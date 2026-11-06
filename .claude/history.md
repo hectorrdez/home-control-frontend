@@ -12,7 +12,7 @@ id|slug|state|role|commit|commit_url
 105|realtime-updates|ENDED|frontend|25196c6|https://github.com/hectorrdez/home-control-frontend/commit/25196c6
 106|house-3d-view|ENDED|frontend|a6c579e|https://github.com/hectorrdez/home-control-frontend/commit/a6c579e
 111|telemetry-view|ENDED|frontend|24b37e8|https://github.com/hectorrdez/home-control-frontend/commit/24b37e8
-113|live-sensor-charts|PENDING|frontend||
+113|live-sensor-charts|ENDED|frontend|3c719a0|https://github.com/hectorrdez/home-control-frontend/commit/3c719a0
 112|telemetry-history|PENDING|frontend||
 107|electron-shell|PENDING|frontend||
 108|deploy-dokploy|PENDING|frontend||
