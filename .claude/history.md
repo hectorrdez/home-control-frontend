@@ -10,7 +10,7 @@ id|slug|state|role|commit|commit_url
 103|areas-dashboard|ENDED|frontend|0108070|https://github.com/hectorrdez/home-control-frontend/commit/0108070
 104|device-control|ENDED|frontend|df1b383|https://github.com/hectorrdez/home-control-frontend/commit/df1b383
 105|realtime-updates|ENDED|frontend|25196c6|https://github.com/hectorrdez/home-control-frontend/commit/25196c6
-106|house-3d-view|ENDED|frontend||
+106|house-3d-view|ENDED|frontend|a6c579e|https://github.com/hectorrdez/home-control-frontend/commit/a6c579e
 111|telemetry-view|PENDING|frontend||
 113|live-sensor-charts|PENDING|frontend||
 112|telemetry-history|PENDING|frontend||
