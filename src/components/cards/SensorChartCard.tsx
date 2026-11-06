@@ -4,13 +4,10 @@ import type { Entity, ConnectionState } from "@/api/types";
 import type { Widget, WidgetKind } from "@/features/telemetry/widgets";
 import { latestValue, trendDelta, type Point } from "@/features/telemetry/liveBuffer";
 import { GAUGE_OK_ABOVE, GAUGE_WARN_ABOVE } from "@/features/telemetry/constants";
+import { cssToken } from "@/features/telemetry/chartTokens";
 import Card from "./Card";
 
-// Feature 113: one live chart per numeric sensor. Colors are CSS tokens read at render time (no hex literals).
-function cssToken(name: string, fallback: string): string {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
-  return raw || fallback;
-}
+// Feature 113: one live chart per numeric sensor. Colors come from the shared token helper (features/telemetry/chartTokens).
 
 const TREND_LABEL: Record<"up" | "down" | "flat", string> = { up: "UP", down: "DOWN", flat: "FLAT" };
 

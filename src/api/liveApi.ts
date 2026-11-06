@@ -132,8 +132,20 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
       };
     },
 
-    async getHistory(): Promise<HistorySeries[]> {
-      throw new ApiError("unavailable", "History not implemented yet");
+    // Backend GET /api/history (endpoints.md): one item per requested entity, in request order.
+    // Numeric `v` arrives as a string; non-finite values are dropped so the charts only see numbers.
+    async getHistory(entityIds, hours): Promise<HistorySeries[]> {
+      const params = new URLSearchParams({ entityIds: entityIds.join(","), hours: String(hours) });
+      const rows = await request<Array<{ entityId: string; points: Array<{ t: string; v: string }> }>>(
+        `/api/history?${params.toString()}`,
+      );
+      return rows.map((row) => ({
+        entityId: row.entityId,
+        unit: null,
+        points: row.points
+          .map((p) => ({ t: p.t, v: Number(p.v) }))
+          .filter((p) => Number.isFinite(p.v)),
+      }));
     },
   };
 }

@@ -12,6 +12,8 @@ import KpiCard from "@components/cards/KpiCard";
 import RingGauge from "@components/cards/RingGauge";
 import EventFeed from "@components/cards/EventFeed";
 import TelemetryChartsGrid from "@components/cards/TelemetryChartsGrid";
+import ClimateHistoryCard from "@components/cards/ClimateHistoryCard";
+import PowerHistoryBars from "@components/cards/PowerHistoryBars";
 import {
   airGrade,
   airQuality,
@@ -197,6 +199,8 @@ export default function TelemetryPage() {
       )}
 
       <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm xl:col-span-8">
+        <ClimateHistoryCard entities={entities} areaName={areaName} />
+        <PowerHistoryBars entities={entities} />
         <TelemetryChartsGrid sensors={entities} areaName={areaName} connection={connection} />
       </section>
 

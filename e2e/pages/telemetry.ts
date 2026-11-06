@@ -33,4 +33,25 @@ export class TelemetryPage {
   chartCard(sensorName: string) {
     return this.page.getByRole("region", { name: sensorName, exact: true });
   }
+
+  // Feature 112: the climate history chart (named "<room> climate, <range>: ...").
+  climateChart(room: string) {
+    return this.page.getByRole("img", { name: new RegExp(`^${room} climate,`) });
+  }
+
+  rangeTab(label: string) {
+    return this.page.getByRole("group", { name: "Range" }).getByRole("button", { name: label, exact: true });
+  }
+
+  roomChip(name: string) {
+    return this.page.getByRole("group", { name: "Rooms" }).getByRole("button", { name, exact: true });
+  }
+
+  climateSummary() {
+    return this.page.getByText(/TEMP VARIANCE/).first();
+  }
+
+  historyNotAvailable() {
+    return this.page.getByText("HISTORY NOT AVAILABLE");
+  }
 }

@@ -27,7 +27,7 @@ export interface EntityAction {
   params?: Record<string, unknown>;
 }
 
-// Proposed contract, see feature 112.
+// Backend GET /api/history (feature 112). unit is not sent by the backend, so it stays null.
 export interface HistorySeries {
   entityId: string;
   unit: string | null;

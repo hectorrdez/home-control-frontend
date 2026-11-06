@@ -173,3 +173,47 @@ describe("liveApi realtime subscribe (105)", () => {
     vi.useRealTimers();
   });
 });
+
+describe("liveApi history (feature 112, backend GET /api/history)", () => {
+  it("requests comma-separated ids and hours with the bearer token", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: [] }));
+
+    await clientWith(fetchImpl).getHistory(["sensor.a", "sensor.b"], 24);
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://panel.test/api/history?entityIds=sensor.a%2Csensor.b&hours=24");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token");
+  });
+
+  it("parses string values to numbers, drops non-numeric points and keeps request order", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
+          { entityId: "sensor.b", points: [{ t: "2026-11-06T08:00:00Z", v: "21.5" }] },
+          {
+            entityId: "sensor.a",
+            points: [
+              { t: "2026-11-06T08:00:00Z", v: "1240" },
+              { t: "2026-11-06T09:00:00Z", v: "unknown" },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const series = await clientWith(fetchImpl).getHistory(["sensor.b", "sensor.a"], 6);
+
+    expect(series.map((s) => s.entityId)).toEqual(["sensor.b", "sensor.a"]);
+    expect(series[0].points).toEqual([{ t: "2026-11-06T08:00:00Z", v: 21.5 }]);
+    expect(series[1].points).toEqual([{ t: "2026-11-06T08:00:00Z", v: 1240 }]);
+  });
+
+  it("maps 404 to not_found so the panel shows HISTORY NOT AVAILABLE", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(404, { error: "not_found" }));
+
+    const err = await clientWith(fetchImpl).getHistory(["sensor.a"], 24).catch((e: unknown) => e);
+
+    expect((err as ApiError).kind).toBe("not_found");
+    expect((err as ApiError).status).toBe(404);
+  });
+});
