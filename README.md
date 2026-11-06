@@ -24,3 +24,20 @@ Mock scenarios (dev/Playwright, `?mock=`): `default`, `empty`, `error`, `slow`, 
 
 - Rules: `.claude/DESIGN.md`.
 - Reference: `design/stitch/` (open the `code.html` files in a browser).
+
+## Deploy (homelab Dokploy)
+
+- `Dockerfile`: multi-stage, `node:22-alpine` build then `nginx:1.27-alpine` serving `dist/` on `$PORT` (default 8080; Dokploy sets 3042) with SPA fallback (`nginx.conf.template`), `/healthz` and a container `HEALTHCHECK`. `scripts/check-bundle.mjs` runs at the end of the build and fails it if mock fixtures reach the bundle or three.js leaks out of its lazy chunk.
+- Build args: `VITE_API_MODE` (default `live`; `mock` only for a demo build), `VITE_API_URL` (default empty = same origin), `VITE_API_TOKEN` (= backend `API_TOKEN`; set it in Dokploy build args, never commit it). It is baked into the bundle, so the panel must stay private (Tailscale + Caddy `import privado`).
+- Dokploy: project `HomeControl`, app `home-control-frontend`, GitHub `hectorrdez/home-control-frontend` branch `dev`, Dockerfile build, env `PORT=3042`, host port `3042:3042`. `docker-compose.yml` runs the same image locally (`VITE_API_TOKEN=... docker compose up --build`).
+- Caddy (`/home/hector/docker/caddy/Caddyfile`):
+
+```
+home-control.hectorrdez.es {
+	import privado
+	handle /api/* { reverse_proxy 192.168.50.200:3041 }
+	handle { reverse_proxy 192.168.50.200:3042 }
+}
+```
+
+  Reload with `docker exec caddy caddy reload --config /etc/caddy/Caddyfile`. dnsmasq-ts resolves the hostname to the server's Tailscale IP.

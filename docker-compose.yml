@@ -1,0 +1,14 @@
+# Local/alt run of the production image. On the homelab Dokploy builds the Dockerfile directly (see README).
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_MODE: live
+        VITE_API_URL: ""
+        VITE_API_TOKEN: ${VITE_API_TOKEN:?set VITE_API_TOKEN}
+    environment:
+      PORT: "3042"
+    ports:
+      - "3042:3042"
+    restart: unless-stopped
