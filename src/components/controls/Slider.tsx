@@ -1,5 +1,5 @@
 import StringUtils from "@utils/StringUtils";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { Hue } from "@/components/cards/deviceState";
 
 // Feature 104: native range input in the domain hue. Commits on release (pointer up / key up), not on every move.
@@ -31,14 +31,17 @@ export default function Slider({ label, value, min, max, step = 1, unit, hue, on
     if (next !== value) onCommit(next);
   };
 
+  const labelId = useId();
+
   return (
-    <label className="flex flex-col gap-space-xs">
-      <span className="flex items-center justify-between font-mono text-label-caps uppercase text-on-surface-variant">
+    <div className="flex flex-col gap-space-xs">
+      <span id={labelId} className="flex items-center justify-between font-mono text-label-caps uppercase text-on-surface-variant">
         <span>{label}</span>
         <span className="text-on-surface">{`${shown}${unit}`}</span>
       </span>
       <input
         type="range"
+        aria-labelledby={labelId}
         min={min}
         max={max}
         step={step}
@@ -53,6 +56,6 @@ export default function Slider({ label, value, min, max, step = 1, unit, hue, on
           accent[hue],
         )}
       />
-    </label>
+    </div>
   );
 }
