@@ -41,3 +41,6 @@ playwright-report/
 .scannerwork/
 .sonar-home/
 .sonar-scan.log
+
+# coverage
+coverage/
