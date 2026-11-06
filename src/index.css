@@ -117,9 +117,29 @@
   /* Breakpoints: handheld < 768, tablet 768-1199, desktop >= 1200 */
   --breakpoint-xl: 1200px;
 
+  /* Motion: device card entrance (116). Stagger is per list index (--i), capped. */
+  --duration-device-card: 200ms;
+  --duration-device-card-stagger: 30ms;
+  --duration-device-card-stagger-max: 400ms;
+
   /* Glow: the only shadows allowed (live state only) */
   --shadow-glow-primary: 0 0 12px color-mix(in srgb, var(--color-primary-container) 25%, transparent);
   --shadow-glow-secondary: 0 0 12px color-mix(in srgb, var(--color-secondary) 25%, transparent);
   --shadow-glow-tertiary: 0 0 12px color-mix(in srgb, var(--color-tertiary-fixed-dim) 25%, transparent);
   --shadow-glow-error: 0 0 12px color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+
+/* Device card entrance (116). Staggered per list item; skipped under prefers-reduced-motion. */
+@keyframes device-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .device-card {
+    animation: device-card-in var(--duration-device-card) ease-out backwards;
+    animation-delay: min(calc(var(--i, 0) * var(--duration-device-card-stagger)), var(--duration-device-card-stagger-max));
+  }
 }

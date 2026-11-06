@@ -59,6 +59,32 @@ describe("createDevApi", () => {
     stop();
   });
 
+  it("forwards alias reads and writes through the lazy mock", async () => {
+    const api = createDevApi({ VITE_API_MODE: "mock", PROD: false }, "");
+
+    await expect(api.getAliases()).resolves.toEqual([]);
+    const saved = await api.setAlias("light.kitchen_ceiling", "Cocina");
+    expect(saved).toEqual([{ entityId: "light.kitchen_ceiling", alias: "Cocina" }]);
+    await expect(api.deleteAlias("light.kitchen_ceiling")).resolves.toEqual([]);
+  });
+
+  it("builds the live client with empty defaults when the URL and token are unset", async () => {
+    const original = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ data: [{ online: true, message: "ok", version: null }] }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const api = createDevApi({ VITE_API_MODE: "live", PROD: false }, "");
+      await expect(api.getStatus()).resolves.toMatchObject({ online: true });
+      expect(calls).toEqual(["/api/ha/status"]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it("returns a live client in live mode that calls the configured base URL", async () => {
     const calls: string[] = [];
     const original = globalThis.fetch;

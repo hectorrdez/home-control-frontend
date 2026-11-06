@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useEntities } from "@/state/EntitiesProvider";
 import {
   DOMAIN_GROUPS,
@@ -142,17 +143,17 @@ export default function DevicePanel() {
           </p>
         ) : (
           <ul aria-label="Devices" className="flex flex-col gap-space-sm">
-            {sections.flatMap((section) =>
-              section.entities.map((entity) => (
-                <li key={entity.entityId}>
+            {sections
+              .flatMap((section) => section.entities.map((entity) => ({ entity, section })))
+              .map(({ entity, section }, index) => (
+                <li key={entity.entityId} style={{ "--i": index } as CSSProperties}>
                   <DeviceModule
                     entity={entity}
                     areaName={section.area.areaId === UNASSIGNED ? "UNASSIGNED" : section.area.name.toUpperCase()}
                     drawText={drawLabel(draws.get(entity.entityId))}
                   />
                 </li>
-              )),
-            )}
+              ))}
           </ul>
         )}
       </div>

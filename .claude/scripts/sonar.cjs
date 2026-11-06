@@ -57,8 +57,11 @@ const props = [
   `-Dsonar.scm.disabled=true`,
 ];
 if (args.tests) props.push(`-Dsonar.tests=${args.tests}`);
-if (args.lcov) props.push(`-Dsonar.javascript.lcov.reportPaths=${args.lcov}`);
-if (args["cov-exclusions"]) props.push(`-Dsonar.coverage.exclusions=${args["cov-exclusions"]}`);
+// Default lcov (vitest --coverage) when present; test files and entrypoints never count as uncovered new code.
+const lcov = args.lcov || (fs.existsSync("coverage/lcov.info") ? "coverage/lcov.info" : null);
+if (lcov) props.push(`-Dsonar.javascript.lcov.reportPaths=${lcov}`);
+const covExclusions = args["cov-exclusions"] || "**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,src/main.tsx,src/types/**";
+props.push(`-Dsonar.coverage.exclusions=${covExclusions}`);
 
 console.log(`sonar: analysing ${key} @ ${host}`);
 const env = { ...process.env, SONAR_TOKEN: token, SONAR_USER_HOME: home };

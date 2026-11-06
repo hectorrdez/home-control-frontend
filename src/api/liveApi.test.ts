@@ -172,6 +172,127 @@ describe("liveApi realtime subscribe (105)", () => {
     expect(FakeSource.instances[1].closed).toBe(true);
     vi.useRealTimers();
   });
+
+  it("ignores a stream error that arrives after unsubscribe", () => {
+    vi.useFakeTimers();
+    FakeSource.instances = [];
+    const api = createLiveApi({
+      baseUrl: "http://panel.test",
+      token: "tok",
+      eventSourceFactory: (url) => new FakeSource(url) as unknown as EventSource,
+    });
+    const states: string[] = [];
+    const stop = api.subscribe(() => undefined, (s) => states.push(s));
+
+    stop();
+    FakeSource.instances[0].onerror?.();
+    vi.advanceTimersByTime(40_000);
+
+    expect(states).toEqual([]);
+    expect(FakeSource.instances).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it("drops state_changed payloads that are not entities", () => {
+    FakeSource.instances = [];
+    const api = createLiveApi({
+      baseUrl: "http://panel.test",
+      token: "tok",
+      eventSourceFactory: (url) => new FakeSource(url) as unknown as EventSource,
+    });
+    const events: string[] = [];
+    const stop = api.subscribe((e) => events.push(e.entityId), () => undefined);
+
+    FakeSource.instances[0].listeners.state_changed({ data: "not json" });
+    expect(events).toEqual([]);
+    stop();
+  });
+});
+
+describe("liveApi envelope and error edges", () => {
+  it("rejects a 200 without a data envelope", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { nope: true }));
+    const err = await clientWith(fetchImpl).getEntities().catch((e: unknown) => e);
+    expect((err as ApiError).kind).toBe("server");
+    expect((err as ApiError).message).toBe("Response has no data envelope");
+  });
+
+  it("rejects a non-JSON body on a 200 as having no envelope", async () => {
+    const fetchImpl = vi.fn(async () => new Response("<html>", { status: 200 }));
+    await expect(clientWith(fetchImpl).getEntities()).rejects.toMatchObject({ kind: "server" });
+  });
+
+  it("uses the HTTP status as the message when an error body has no code", async () => {
+    const fetchImpl = vi.fn(async () => new Response("oops", { status: 500 }));
+    const err = await clientWith(fetchImpl).getEntities().catch((e: unknown) => e);
+    expect((err as ApiError).message).toBe("HTTP 500");
+    expect((err as ApiError).status).toBe(500);
+  });
+
+  it("reads a string error code and an error object without a code", async () => {
+    const asString = vi.fn(async () => jsonResponse(400, { error: "invalid_alias" }));
+    const e1 = await clientWith(asString).setAlias("light.a", "x").catch((e: unknown) => e);
+    expect((e1 as ApiError).message).toBe("invalid_alias");
+
+    const withMessage = vi.fn(async () => jsonResponse(400, { error: { message: "bad" }, code: "outer" }));
+    const e2 = await clientWith(withMessage).setAlias("light.a", "x").catch((e: unknown) => e);
+    expect((e2 as ApiError).message).toBe("outer");
+  });
+
+  it("maps a non-Error network failure to a generic network error", async () => {
+    const fetchImpl = vi.fn(() => Promise.reject("offline"));
+    const err = await clientWith(fetchImpl).getStatus().catch((e: unknown) => e);
+    expect((err as ApiError).kind).toBe("network");
+    expect((err as ApiError).message).toBe("Network error");
+  });
+
+  it("rejects an empty status list and an empty action response", async () => {
+    const status = vi.fn(async () => jsonResponse(200, { data: [] }));
+    await expect(clientWith(status).getStatus()).rejects.toThrow("Empty status response");
+
+    const action = vi.fn(async () => jsonResponse(200, { data: [] }));
+    await expect(clientWith(action).runAction("light.a", { action: "toggle" })).rejects.toThrow("Empty action response");
+  });
+
+  it("returns the updated entity from an action", async () => {
+    const entity = { entityId: "light.a", state: "on" };
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: [entity] }));
+    await expect(clientWith(fetchImpl).runAction("light.a", { action: "turn_on" })).resolves.toEqual(entity);
+    expect((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1]).toMatchObject({ method: "POST" });
+  });
+
+  it("maps a null area id to unassigned and sends the area filter", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: [{ areaId: null, name: "Unassigned", entities: [] }] }));
+    const areas = await clientWith(fetchImpl).getAreas();
+    expect(areas[0].areaId).toBe("unassigned");
+
+    await clientWith(fetchImpl).getEntities({ area: "kitchen" });
+    expect((fetchImpl.mock.calls.at(-1) as unknown as [string])[0]).toBe("http://panel.test/api/entities?area=kitchen");
+  });
+
+  it("sends alias writes to the alias endpoints and returns the list", async () => {
+    const list = [{ entityId: "light.a", alias: "A" }];
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: list }));
+    const client = clientWith(fetchImpl);
+
+    await expect(client.getAliases()).resolves.toEqual(list);
+    await expect(client.setAlias("light.a", "A")).resolves.toEqual(list);
+    await expect(client.deleteAlias("light.a")).resolves.toEqual(list);
+
+    const [, setInit] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit];
+    expect(setInit.method).toBe("PUT");
+    expect(setInit.body).toBe(JSON.stringify({ alias: "A" }));
+    expect((fetchImpl.mock.calls[2] as unknown as [string, RequestInit])[1]).toMatchObject({ method: "DELETE" });
+  });
+
+  it("drops history points whose value is not finite", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(200, { data: [{ entityId: "sensor.a", points: [{ t: "t1", v: "NaN" }, { t: "t2", v: "3" }] }] }),
+    );
+    const [series] = await clientWith(fetchImpl).getHistory(["sensor.a"], 6);
+    expect(series.points).toEqual([{ t: "t2", v: 3 }]);
+    expect(series.unit).toBeNull();
+  });
 });
 
 describe("liveApi history (feature 112, backend GET /api/history)", () => {

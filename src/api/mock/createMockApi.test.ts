@@ -211,4 +211,133 @@ describe("mock aliases", () => {
     const count = (a: typeof base) => a.reduce((n, x) => n + x.entities.length, 0);
     expect(count(raw)).toBeGreaterThan(count(base));
   });
+
+  it("rejects an alias write that is not a valid entity id before any delay", async () => {
+    const api = createMockApi({ actionDelayMs: 10_000 });
+    await expect(api.deleteAlias("not an id")).rejects.toMatchObject({ message: "invalid_entity_id" });
+    await expect(api.setAlias("not an id", "ok")).rejects.toMatchObject({ message: "invalid_entity_id" });
+  });
+
+  it("refuses new aliases past the cap", async () => {
+    // Seed the cap through storage so the test does not write 2000 aliases one by one.
+    const full = Array.from({ length: 2000 }, (_, i) => ({ entityId: `sensor.s${i}`, alias: `n${i}` }));
+    globalThis.localStorage.setItem("hc.mock.aliases.v1", JSON.stringify(full));
+    const api = createMockApi(fast);
+    await expect(api.setAlias("sensor.extra", "x")).rejects.toMatchObject({ message: "too_many_aliases" });
+    await expect(api.setAlias("sensor.s0", "changed")).resolves.toHaveLength(2000);
+  });
+
+  it("reads aliases persisted by an earlier session and skips malformed rows", async () => {
+    globalThis.localStorage.setItem(
+      "hc.mock.aliases.v1",
+      JSON.stringify([{ entityId: "light.a", alias: "A" }, { entityId: 3 }, null]),
+    );
+    expect(await createMockApi(fast).getAliases()).toEqual([{ entityId: "light.a", alias: "A" }]);
+  });
+
+  it("starts empty when the stored aliases are corrupt or not a list", async () => {
+    globalThis.localStorage.setItem("hc.mock.aliases.v1", "{oops");
+    expect(await createMockApi(fast).getAliases()).toEqual([]);
+
+    globalThis.localStorage.setItem("hc.mock.aliases.v1", JSON.stringify({ not: "a list" }));
+    expect(await createMockApi(fast).getAliases()).toEqual([]);
+  });
+
+  it("keeps working when storage is blocked for writes", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    try {
+      const api = createMockApi(fast);
+      await expect(api.setAlias("light.a", "A")).resolves.toEqual([{ entityId: "light.a", alias: "A" }]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("mock API domain actions", () => {
+  const find = (domain: string) => createFixtureEntities().find((e) => e.domain === domain)!;
+
+  it("handles switch and light on/off and rejects unsupported light actions", async () => {
+    const api = createMockApi(fast);
+    const sw = find("switch");
+    expect((await api.runAction(sw.entityId, { action: "turn_off" })).state).toBe("off");
+    expect((await api.runAction(sw.entityId, { action: "turn_on" })).state).toBe("on");
+    expect((await api.runAction(sw.entityId, { action: "toggle" })).state).toBe("off");
+    await expect(api.runAction(sw.entityId, { action: "explode" })).rejects.toMatchObject({ message: "invalid_action" });
+
+    const light = find("light");
+    await expect(api.runAction(light.entityId, { action: "explode" })).rejects.toMatchObject({ kind: "server" });
+  });
+
+  it("only lets scenes be activated", async () => {
+    const api = createMockApi(fast);
+    const scene = find("scene");
+    const after = await api.runAction(scene.entityId, { action: "turn_on" });
+    expect(after.lastChanged).not.toBe(scene.lastChanged);
+    await expect(api.runAction(scene.entityId, { action: "turn_off" })).rejects.toMatchObject({ message: "invalid_action" });
+  });
+
+  it("sets climate targets and rejects bad climate actions", async () => {
+    const api = createMockApi(fast);
+    const climate = find("climate");
+    const hot = await api.runAction(climate.entityId, { action: "set_temperature", params: { temperature: 23 } });
+    expect(hot.attributes.temperature).toBe(23);
+    const mode = await api.runAction(climate.entityId, { action: "set_hvac_mode", params: { hvac_mode: "off" } });
+    expect(mode.state).toBe("off");
+    await expect(api.runAction(climate.entityId, { action: "set_temperature", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
+    await expect(api.runAction(climate.entityId, { action: "set_preset_mode", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
+    await expect(api.runAction(climate.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
+  });
+
+  it("closes, opens and positions covers and rejects unknown cover actions", async () => {
+    const api = createMockApi(fast);
+    const cover = find("cover");
+    expect((await api.runAction(cover.entityId, { action: "close_cover" })).state).toBe("closed");
+    expect((await api.runAction(cover.entityId, { action: "open_cover" })).attributes.current_position).toBe(100);
+    const half = await api.runAction(cover.entityId, { action: "set_cover_position", params: { position: 0 } });
+    expect(half.state).toBe("closed");
+    await expect(api.runAction(cover.entityId, { action: "set_cover_position", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
+    await expect(api.runAction(cover.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
+  });
+
+  it("locks and unlocks and rejects other lock actions", async () => {
+    const api = createMockApi(fast);
+    const lock = find("lock");
+    expect((await api.runAction(lock.entityId, { action: "unlock" })).state).toBe("unlocked");
+    expect((await api.runAction(lock.entityId, { action: "lock" })).state).toBe("locked");
+    await expect(api.runAction(lock.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
+  });
+
+  it("refuses actions on domains the mock does not control", async () => {
+    const api = createMockApi(fast);
+    const sensor = find("sensor");
+    await expect(api.runAction(sensor.entityId, { action: "turn_on" })).rejects.toMatchObject({ message: "domain_not_allowed", status: 403 });
+  });
+
+  it("returns a history series with no points for a non-numeric entity", async () => {
+    const api = createMockApi(fast);
+    const [series] = await api.getHistory(["light.kitchen_ceiling"], 24);
+    expect(series.points).toEqual([]);
+    const [missing] = await api.getHistory(["sensor.does_not_exist"], 24);
+    expect(missing).toEqual({ entityId: "sensor.does_not_exist", unit: null, points: [] });
+  });
+
+  it("drifts the motion sensor and the house power meter as well as temperatures", () => {
+    vi.useFakeTimers();
+    const api = createMockApi(fast);
+    const seen = new Map<string, string>();
+    const stop = api.subscribe((e) => seen.set(e.entityId, e.state), () => undefined);
+    vi.advanceTimersByTime(5000);
+    expect(seen.has("binary_sensor.entry_motion")).toBe(true);
+    stop();
+  });
+
+  it("reports the connection state unchanged when a read scenario answers normally", async () => {
+    const api = createMockApi({ ...fast, scenario: "empty" });
+    await expect(api.getEntities()).resolves.toEqual([]);
+    await expect(api.getAreas()).resolves.toEqual([]);
+    await expect(api.getStatus()).resolves.toMatchObject({ online: true });
+  });
 });
