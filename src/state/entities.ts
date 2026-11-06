@@ -1,4 +1,5 @@
 import type { Area, Entity } from "@/api/types";
+import { recordChange, type FeedEvent } from "./feed";
 
 // Single entity store (feature 103). Entities keyed by entityId; areas keep order and membership.
 // 104 adds optimistic actions (pending map with a rollback baseline); 105 merges stream events.
@@ -27,6 +28,7 @@ export interface EntitiesState {
   areas: AreaGroup[];
   entities: Record<string, Entity>;
   pending: Record<string, PendingAction>;
+  feed: FeedEvent[]; // 111: session-only, newest first
 }
 
 export type EntitiesAction =
@@ -44,6 +46,7 @@ export const initialEntitiesState: EntitiesState = {
   areas: [],
   entities: {},
   pending: {},
+  feed: [],
 };
 
 function groupsFrom(areas: Area[]): { groups: AreaGroup[]; entities: Record<string, Entity> } {
@@ -103,7 +106,7 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
       return { ...state, status: "error" };
     case "loaded": {
       const { groups, entities } = groupsFrom(action.areas);
-      return { status: "ready", areas: groups, entities, pending: {} };
+      return { status: "ready", areas: groups, entities, pending: {}, feed: state.feed };
     }
     case "areasRefreshed": {
       // Re-fetch after a stream reconnect: keep optimistic values of in-flight actions.
@@ -151,7 +154,11 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
         pending: rest,
       };
     }
-    case "entityUpdated":
-      return applyEvent(state, action.entity);
+    case "entityUpdated": {
+      const next = applyEvent(state, action.entity);
+      if (next === state) return state;
+      const feed = recordChange(state.feed, state.entities[action.entity.entityId], next.entities[action.entity.entityId]);
+      return feed === state.feed ? next : { ...next, feed };
+    }
   }
 }
