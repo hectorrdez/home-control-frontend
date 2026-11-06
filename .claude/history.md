@@ -19,5 +19,5 @@ id|slug|state|role|commit|commit_url
 108|deploy-dokploy|ENDED|frontend|78a1e8e|https://github.com/hectorrdez/home-control-frontend/commit/78a1e8e
 114|telemetry-dashboard-editor|PENDING|frontend||
 116|device-card-redesign|ENDED|frontend|77c7b27|https://github.com/hectorrdez/home-control-frontend/commit/77c7b27
-117|device-action-feedback|PENDING|frontend||
-118|telemetry-chart-filters|PENDING|frontend||
+117|device-action-feedback|ENDED|frontend|45b2ba4|https://github.com/hectorrdez/home-control-frontend/commit/45b2ba4
+118|telemetry-chart-filters|ENDED|frontend|af3ce3b|https://github.com/hectorrdez/home-control-frontend/commit/af3ce3b
