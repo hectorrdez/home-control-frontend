@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isUnavailable } from "@/state/selectors";
 import { useEntities } from "@/state/EntitiesProvider";
 import type { Entity } from "@/api/types";
 import { roomGlow, roomLabel, roomStatus, type RoomGlow } from "./glow";
@@ -60,7 +61,7 @@ export default function HouseStage() {
   const entitiesByArea = useMemo(() => {
     const map = new Map<string, Entity[]>();
     for (const group of state.areas) {
-      map.set(group.areaId, group.entityIds.map((id) => state.entities[id]).filter((e): e is Entity => Boolean(e)));
+      map.set(group.areaId, group.entityIds.map((id) => state.entities[id]).filter((e): e is Entity => Boolean(e) && !isUnavailable(e)));
     }
     return map;
   }, [state.areas, state.entities]);

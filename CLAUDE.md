@@ -27,13 +27,14 @@ All under `.claude/` except this `CLAUDE.md` (repo root).
 
 ## Roles
 
-v1: three roles in **one session**, not subagents.
+Roles map to models (see *Model routing*). Orchestration stays in the main session; the others run as subagents/delegated agents.
 
-- **Orchestrator** (main session): picks the feature, drives the flow. **Writes no code.**
-- **Dev**: implements the feature.
-- **Tester**: runs the test command, reads output.
+- **Orchestrator** (Sonnet, main session): picks the feature, drives the flow, spawns the other agents, reviews the kanban board when configured. **Writes no code.**
+- **Refiner** (Opus): refines tasks from the board or `history.md` into precise, testable requirements.
+- **Dev** (Haiku): implements the feature and fixes.
+- **Tester** (gpt-6-luna, via `mcp__codex-hub__gpt`): writes the tests, runs the test command, and launches Sonar (`node .claude/scripts/sonar.cjs`).
 
-> Promote Dev/Tester to subagents in `/agents` only when one feature's cycle (implement + test + iterate) starts saturating session context. That's the trigger — not project size.
+> The luna/codex sandbox has no network: if `sonar.cjs` cannot run there, the orchestrator (or a Haiku agent) runs it from a normal shell and hands the output to luna for review.
 
 ---
 
@@ -82,7 +83,7 @@ Choose the cheapest automated proof that covers the change. Add or update an E2E
    - `[frontend]` Apply *Playwright E2E architecture* above. Use Playwright through the real UI when the change affects a critical journey, navigation, permissions, integration, or cross-component interaction; cover the happy path and introduced failure/edge case. Otherwise use the appropriate unit/component test. Never duplicate component selectors in page objects or specs.
    - `[backend]` The updated/added Bruno request (previous bullet) **is** this feature's test — no separate test file needed.
    - `[testing]` The scenario/suite itself is the feature; this step is redundant with step 8.
-10. **Tester** runs the repo's `node .claude/scripts/test.cjs`, reads exit code + log.
+10. **Tester** (gpt-6-luna) writes/updates the tests, runs `node .claude/scripts/test.cjs`, then `node .claude/scripts/sonar.cjs`; reads exit codes + logs. Test failure or Sonar gate failed → fix list back to Dev (Haiku), escalating a tier on each repeat failure (see *Model routing*).
    - `[backend]` Old request fails: check the feature's `requirements`. Did it intentionally touch that endpoint? → contract changed, update the Bruno request (not a regression). Didn't touch it? → regression, fix the code.
    - Test fails → return the log to Dev, iterate. Don't advance. Fix the source code, not the assertion (unless the assertion is genuinely wrong — say so explicitly).
 11. Run `node .claude/scripts/mark-ended.cjs <id>`. Re-runs the test, writes `ENDED` **only on exit code 0**. On failure it refuses. On success it also clears `.claude/handoff.md`.
@@ -241,11 +242,16 @@ Sessions get much more expensive once the conversation passes ~200k tokens of co
 
 ## Model routing
 
-When the CLI lets you pick a model or delegate to a sub-agent, split by role, not by CLI:
+Split by role, not by CLI. When the CLI lets you pick a model or delegate to a sub-agent:
 
-- **Feature definition and planning** (turning approved requirements into a precise, testable plan): the most capable model available (Claude: Opus; Codex: its top-tier model).
-- **Implementation and routine testing** (writing the approved code, E2E coverage, running the normal test loop): the fastest/cheapest capable model (Claude: Haiku; Codex: its lightweight model).
-- **Bugs, corrections, refactors** (fixing shipped work, judgment-heavy changes): the balanced mid-tier model (Claude: Sonnet; Codex: its mid-tier model).
+| Role | Model | Does |
+|---|---|---|
+| Orchestrator | Sonnet | Orchestrates tasks, spawns agents, reviews the board (if configured) |
+| Refiner | Opus | Refines board / `history.md` tasks into requirements |
+| Dev | Haiku | Implements and codes |
+| Tester | gpt-6-luna | Creates tests, runs them, runs Sonar (`sonar.cjs`) |
+
+**Failure loop.** If the tests find a problem, or the Sonar quality gate fails (or issues/hotspots stay open), the Tester writes a concise fix list and the work goes back to **Dev (Haiku)**. If it fails again, escalate Dev one tier (Haiku → Sonnet → Opus) and retry; repeat (tests + Sonar after every fix) until green. Never start higher "just in case"; drop back to Haiku on the next task.
 
 Never use routing to skip the feature cycle: requirements still need approval before a `PENDING` feature starts, and `mark-ended.cjs` stays the completion gate regardless of which model did the work. If the CLI exposes no model selection, follow the same role split with whatever single model is available.
 

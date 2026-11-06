@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Network, Thermometer, Wind, Zap } from "lucide-react";
+import { Activity, Network, Thermometer, Wind, Zap } from "lucide-react";
+import SideDrawer from "@components/panels/SideDrawer";
 import PageGrid from "@layouts/PageGrid";
 import { useEntities } from "@/state/EntitiesProvider";
 import { useEntityName } from "@/features/names/useEntityName";
@@ -72,6 +73,8 @@ function StatusStrip({ text }: { text: string }) {
 export default function TelemetryPage() {
   const { state, reload, connection } = useEntities();
   const names = useEntityName();
+  const [feedOpen, setFeedOpen] = useState(false);
+  const closeFeed = useCallback(() => setFeedOpen(false), []);
 
   if (state.status === "error") {
     return (
@@ -136,7 +139,16 @@ export default function TelemetryPage() {
 
   return (
     <PageGrid>
-      <Header title="Telemetry & sensors" sub={sub} />
+      <Header
+        title="Telemetry & sensors"
+        sub={sub}
+        action={
+          <Button variant="secondary" aria-expanded={feedOpen} onClick={() => setFeedOpen((v) => !v)}>
+            <Activity size={16} aria-hidden="true" />
+            {`EVENTS (${state.feed.length})`}
+          </Button>
+        }
+      />
       <StatusStrip text={`SENSORS ${sensors} • ${nodes ? `${nodes.online}/${nodes.total}` : "0/0"} ONLINE`} />
 
       <section aria-label="Key metrics" className="col-span-12 grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4">
@@ -200,24 +212,27 @@ export default function TelemetryPage() {
         </section>
       )}
 
-      <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm xl:col-span-8">
+      <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm">
         <ClimateHistoryCard entities={entities} areaName={areaName} />
         <PowerHistoryBars entities={entities} />
         <TelemetryChartsGrid sensors={entities} areaName={areaName} connection={connection} />
       </section>
 
-      <div className="col-span-12 xl:col-span-4">
+      <SideDrawer side="right" title="Live event feed" open={feedOpen} onClose={closeFeed}>
         <EventFeed events={state.feed} areaName={areaName} />
-      </div>
+      </SideDrawer>
     </PageGrid>
   );
 }
 
-function Header({ title, sub }: { title: string; sub: ReactNode }) {
+function Header({ title, sub, action }: { title: string; sub: ReactNode; action?: ReactNode }) {
   return (
-    <header className="col-span-12 flex flex-col gap-space-xs">
-      <h1 className="font-sans text-headline-md uppercase text-on-surface">{title}</h1>
-      {sub && <div>{sub}</div>}
+    <header className="col-span-12 flex items-start justify-between gap-space-sm">
+      <div className="flex flex-col gap-space-xs">
+        <h1 className="font-sans text-headline-md uppercase text-on-surface">{title}</h1>
+        {sub && <div>{sub}</div>}
+      </div>
+      {action}
     </header>
   );
 }

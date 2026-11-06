@@ -51,6 +51,18 @@ test.describe("telemetry live charts", () => {
     await expect(telemetry.chartCard("Living room temperature")).toHaveCount(0);
   });
 
+  test("the charts side panel hides and restores a chart", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await telemetry.open();
+
+    await expect(telemetry.chartCard("Kitchen humidity")).toBeVisible();
+    await telemetry.openChartsPanel();
+    await telemetry.chartToggle("Kitchen humidity").click();
+    await expect(telemetry.chartCard("Kitchen humidity")).toHaveCount(0);
+    await telemetry.chartToggle("Kitchen humidity").click();
+    await expect(telemetry.chartCard("Kitchen humidity")).toBeVisible();
+  });
+
   test("the empty house shows no charts", async ({ page }) => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open("?mock=empty");

@@ -21,6 +21,18 @@ export class TelemetryPage {
     return this.page.getByRole("region", { name: title, exact: true });
   }
 
+  async openEvents() {
+    await this.page.getByRole("button", { name: /^EVENTS/ }).click();
+  }
+
+  async openChartsPanel() {
+    await this.page.getByRole("button", { name: "CHARTS", exact: true }).click();
+  }
+
+  chartToggle(label: string) {
+    return this.page.getByRole("switch", { name: `Show ${label}`, exact: true });
+  }
+
   feedItems() {
     return this.page.getByRole("list", { name: "Event feed items" }).getByRole("listitem");
   }

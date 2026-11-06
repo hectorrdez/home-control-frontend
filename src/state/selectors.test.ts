@@ -131,3 +131,13 @@ describe("deck sections", () => {
     expect(ids.every((id) => id.startsWith("light."))).toBe(true);
   });
 });
+
+describe("unavailable entities", () => {
+  it("are hidden from the deck and the group counts", () => {
+    const entities = createFixtureEntities().map((e) => (e.entityId === "light.kitchen_ceiling" ? { ...e, state: "unavailable" } : e));
+    const state = loaded(entities);
+    const shown = deckSections(state, null, "all").flatMap((sec) => sec.entities.map((e) => e.entityId));
+    expect(shown).not.toContain("light.kitchen_ceiling");
+    expect(groupCounts(state).all).toBe(entities.length - 1);
+  });
+});

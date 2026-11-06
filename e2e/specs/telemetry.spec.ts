@@ -21,9 +21,30 @@ test.describe("telemetry view", () => {
     test.setTimeout(90_000);
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
+    await telemetry.openEvents();
 
     // The mock flips binary_sensor.entry_motion on each 5 s stream tick (50% chance), so a change is expected within a few ticks.
     await expect(telemetry.feedItems().first()).toContainText("Entry motion", { timeout: 80_000 });
+  });
+
+  test("the event drawer closes with its button, by clicking outside, and with Escape", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await telemetry.open();
+    const drawer = page.getByRole("complementary", { name: "Live event feed" });
+
+    await telemetry.openEvents();
+    await expect(drawer).toBeVisible();
+    await page.getByRole("button", { name: "Close Live event feed" }).click();
+    await expect(drawer).toBeHidden();
+
+    await telemetry.openEvents();
+    await expect(drawer).toBeVisible();
+    await page.mouse.click(20, 300);
+    await expect(drawer).toBeHidden();
+
+    await telemetry.openEvents();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
   });
 
   test("shows the empty state when the house has no sensors", async ({ page }) => {

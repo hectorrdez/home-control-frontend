@@ -5,6 +5,7 @@ import {
   groupCounts,
   summarize,
   allEntities,
+  isUnavailable,
   formatPower,
   plugDrawBySwitch,
   type DomainFilter,
@@ -72,7 +73,7 @@ export default function DevicePanel() {
   const synchronized = ha.state === "online" && summary.unavailable === 0;
   const sections = deckSections(state, selectedArea, selectedGroup);
   const shown = sections.reduce((n, s) => n + s.entities.length, 0);
-  const rooms = state.areas.filter((a) => a.entityIds.length > 0);
+  const rooms = state.areas.filter((a) => a.entityIds.some((id) => state.entities[id] && !isUnavailable(state.entities[id])));
   const draws = plugDrawBySwitch(allEntities(state));
 
   return (

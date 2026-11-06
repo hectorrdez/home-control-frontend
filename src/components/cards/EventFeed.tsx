@@ -24,7 +24,6 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
   return (
     <Card role="region" aria-label="Event feed" className="flex flex-col gap-space-sm">
       <div className="flex flex-col gap-space-xs">
-        <span className="font-label-caps text-label-caps uppercase text-on-surface">Live event feed</span>
         <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">
           Session only, not stored
         </span>
@@ -34,7 +33,7 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
           WAITING FOR EVENTS
         </p>
       ) : (
-        <ul aria-label="Event feed items" className="flex max-h-96 flex-col gap-space-xs overflow-y-auto">
+        <ul aria-label="Event feed items" className="flex flex-col gap-space-xs overflow-y-auto">
           {events.map((event) => {
             const Icon = ICON[event.entityId.split(".")[0]] ?? Activity;
             return (

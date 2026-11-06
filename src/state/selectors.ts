@@ -51,7 +51,7 @@ export function allEntities(state: EntitiesState): Entity[] {
 
 // Counts for ALL and each group, over every entity in the house.
 export function groupCounts(state: EntitiesState): Record<DomainFilter, number> {
-  const all = allEntities(state);
+  const all = allEntities(state).filter((e) => !isUnavailable(e));
   const plugs = plugPowerSensorIds(all);
   const counts: Record<DomainFilter, number> = { all: all.length, lights: 0, climate: 0, security: 0, plugs: 0 };
   for (const e of all) {
@@ -78,7 +78,7 @@ export function deckSections(
     if (selectedArea !== null && area.areaId !== selectedArea) continue;
     const entities = area.entityIds
       .map((id) => state.entities[id])
-      .filter((e): e is Entity => e !== undefined)
+      .filter((e): e is Entity => e !== undefined && !isUnavailable(e))
       .filter((e) => filter === "all" || domainGroupOf(e, plugs) === filter)
       .sort((a, b) => {
         const rank = GROUP_RANK[domainGroupOf(a, plugs)] - GROUP_RANK[domainGroupOf(b, plugs)];
