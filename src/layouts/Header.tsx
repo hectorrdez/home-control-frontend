@@ -1,5 +1,6 @@
 import { House } from "lucide-react";
 import Clock from "./Clock";
+import HaStatusLine from "./HaStatusLine";
 import { TopNav } from "./Navigation";
 
 export default function Header() {
@@ -14,9 +15,7 @@ export default function Header() {
             <span className="font-sans text-title-md uppercase tracking-tight text-on-surface">
               Home Control
             </span>
-            <span className="font-mono text-label-caps tracking-widest text-on-surface-variant">
-              OFFLINE
-            </span>
+            <HaStatusLine />
           </div>
         </div>
         <TopNav />

@@ -20,7 +20,13 @@ if (run('npm', ['run', 'build']) !== 0) {
   process.exit(1);
 }
 
-console.log('[4/4] Playwright E2E tests...');
+console.log('[4/5] Unit tests (vitest)...');
+if (run('npm', ['run', 'test:unit']) !== 0) {
+  console.log('FAIL: unit tests');
+  process.exit(1);
+}
+
+console.log('[5/5] Playwright E2E tests...');
 if (run('npx', ['playwright', 'test']) !== 0) {
   console.log('FAIL: Playwright E2E tests');
   process.exit(1);

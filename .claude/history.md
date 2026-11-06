@@ -4,8 +4,8 @@
 # commit/commit_url are empty until set-commit.cjs records the ENDED commit.
 id|slug|state|role|commit|commit_url
 101|template-cleanup|ENDED|frontend|fcab15b|https://github.com/hectorrdez/home-control-frontend/commit/fcab15b
-109|design-tokens-and-shell|ENDED|frontend||
-102|api-client|PENDING|frontend||
+109|design-tokens-and-shell|ENDED|frontend|a018b67|https://github.com/hectorrdez/home-control-frontend/commit/a018b67
+102|api-client|ENDED|frontend||
 110|mock-data-layer|PENDING|frontend||
 103|areas-dashboard|PENDING|frontend||
 104|device-control|PENDING|frontend||
