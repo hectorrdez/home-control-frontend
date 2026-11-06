@@ -18,6 +18,16 @@ export default defineConfig(({ mode }) => {
         "/api": { target: proxyTarget, changeOrigin: true },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // three.js (106) ships as one named chunk, loaded only by the lazy HouseStage.
+          manualChunks(id) {
+            if (id.includes("/node_modules/three/")) return "three";
+          },
+        },
+      },
+    },
     test: {
       environment: "jsdom",
       include: ["src/**/*.test.{ts,tsx}"],
