@@ -21,7 +21,9 @@ export default function EditableName({ entityId, shown, label, raw, canRename, o
   const savingRef = useRef(false);
 
   useEffect(() => {
-    if (editing) inputRef.current?.select();
+    if (!editing) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
   }, [editing]);
 
   const close = (returnFocus: boolean) => {
@@ -61,7 +63,6 @@ export default function EditableName({ entityId, shown, label, raw, canRename, o
           <>
             <input
               ref={inputRef}
-              autoFocus
               type="text"
               value={draft}
               maxLength={80}
