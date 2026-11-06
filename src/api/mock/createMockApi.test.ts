@@ -2,9 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockApi } from "./createMockApi";
 import { createFixtureEntities } from "./fixtures";
 import { parseScenario, parseSeed } from "./scenarios";
-import { ApiError, type Entity } from "../types";
+import type { HomeApi } from "../HomeApi";
+import { ApiError, type Entity, type EntityAction } from "../types";
 
-const fast = { actionDelayMs: 0 };
+const fast = { actionDelayMs: 0, streamDelayMs: 0 };
+
+// The action answer shows the state from before the change (117); the store already holds the new one.
+async function applied(api: HomeApi, entityId: string, action: EntityAction): Promise<Entity> {
+  await api.runAction(entityId, action);
+  return (await api.getEntities()).find((e) => e.entityId === entityId)!;
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -41,15 +48,15 @@ describe("runAction", () => {
     const before = (await api.getEntities({ area: "kitchen" })).find((e) => e.domain === "light")!;
     expect(before.state).toBe("off");
 
-    const after = await api.runAction(before.entityId, { action: "toggle" });
+    const after = await applied(api, before.entityId, { action: "toggle" });
     expect(after.state).toBe("on");
-    expect(seen.map((e) => e.entityId)).toEqual([before.entityId]);
+    await vi.waitFor(() => expect(seen.map((e) => e.entityId)).toEqual([before.entityId]));
     expect((await api.getEntities({ area: "kitchen" })).find((e) => e.domain === "light")!.state).toBe("on");
   });
 
   it("applies brightness_pct to a light", async () => {
     const api = createMockApi(fast);
-    const updated = await api.runAction("light.bedroom_lamp", {
+    const updated = await applied(api, "light.bedroom_lamp", {
       action: "turn_on",
       params: { brightness_pct: 50 },
     });
@@ -58,20 +65,20 @@ describe("runAction", () => {
 
   it("sets climate temperature, hvac mode and preset", async () => {
     const api = createMockApi(fast);
-    const t = await api.runAction("climate.living_room", { action: "set_temperature", params: { temperature: 23 } });
+    const t = await applied(api, "climate.living_room", { action: "set_temperature", params: { temperature: 23 } });
     expect(t.attributes.temperature).toBe(23);
-    const m = await api.runAction("climate.living_room", { action: "set_hvac_mode", params: { hvac_mode: "cool" } });
+    const m = await applied(api, "climate.living_room", { action: "set_hvac_mode", params: { hvac_mode: "cool" } });
     expect(m.state).toBe("cool");
-    const p = await api.runAction("climate.living_room", { action: "set_preset_mode", params: { preset_mode: "away" } });
+    const p = await applied(api, "climate.living_room", { action: "set_preset_mode", params: { preset_mode: "away" } });
     expect(p.attributes.preset_mode).toBe("away");
   });
 
   it("moves covers by position and open/close", async () => {
     const api = createMockApi(fast);
-    const closed = await api.runAction("cover.bedroom_blinds", { action: "close_cover" });
+    const closed = await applied(api, "cover.bedroom_blinds", { action: "close_cover" });
     expect(closed.state).toBe("closed");
     expect(closed.attributes.current_position).toBe(0);
-    const pos = await api.runAction("cover.bedroom_blinds", { action: "set_cover_position", params: { position: 40 } });
+    const pos = await applied(api, "cover.bedroom_blinds", { action: "set_cover_position", params: { position: 40 } });
     expect(pos.state).toBe("open");
     expect(pos.attributes.current_position).toBe(40);
   });
@@ -262,9 +269,9 @@ describe("mock API domain actions", () => {
   it("handles switch and light on/off and rejects unsupported light actions", async () => {
     const api = createMockApi(fast);
     const sw = find("switch");
-    expect((await api.runAction(sw.entityId, { action: "turn_off" })).state).toBe("off");
-    expect((await api.runAction(sw.entityId, { action: "turn_on" })).state).toBe("on");
-    expect((await api.runAction(sw.entityId, { action: "toggle" })).state).toBe("off");
+    expect((await applied(api,sw.entityId, { action: "turn_off" })).state).toBe("off");
+    expect((await applied(api,sw.entityId, { action: "turn_on" })).state).toBe("on");
+    expect((await applied(api,sw.entityId, { action: "toggle" })).state).toBe("off");
     await expect(api.runAction(sw.entityId, { action: "explode" })).rejects.toMatchObject({ message: "invalid_action" });
 
     const light = find("light");
@@ -274,7 +281,7 @@ describe("mock API domain actions", () => {
   it("only lets scenes be activated", async () => {
     const api = createMockApi(fast);
     const scene = find("scene");
-    const after = await api.runAction(scene.entityId, { action: "turn_on" });
+    const after = await applied(api, scene.entityId, { action: "turn_on" });
     expect(after.lastChanged).not.toBe(scene.lastChanged);
     await expect(api.runAction(scene.entityId, { action: "turn_off" })).rejects.toMatchObject({ message: "invalid_action" });
   });
@@ -282,9 +289,9 @@ describe("mock API domain actions", () => {
   it("sets climate targets and rejects bad climate actions", async () => {
     const api = createMockApi(fast);
     const climate = find("climate");
-    const hot = await api.runAction(climate.entityId, { action: "set_temperature", params: { temperature: 23 } });
+    const hot = await applied(api,climate.entityId, { action: "set_temperature", params: { temperature: 23 } });
     expect(hot.attributes.temperature).toBe(23);
-    const mode = await api.runAction(climate.entityId, { action: "set_hvac_mode", params: { hvac_mode: "off" } });
+    const mode = await applied(api,climate.entityId, { action: "set_hvac_mode", params: { hvac_mode: "off" } });
     expect(mode.state).toBe("off");
     await expect(api.runAction(climate.entityId, { action: "set_temperature", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
     await expect(api.runAction(climate.entityId, { action: "set_preset_mode", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
@@ -294,9 +301,9 @@ describe("mock API domain actions", () => {
   it("closes, opens and positions covers and rejects unknown cover actions", async () => {
     const api = createMockApi(fast);
     const cover = find("cover");
-    expect((await api.runAction(cover.entityId, { action: "close_cover" })).state).toBe("closed");
-    expect((await api.runAction(cover.entityId, { action: "open_cover" })).attributes.current_position).toBe(100);
-    const half = await api.runAction(cover.entityId, { action: "set_cover_position", params: { position: 0 } });
+    expect((await applied(api,cover.entityId, { action: "close_cover" })).state).toBe("closed");
+    expect((await applied(api,cover.entityId, { action: "open_cover" })).attributes.current_position).toBe(100);
+    const half = await applied(api,cover.entityId, { action: "set_cover_position", params: { position: 0 } });
     expect(half.state).toBe("closed");
     await expect(api.runAction(cover.entityId, { action: "set_cover_position", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
     await expect(api.runAction(cover.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
@@ -305,9 +312,30 @@ describe("mock API domain actions", () => {
   it("locks and unlocks and rejects other lock actions", async () => {
     const api = createMockApi(fast);
     const lock = find("lock");
-    expect((await api.runAction(lock.entityId, { action: "unlock" })).state).toBe("unlocked");
-    expect((await api.runAction(lock.entityId, { action: "lock" })).state).toBe("locked");
+    expect((await applied(api,lock.entityId, { action: "unlock" })).state).toBe("unlocked");
+    expect((await applied(api,lock.entityId, { action: "lock" })).state).toBe("locked");
     await expect(api.runAction(lock.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
+  });
+
+  it("answers with the pre-action state and streams the new state after the delay (117)", async () => {
+    const api = createMockApi({ actionDelayMs: 0, streamDelayMs: 20 });
+    const sw = find("switch");
+    const target = sw.state === "on" ? "turn_off" : "turn_on";
+    const expected = target === "turn_on" ? "on" : "off";
+    const streamed: string[] = [];
+    const stop = api.subscribe(
+      (e) => {
+        if (e.entityId === sw.entityId) streamed.push(e.state);
+      },
+      () => undefined,
+    );
+
+    const answer = await api.runAction(sw.entityId, { action: target });
+    expect(answer.state).toBe(sw.state);
+    expect(streamed).toEqual([]);
+
+    await vi.waitFor(() => expect(streamed).toEqual([expected]));
+    stop();
   });
 
   it("refuses actions on domains the mock does not control", async () => {

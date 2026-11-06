@@ -60,6 +60,15 @@ export class DeviceCard {
     await expect(this.page.getByRole("textbox", { name: /^Name for / })).toBeHidden();
   }
 
+  // Feature 117: the loader inside the control that sent the action (decorative; aria-busy carries the state).
+  spinner(): Locator {
+    return this.card().getByTestId("spinner");
+  }
+
+  powerSpinner(): Locator {
+    return this.power().getByTestId("spinner");
+  }
+
   confirmUnlock(): Locator {
     return this.card().getByRole("button", { name: "CONFIRM UNLOCK" });
   }

@@ -18,6 +18,7 @@ export interface MockApiOptions {
   seed?: number;
   actionDelayMs?: number; // default 150
   slowMs?: number; // default 2000
+  streamDelayMs?: number; // default 300 (slow scenario: 1500); the new state follows the action answer on the stream
 }
 
 const HA_VERSION = "2026.4.1";
@@ -41,6 +42,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const seed = options.seed ?? 1;
   const actionDelayMs = options.actionDelayMs ?? 150;
   const slowMs = options.slowMs ?? 2000;
+  const streamDelayMs = options.streamDelayMs ?? (scenario === "slow" ? 1500 : 300);
 
   const entities = new Map<string, Entity>(
     scenario === "empty" ? [] : [...createFixtureEntities(), ...(scenario === "raw-names" ? createRawNameEntities() : [])].map((e) => [e.entityId, e]),
@@ -273,8 +275,13 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       const updated = applyAction(current, action);
       entities.set(entityId, updated);
-      emit(updated);
-      return clone(updated);
+      // Like Home Assistant (117): the answer still shows the state before the change; the new state
+      // reaches the stream a little later, so the optimistic value has to bridge the gap.
+      setTimeout(() => {
+        const latest = entities.get(entityId);
+        if (latest) emit(latest);
+      }, streamDelayMs);
+      return clone(current);
     },
 
     subscribe(onEntity: (e: Entity) => void, onConnection: (s: ConnectionState) => void) {

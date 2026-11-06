@@ -1,9 +1,11 @@
 import StringUtils from "@utils/StringUtils";
 import type { ComponentProps } from "react";
+import Spinner from "./Spinner";
 
 type SwitchProps = Omit<ComponentProps<"button">, "onChange" | "value"> & {
   checked: boolean;
   onCheckedChange?: (checked: boolean) => void;
+  busy?: boolean; // 117: an action is in flight; the loader sits inside the thumb
 };
 
 export default function Switch({
@@ -11,6 +13,7 @@ export default function Switch({
   onCheckedChange,
   className,
   disabled = false,
+  busy = false,
   ...args
 }: SwitchProps) {
   return (
@@ -18,6 +21,7 @@ export default function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-busy={busy || undefined}
       disabled={disabled}
       onClick={() => onCheckedChange?.(!checked)}
       className={StringUtils.JoinClassName(
@@ -32,10 +36,12 @@ export default function Switch({
       <span
         aria-hidden="true"
         className={StringUtils.JoinClassName(
-          "absolute left-1 top-1 h-5 w-5 rounded-full transition-transform duration-200",
+          "absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full transition-transform duration-200",
           checked ? "translate-x-5 bg-primary-container" : "bg-on-surface-variant",
         )}
-      />
+      >
+        {busy && <Spinner size="sm" className={checked ? "text-on-primary-container" : "text-on-surface"} />}
+      </span>
     </button>
   );
 }

@@ -1,8 +1,10 @@
 import StringUtils from "@utils/StringUtils";
 import { useId, useState } from "react";
 import type { Hue } from "@/components/cards/deviceState";
+import Spinner from "./Spinner";
 
 // Feature 104: native range input in the domain hue. Commits on release (pointer up / key up), not on every move.
+// Stays focusable while busy (117): only a small inline spinner next to the label.
 type SliderProps = {
   label: string;
   value: number;
@@ -11,6 +13,7 @@ type SliderProps = {
   step?: number;
   unit: string;
   hue: Hue;
+  busy?: boolean;
   onCommit: (value: number) => void;
 };
 
@@ -20,7 +23,7 @@ const accent = {
   tertiary: "accent-tertiary-fixed-dim",
 };
 
-export default function Slider({ label, value, min, max, step = 1, unit, hue, onCommit }: SliderProps) {
+export default function Slider({ label, value, min, max, step = 1, unit, hue, busy = false, onCommit }: SliderProps) {
   const [draft, setDraft] = useState<number | null>(null);
   const shown = draft ?? value;
 
@@ -36,12 +39,16 @@ export default function Slider({ label, value, min, max, step = 1, unit, hue, on
   return (
     <div className="flex flex-col gap-space-xs">
       <span id={labelId} className="flex items-center justify-between font-mono text-label-caps uppercase text-on-surface-variant">
-        <span>{label}</span>
+        <span className="flex items-center gap-space-xs">
+          {label}
+          {busy && <Spinner size="sm" className="text-primary-container" />}
+        </span>
         <span className="text-on-surface">{`${shown}${unit}`}</span>
       </span>
       <input
         type="range"
         aria-labelledby={labelId}
+        aria-busy={busy || undefined}
         min={min}
         max={max}
         step={step}

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useApi } from "@/api/ApiContext";
 import type { ConnectionState, Entity } from "@/api/types";
-import { entitiesReducer, initialEntitiesState, type EntitiesState } from "./entities";
+import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, type EntitiesState } from "./entities";
 import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 
@@ -61,6 +61,31 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       },
     );
   }, [api]);
+
+  // 117: an action whose answer still showed the old state waits for its stream event. After SETTLE_TIMEOUT_MS
+  // the marker is dropped and the areas are re-fetched, so the server state takes over. Keyed on the settling
+  // actions only, so unrelated updates do not restart the timers.
+  const settlingKey = Object.entries(state.pending)
+    .filter(([, pending]) => pending.settling)
+    .map(([entityId, pending]) => `${entityId}:${pending.requestId}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!settlingKey) return;
+    const timers = settlingKey.split("|").map((entry) => {
+      const separator = entry.lastIndexOf(":");
+      const entityId = entry.slice(0, separator);
+      const requestId = Number(entry.slice(separator + 1));
+      return window.setTimeout(() => {
+        dispatch({ type: "settleTimedOut", entityId, requestId });
+        void api.getAreas().then(
+          (areas) => dispatch({ type: "areasRefreshed", areas }),
+          () => undefined, // keep the last state; the next stream event or reload will correct it
+        );
+      }, SETTLE_TIMEOUT_MS);
+    });
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [settlingKey, api]);
 
   const sendIntent = useCallback(
     (entity: Entity, intent: Intent): Promise<boolean> => {

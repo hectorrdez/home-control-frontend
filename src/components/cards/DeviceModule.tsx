@@ -1,6 +1,6 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import StringUtils from "@utils/StringUtils";
 import Card from "@components/cards/Card";
-import StatusChip from "@components/controls/StatusChip";
 import type { Entity } from "@/api/types";
 import { useEntities } from "@/state/EntitiesProvider";
 import { useToast } from "@components/feedback/Toast";
@@ -49,7 +49,11 @@ const hueWash = {
   tertiary: "from-tertiary-fixed-dim/10",
 };
 
-// Device card (103 read-only, 104 controls). Failed actions roll back and show an error toast.
+// 117: how long the success flash / error highlight stays after an action settles.
+const FEEDBACK_MS = 1200;
+
+// Device card (103 read-only, 104 controls, 117 feedback). A pending or settling action shows a loader in the
+// control that sent it; success flashes the card, failure highlights it and shows the error toast.
 export default function DeviceModule({ entity, areaName, drawText }: DeviceModuleProps) {
   const Icon = domainIcon(entity.domain);
   const hue = domainHue(entity.domain);
@@ -57,19 +61,57 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
   const { state, sendIntent } = useEntities();
   const toast = useToast();
   const names = useEntityName();
-  const pending = Boolean(state.pending[entity.entityId]);
+  const transition = state.pending[entity.entityId];
+  const pending = Boolean(transition);
+  const settling = transition?.settling ?? false;
+  const outcome = useRef<boolean | null>(null); // result of the last send: false = rolled back by the provider
+  const wasPending = useRef(false);
+  const feedbackTimer = useRef<number | undefined>(undefined);
+  const [feedback, setFeedback] = useState<"success" | "error" | null>(null);
+
+  const flash = useCallback((kind: "success" | "error") => {
+    window.clearTimeout(feedbackTimer.current);
+    setFeedback(kind);
+    feedbackTimer.current = window.setTimeout(() => setFeedback(null), FEEDBACK_MS);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(feedbackTimer.current), []);
+
+  // The settled action flashes success, unless its send already failed (the failure owns the highlight).
+  useEffect(() => {
+    if (pending) {
+      wasPending.current = true;
+      return;
+    }
+    if (!wasPending.current) return;
+    wasPending.current = false;
+    if (outcome.current !== false) flash("success");
+  }, [pending, flash]);
+
   const send = (intent: Intent) => {
+    outcome.current = null;
     void sendIntent(entity, intent).then((ok) => {
-      if (!ok) toast.show(`Could not update ${names.displayName(entity)}`);
+      outcome.current = ok;
+      if (!ok) {
+        flash("error");
+        toast.show(`Could not update ${names.displayName(entity)}`);
+      }
     });
   };
   const visualState = view.unavailable ? "unavailable" : view.on ? "on" : "off";
+  const feedbackClass =
+    feedback === "success"
+      ? "!border-secondary/50 !bg-secondary/10"
+      : feedback === "error"
+        ? "!border-error/50 !bg-error/10"
+        : "";
 
   return (
     <Card
       role="article"
       aria-label={names.displayName(entity)}
       data-state={visualState}
+      data-feedback={feedback ?? undefined}
       className={StringUtils.JoinClassName(
         "device-card flex flex-col gap-space-sm transition duration-150 motion-reduce:transition-none",
         "hover:-translate-y-0.5 hover:bg-surface-container-high motion-reduce:hover:translate-y-0",
@@ -78,6 +120,7 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
           : view.on
             ? `border-outline-variant/30 border-l-2 bg-linear-to-br to-surface-container ${hueWash[hue]} ${hueBorderLeft[hue]}`
             : "border-outline-variant/30",
+        feedbackClass,
       )}
     >
       <div className="flex items-center gap-space-sm">
@@ -123,8 +166,11 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
       {drawText && (
         <p className="font-mono text-label-caps uppercase text-on-surface-variant">{`DRAW METRIC ${drawText}`}</p>
       )}
+      {/* Live status for screen readers; the visible feedback is the loader inside the control. */}
+      <span aria-live="polite" className="sr-only">
+        {pending ? (settling ? "UPDATING" : "SENDING") : ""}
+      </span>
       <DeviceControls entity={entity} disabled={pending} send={send} />
-      {pending && <StatusChip tone="primary">SENDING</StatusChip>}
     </Card>
   );
 }

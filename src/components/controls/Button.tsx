@@ -1,8 +1,10 @@
 import StringUtils from "@utils/StringUtils";
 import type { ComponentProps } from "react";
+import Spinner from "./Spinner";
 
 type ButtonProps = ComponentProps<"button"> & {
   variant?: "primary" | "secondary" | "destructive";
+  busy?: boolean; // 117: an action is in flight; a loader shows before the label
 };
 
 const variants = {
@@ -17,6 +19,7 @@ export default function Button({
   children,
   className,
   type = "button",
+  busy = false,
   ...args
 }: ButtonProps) {
   const newClassName = StringUtils.JoinClassName(
@@ -26,7 +29,8 @@ export default function Button({
   );
 
   return (
-    <button type={type} className={newClassName} {...args}>
+    <button type={type} className={newClassName} aria-busy={busy || undefined} {...args}>
+      {busy && <Spinner size="sm" />}
       {children}
     </button>
   );

@@ -17,11 +17,17 @@ export type EntitiesStatus = "loading" | "ready" | "error";
 // One pending action per entity. `baseline` is the last value the server confirmed (rollback target).
 // A newer action supersedes the older optimistic value: it keeps the same baseline, and only its
 // requestId can confirm or roll back. `startedAt` (epoch ms) decides whether a stream event is newer.
+// `settling` (117): the HTTP answer still showed the pre-action state (Home Assistant applies the change after
+// answering), so the optimistic value is kept and the entity stays "in transition" until a stream event with the
+// expected state clears it, or SETTLE_TIMEOUT_MS passes (the provider then drops the marker and refreshes).
 export interface PendingAction {
   requestId: number;
   baseline: Entity;
   startedAt: number;
+  settling: boolean;
 }
+
+export const SETTLE_TIMEOUT_MS = 5000;
 
 export interface EntitiesState {
   status: EntitiesStatus;
@@ -39,6 +45,7 @@ export type EntitiesAction =
   | { type: "actionStarted"; entityId: string; requestId: number; optimistic: Entity; startedAt: number }
   | { type: "actionConfirmed"; entityId: string; requestId: number; entity: Entity }
   | { type: "actionFailed"; entityId: string; requestId: number }
+  | { type: "settleTimedOut"; entityId: string; requestId: number }
   | { type: "entityUpdated"; entity: Entity };
 
 export const initialEntitiesState: EntitiesState = {
@@ -89,11 +96,31 @@ export function reconcileEvent(
   return Date.parse(incoming.lastChanged) > pending.startedAt ? "apply" : "keep";
 }
 
+// True when an attribute the action changed (optimistic vs baseline) is not the optimistic value in `other`.
+function changedAttributeDiffers(baseline: Entity, optimistic: Entity, other: Entity): boolean {
+  return Object.keys(optimistic.attributes).some(
+    (key) =>
+      JSON.stringify(optimistic.attributes[key]) !== JSON.stringify(baseline.attributes[key]) &&
+      JSON.stringify(optimistic.attributes[key]) !== JSON.stringify(other.attributes[key]),
+  );
+}
+
+// An HTTP answer still shows the state from before the action (117): the state differs, or an attribute the
+// action changed still has its old value.
+function isStale(baseline: Entity, optimistic: Entity, answered: Entity): boolean {
+  return answered.state !== optimistic.state || changedAttributeDiffers(baseline, optimistic, answered);
+}
+
 function applyEvent(state: EntitiesState, incoming: Entity): EntitiesState {
   const id = incoming.entityId;
   const pending = state.pending[id];
   if (!pending) return withEntity(state, incoming);
-  if (reconcileEvent(pending, state.entities[id], incoming) === "keep") return state;
+  const optimistic = state.entities[id];
+  if (reconcileEvent(pending, optimistic, incoming) === "keep") return state;
+  // Same state but an older value for the attribute being changed (an event of a superseded action): keep the newer one.
+  if (optimistic && incoming.state === optimistic.state && changedAttributeDiffers(pending.baseline, optimistic, incoming)) {
+    return state;
+  }
   const { [id]: _settled, ...rest } = state.pending;
   return withEntity({ ...state, pending: rest }, incoming);
 }
@@ -129,6 +156,7 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
             requestId: action.requestId,
             baseline: previous ? previous.baseline : current,
             startedAt: action.startedAt,
+            settling: false,
           },
         },
       };
@@ -137,6 +165,11 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
       const pending = state.pending[action.entityId];
       // Stale confirmations (superseded by a newer action) are ignored.
       if (!pending || pending.requestId !== action.requestId) return state;
+      const optimistic = state.entities[action.entityId];
+      if (optimistic && isStale(pending.baseline, optimistic, action.entity)) {
+        // Keep the optimistic value; the stream event with the expected state (or the settle timeout) ends it.
+        return { ...state, pending: { ...state.pending, [action.entityId]: { ...pending, settling: true } } };
+      }
       const { [action.entityId]: _done, ...rest } = state.pending;
       return {
         ...state,
@@ -153,6 +186,13 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
         entities: { ...state.entities, [action.entityId]: pending.baseline },
         pending: rest,
       };
+    }
+    case "settleTimedOut": {
+      const pending = state.pending[action.entityId];
+      if (!pending || pending.requestId !== action.requestId || !pending.settling) return state;
+      // The optimistic value stays until the provider's area refresh brings the server state.
+      const { [action.entityId]: _settled, ...rest } = state.pending;
+      return { ...state, pending: rest };
     }
     case "entityUpdated": {
       const next = applyEvent(state, action.entity);

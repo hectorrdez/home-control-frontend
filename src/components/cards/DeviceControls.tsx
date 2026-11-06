@@ -46,7 +46,7 @@ export default function DeviceControls({ entity, disabled, send }: Omit<ControlP
     case "scene":
     case "script":
       return (
-        <Button variant="secondary" className="w-full" disabled={disabled} onClick={() => send({ kind: "activate" })}>
+        <Button variant="secondary" className="w-full" disabled={disabled} busy={disabled} onClick={() => send({ kind: "activate" })}>
           ACTIVATE
         </Button>
       );
@@ -60,14 +60,14 @@ function PowerControl({ entity, label, disabled, send }: ControlProps) {
     <Switch
       aria-label={`${label} power`}
       checked={entity.state === "on"}
-      disabled={disabled}
+      disabled={disabled} busy={disabled}
       onCheckedChange={(on) => send({ kind: "power", on })}
     />
   );
 }
 
 function LightControls(props: ControlProps) {
-  const { entity, send } = props;
+  const { entity, send, disabled } = props;
   const brightness = num(entity.attributes.brightness);
   return (
     <div className="flex flex-col gap-space-sm">
@@ -80,6 +80,7 @@ function LightControls(props: ControlProps) {
           max={100}
           unit="%"
           hue="primary"
+          busy={disabled}
           onCommit={(pct) => send({ kind: "brightness", pct })}
         />
       )}
@@ -137,6 +138,7 @@ function ClimateControls({ entity, disabled, send }: ControlProps) {
         max={max}
         step={step}
         unit=" °C"
+        busy={disabled}
         onChange={stepTo}
       />
       {modes.length > 0 && (
@@ -145,7 +147,7 @@ function ClimateControls({ entity, disabled, send }: ControlProps) {
             <FilterPill
               key={mode}
               selected={entity.state === mode}
-              disabled={disabled}
+              disabled={disabled} busy={disabled}
               onClick={() => send({ kind: "hvac_mode", mode })}
             >
               {mode.toUpperCase()}
@@ -159,7 +161,7 @@ function ClimateControls({ entity, disabled, send }: ControlProps) {
             <FilterPill
               key={preset}
               selected={entity.attributes.preset_mode === preset}
-              disabled={disabled}
+              disabled={disabled} busy={disabled}
               onClick={() => send({ kind: "preset", preset })}
             >
               {preset.toUpperCase()}
@@ -182,13 +184,14 @@ function CoverControls({ entity, hue, disabled, send }: ControlProps) {
         max={100}
         unit="%"
         hue={hue}
+        busy={disabled}
         onCommit={(value) => send({ kind: "cover_position", position: value })}
       />
       <div className="flex gap-space-sm">
-        <Button variant="secondary" className="flex-1" disabled={disabled} onClick={() => send({ kind: "cover_close" })}>
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_close" })}>
           SHUT (0%)
         </Button>
-        <Button variant="secondary" className="flex-1" disabled={disabled} onClick={() => send({ kind: "cover_open" })}>
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_open" })}>
           FULL (100%)
         </Button>
       </div>
@@ -209,7 +212,7 @@ function LockControl({ entity, label, disabled, send }: ControlProps) {
           <Button
             variant="destructive"
             className="flex-1"
-            disabled={disabled}
+            disabled={disabled} busy={disabled}
             onClick={() => {
               setConfirming(false);
               send({ kind: "lock", locked: false });
@@ -229,7 +232,7 @@ function LockControl({ entity, label, disabled, send }: ControlProps) {
     <Switch
       aria-label={`${label} locked`}
       checked={locked}
-      disabled={disabled}
+      disabled={disabled} busy={disabled}
       onCheckedChange={(next) => (next ? send({ kind: "lock", locked: true }) : setConfirming(true))}
     />
   );

@@ -241,3 +241,49 @@ describe("DeviceControls: scene, script and read-only domains", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+describe("DeviceControls: busy while an action is in flight (117)", () => {
+  it("shows the loader in the control that sent the action and keeps the sliders focusable", () => {
+    const light = entity({ entityId: "light.kitchen", domain: "light", state: "on", attributes: { brightness: 204 } });
+    renderControls(light, { disabled: true });
+    expect(screen.getByRole("switch", { name: "Kitchen ceiling power" }).getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("slider", { name: /INTENSITY/ }).getAttribute("aria-busy")).toBe("true");
+    expect(screen.getAllByTestId("spinner").length).toBe(2);
+    expect((screen.getByRole("slider", { name: /INTENSITY/ }) as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("marks the scene activation busy", () => {
+    renderControls(entity({ entityId: "scene.movie", domain: "scene", name: "Movie" }), { disabled: true });
+    expect(screen.getByRole("button", { name: "ACTIVATE" }).getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("marks the mode and preset pills busy and the setpoint stepper busy, without disabling the stepper", () => {
+    renderControls(
+      entity({
+        entityId: "climate.hall",
+        domain: "climate",
+        state: "heat",
+        attributes: { temperature: 21, hvac_modes: ["off", "heat"], preset_modes: ["home"], preset_mode: "home" },
+      }),
+      { disabled: true },
+    );
+    expect(screen.getByRole("button", { name: "HEAT" }).getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("button", { name: "HOME" }).getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("group", { name: "Target temperature" }).getAttribute("aria-busy")).toBe("true");
+    expect((screen.getByRole("button", { name: "Increase Target temperature" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("marks the cover presets and the position slider busy", () => {
+    renderControls(entity({ entityId: "cover.blinds", domain: "cover", state: "open", attributes: { current_position: 10 } }), {
+      disabled: true,
+    });
+    expect(screen.getByRole("button", { name: "SHUT (0%)" }).getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("slider").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("shows no loader when nothing is in flight", () => {
+    renderControls(entity({ entityId: "light.kitchen", domain: "light", state: "on", attributes: { brightness: 204 } }));
+    expect(screen.queryByTestId("spinner")).toBeNull();
+    expect(screen.getByRole("switch", { name: "Kitchen ceiling power" }).getAttribute("aria-busy")).toBeNull();
+  });
+});

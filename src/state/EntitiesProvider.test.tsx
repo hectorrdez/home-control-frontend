@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
 import type { Area, ConnectionState, Entity } from "@/api/types";
+import { SETTLE_TIMEOUT_MS } from "./entities";
 import { EntitiesProvider, useEntities } from "./EntitiesProvider";
 
 const light = (id: string, state = "off"): Entity => ({
@@ -168,5 +169,55 @@ describe("EntitiesProvider", () => {
     });
     expect(ok).toBe(false);
     expect(result.current.state.entities["light.k"].state).toBe("off");
+  });
+});
+
+describe("settling after a stale answer (117)", () => {
+  it("keeps the optimistic value until the matching stream event, which ends the settling", async () => {
+    // The answer still shows the old state (Home Assistant answers before it applies the change).
+    const h = harness({ runAction: async (id: string) => light(id, "off") });
+    const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+    await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+    let sent!: Promise<boolean>;
+    act(() => {
+      sent = result.current.sendIntent(light("light.k"), { kind: "power", on: true });
+    });
+    await act(async () => {
+      await sent;
+    });
+    expect(result.current.state.entities["light.k"].state).toBe("on");
+    expect(result.current.state.pending["light.k"]).toMatchObject({ settling: true });
+
+    h.emitEntity({ ...light("light.k", "on"), lastChanged: "2026-11-06T10:00:05.000Z" });
+    expect(result.current.state.pending["light.k"]).toBeUndefined();
+    expect(result.current.state.entities["light.k"].state).toBe("on");
+  });
+
+  it("drops the settling after the timeout and takes the server state from a refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness({ runAction: async (id: string) => light(id, "off") });
+      const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.state.status).toBe("ready");
+
+      await act(async () => {
+        void result.current.sendIntent(light("light.k"), { kind: "power", on: true });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.state.pending["light.k"]).toMatchObject({ settling: true });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTLE_TIMEOUT_MS);
+      });
+      expect(result.current.state.pending["light.k"]).toBeUndefined();
+      expect(result.current.state.entities["light.k"].state).toBe("off");
+      expect(h.getAreas).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
