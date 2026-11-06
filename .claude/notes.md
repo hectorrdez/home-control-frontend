@@ -1,0 +1,11 @@
+# Project notes - constraints and learnings
+# Append-only via add-note.cjs. Read before building. Reuse what's here; don't repeat past mistakes.
+# Content can be in any language; this file is yours.
+- HA_TOKEN lives in F:\proyectos\home-control\.env (parent folder) and belongs to the BACKEND only. Never read it here, never expose it via VITE_* vars, Electron or the docs repo.
+- Template origin: src/ came from a SaaS template (landing, pricing, auth, cookies pages, AuthContext, RouteProtector). Feature 101 removes what the panel does not need; keep layouts/, components/, ThemeProvider and tokens.
+- Backend dependencies: 103 needs backend 004 (areas), 104 needs 003 (entity-control), 105 needs 005 (realtime-stream), 108 needs backend 006. Develop against endpoints.md; mock the API in E2E until the backend feature exists.
+- Playwright is installed (chromium) with playwright.config.ts (testDir e2e/specs, webServer = vite dev on 5173). test.cjs runs tsc, oxlint, build, playwright; with zero specs Playwright exits non-zero, so 101 must add the first spec.
+- TOKENS: the frontend uses API_TOKEN (from F:\proyectos\home-control\.env) as VITE_API_TOKEN and sends Authorization: Bearer <token> on every /api call. VITE_* is baked into the bundle, so it is visible to anyone who can load the panel; acceptable only because access is Tailscale-private. HA_TOKEN is backend-only: never here.
+- DESIGN: target UI = Stitch export in design/stitch/ (reference only, not app code; screen.png are unstyled captures, open code.html in a browser). Rules in .claude/DESIGN.md; tokens in src/index.css @theme (feature 109). Execution order is history.md row order (not id order): 101,109,102,110,103,104,105,106,111,112,107,108.
+- API MODES: VITE_API_MODE=mock|live (102). Mock house + scenarios (?mock=empty|error|slow|action-error|stream-drop|offline|no-history, ?seed=) in src/api/mock (110); default for dev and Playwright, excluded from prod bundle. Frontend features progress without the backend.
+- BACKEND GAPS: (1) telemetry history (112) needs a new backend endpoint GET /api/history?entityIds=&hours= -> HistorySeries[] (not in backend 001-006); frontend degrades to HISTORY NOT AVAILABLE on 404. (2) SSE auth (105): EventSource cannot send Authorization header; backend 005 must accept ?token= or a cookie. (3) Event feed (111) is session-only; no logbook endpoint.

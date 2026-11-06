@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# harness
+.claude/handoff.md
+.claude/relay.pid
+.claude/relay.state
+.claude/relay.log
+.claude/relay.prompt.txt
+.claude/relay.launch.*
+.claude/kanban.local.json
+
+.env
+.env.*
+!.env.example
+
+test-results/
+playwright-report/

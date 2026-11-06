@@ -1,0 +1,61 @@
+{
+  "backend": "plane",
+  "baseUrl": "https://plane.hectorrdez.es",
+  "workspace": "scouttech",
+  "profile": "scouttech",
+  "project": "e4cc7d5b-6876-4fd8-bca0-00998bb1b4c4",
+  "projectName": "HomeControl",
+  "projectIdentifier": "HOME",
+  "repo": "home-control-frontend",
+  "mode": "harness",
+  "assignee": "5d8fa510-7493-4814-9555-8ba93819dd02",
+  "stages": {
+    "idea": {
+      "id": "c7416ad2-3d1e-45ed-b0f3-9920e303b507",
+      "name": "Idea"
+    },
+    "ready": {
+      "id": "17e1f285-c281-40c8-8d92-fceba6d53d1f",
+      "name": "Listo para empezar"
+    },
+    "doing": {
+      "id": "4c00d0b0-520e-49da-8c72-3ee4091986c2",
+      "name": "En progreso"
+    },
+    "testing": {
+      "id": "6adce1e8-dad2-4072-ba6b-fac386e7313a",
+      "name": "Por probar"
+    },
+    "pre": {
+      "id": "00627975-5ebf-4bbc-bb6f-baa6b46bf7f5",
+      "name": "Pendiente PRE"
+    },
+    "review": {
+      "id": "330c619d-438b-404f-b688-c4700ecf63c9",
+      "name": "Revisar en PRE"
+    },
+    "pro": {
+      "id": "001db8f9-217f-4525-832e-e7c2b380464f",
+      "name": "Pendiente PRO"
+    },
+    "done": {
+      "id": "8bdf0fb8-1d56-4573-80f4-5103de7aa200",
+      "name": "Completado"
+    }
+  },
+  "labels": {
+    "repo:home-control": "2d0324ff-c748-4b0a-b634-af3a5ab280a5",
+    "repo:home-control-frontend": "ffc3c7dc-277d-42b6-8b6c-ff62dfaaff81",
+    "repo:home-control-backend": "471a7ec6-8c96-406a-9c75-ce302ef0274b",
+    "tipo:Feature": "e43c80e5-bbcf-41d5-b768-31ab9a1b135e",
+    "tipo:Mejora": "af155ad4-1db8-4eba-89bc-191fc12fc43b",
+    "tipo:Bug": "1840d72b-9414-4beb-8010-9e2cb680a8c8",
+    "tipo:Error": "6ce6b8c8-b32e-4513-8e9f-098f88d2f6ea",
+    "tipo:Doc": "560e510f-8499-46c9-86d1-93d6defaf86d",
+    "env:DEV": "c2e11a08-99a3-4369-9fc6-09caa235a6c9",
+    "env:PRE": "580a25c0-42c4-46ed-8aa7-ee04ce183bab",
+    "env:PRO": "83b68064-f61e-41dc-b3db-b9ca20f8f2aa",
+    "Main": "8349ad43-fcc2-4e15-8ce5-6ecfc26216c8"
+  },
+  "titleFormat": "{id} {slug}"
+}

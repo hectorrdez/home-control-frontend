@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+<!-- STITCH_THREEJS_START:ANIMATION_1 class="fixed inset-0 w-full h-full bg-transparent" -->
+<div class="fixed inset-0 w-full h-full bg-transparent" style="display:block;">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-ANIMATION_1" style="width:100%;height:100%"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-ANIMATION_1');
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  // Interactive Three.js 3D Architectural Isometric Cutaway / Wireframe Floor Plan
+const container = document.getElementById('threejs-container') || document.body;
+const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0f18, 0.015);
+
+const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
+camera.position.set(28, 22, 28);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x1e293b, 1.2);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x00f0ff, 0.8);
+dirLight.position.set(20, 35, 15);
+scene.add(dirLight);
+
+const accentLight = new THREE.PointLight(0x10b981, 1.5, 40);
+accentLight.position.set(-10, 15, -10);
+scene.add(accentLight);
+
+// Room Glow Lights (Controlled by UI states)
+const roomGlows = {
+  living: new THREE.PointLight(0x00f0ff, 2.5, 14),
+  kitchen: new THREE.PointLight(0xf59e0b, 2.0, 12),
+  bedroom: new THREE.PointLight(0x8b5cf6, 1.8, 12),
+  office: new THREE.PointLight(0x00f0ff, 2.2, 12)
+};
+roomGlows.living.position.set(-4, 3, -4);
+roomGlows.kitchen.position.set(5, 3, -4);
+roomGlows.bedroom.position.set(-4, 3, 5);
+roomGlows.office.position.set(5, 3, 5);
+
+Object.values(roomGlows).forEach(light => scene.add(light));
+
+// Ground Grid Plane
+const gridHelper = new THREE.GridHelper(36, 36, 0x00f0ff, 0x1e293b);
+gridHelper.position.y = -0.05;
+scene.add(gridHelper);
+
+// Holographic Floor Base Plate
+const floorGeo = new THREE.BoxGeometry(22, 0.4, 22);
+const floorMat = new THREE.MeshPhongMaterial({
+  color: 0x0e1726,
+  transparent: true,
+  opacity: 0.85,
+  shininess: 40
+});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.position.y = -0.2;
+scene.add(floor);
+
+// Floor Edge Outline
+const floorEdge = new THREE.LineSegments(
+  new THREE.EdgesGeometry(floorGeo),
+  new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 })
+);
+floorEdge.position.y = -0.2;
+scene.add(floorEdge);
+
+// Materials for Architectural Wireframe Walls & Furniture
+const wallMat = new THREE.MeshPhongMaterial({
+  color: 0x1e293b,
+  transparent: true,
+  opacity: 0.35,
+  shininess: 80
+});
+
+const wallEdgeMat = new THREE.LineBasicMaterial({
+  color: 0x38bdf8,
+  transparent: true,
+  opacity: 0.85,
+  linewidth: 1.5
+});
+
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color: 0x00f0ff,
+  transparent: true,
+  opacity: 0.25,
+  roughness: 0.1,
+  transmission: 0.8,
+  thickness: 0.5
+});
+
+// Helper to create glowing wireframe architectural boxes
+function createWall(w, h, d, x, y, z) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mesh = new THREE.Mesh(geo, wallMat);
+  mesh.position.set(x, y + h / 2, z);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), wallEdgeMat);
+  mesh.add(edges);
+  scene.add(mesh);
+  return mesh;
+}
+
+// Exterior & Interior Cutaway Walls (low height for isometric visualization)
+createWall(21, 2.8, 0.4, 0, 0, -10.5); // Back wall
+createWall(0.4, 2.8, 21, -10.5, 0, 0); // Left wall
+createWall(21, 1.2, 0.4, 0, 0, 10.5);  // Front cutaway wall
+createWall(0.4, 1.2, 21, 10.5, 0, 0);  // Right cutaway wall
+
+// Interior Divider Walls
+createWall(0.3, 2.4, 21, 0.5, 0, 0);   // Center dividing wall
+createWall(10, 2.4, 0.3, -5.5, 0, 0.5); // Bedroom/Living divider
+createWall(10, 2.4, 0.3, 5.5, 0, 0.5);  // Kitchen/Office divider
+
+// Abstract Architectural Furniture
+function createFurniture(w, h, d, x, y, z, color = 0x1e293b, edgeColor = 0x00f0ff) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.6 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y + h / 2, z);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.7 }));
+  mesh.add(edges);
+  scene.add(mesh);
+  return mesh;
+}
+
+// Living Room: Sofa & Coffee Table
+createFurniture(5, 0.9, 2.2, -5, 0, -5.5, 0x152238, 0x00f0ff);
+createFurniture(3, 0.4, 1.5, -5, 0, -2.5, 0x0f172a, 0x38bdf8);
+// Media console / TV screen
+createFurniture(4.5, 1.8, 0.3, -5, 0, -9.8, 0x0a101d, 0x00f0ff);
+
+// Kitchen: Island & Counters
+createFurniture(6, 1.1, 2, 5.5, 0, -6, 0x1e293b, 0xf59e0b);
+createFurniture(2, 1.1, 4, 9, 0, -3.5, 0x1e293b, 0xf59e0b);
+
+// Bedroom: Bed & Nightstands
+createFurniture(4, 0.8, 5, -5, 0, 5.5, 0x182030, 0x8b5cf6);
+createFurniture(1, 0.6, 1, -8, 0, 7.5, 0x111827, 0x8b5cf6);
+createFurniture(1, 0.6, 1, -2, 0, 7.5, 0x111827, 0x8b5cf6);
+
+// Office: Desk & Workstation Setup
+createFurniture(4.5, 0.9, 2, 5.5, 0, 5.5, 0x162234, 0x00f0ff);
+createFurniture(2, 1.2, 0.2, 5.5, 0.9, 4.6, 0x00f0ff, 0x38bdf8);
+
+// Floating 3D Hotspot Markers
+const hotspots = [];
+const markerData = [
+  { id: 'living', name: 'Living Room Lights', pos: [-5, 4.2, -4], color: 0x00f0ff, icon: '💡' },
+  { id: 'kitchen', name: 'Kitchen Climate', pos: [5.5, 4.2, -4], color: 0xf59e0b, icon: '🌡️' },
+  { id: 'bedroom', name: 'Bedroom Blinds', pos: [-5, 4.2, 5.5], color: 0x8b5cf6, icon: '🪟' },
+  { id: 'office', name: 'Office Workstation', pos: [5.5, 4.2, 5.5], color: 0x10b981, icon: '⚡' }
+];
+
+markerData.forEach(data => {
+  const group = new THREE.Group();
+  group.position.set(...data.pos);
+
+  // Outer Glowing Ring
+  const ringGeo = new THREE.RingGeometry(0.55, 0.7, 32);
+  const ringMat = new THREE.MeshBasicMaterial({ color: data.color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  // Central Core Sphere
+  const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16);
+  const sphereMat = new THREE.MeshStandardMaterial({
+    color: data.color,
+    emissive: data.color,
+    emissiveIntensity: 0.8
+  });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  group.add(sphere);
+
+  // Beacon Vertical Line to Floor
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, -4.2, 0)
+  ]);
+  const lineMat = new THREE.LineDashedMaterial({
+    color: data.color,
+    dashSize: 0.3,
+    gapSize: 0.2,
+    transparent: true,
+    opacity: 0.6
+  });
+  const beaconLine = new THREE.Line(lineGeo, lineMat);
+  beaconLine.computeLineDistances();
+  group.add(beaconLine);
+
+  scene.add(group);
+  hotspots.push({ group, sphere, ring, initialY: data.pos[1], id: data.id });
+});
+
+// Interactive Orbit / Rotation Control Logic
+let isDragging = false;
+let prevMousePos = { x: 0, y: 0 };
+let rotationVelocity = { x: 0, y: 0 };
+let currentAngleY = Math.PI / 4;
+let currentAngleX = 0.52; // approx 30 deg isometric pitch
+const radius = 38;
+
+function updateCamera() {
+  camera.position.x = radius * Math.cos(currentAngleX) * Math.sin(currentAngleY);
+  camera.position.y = radius * Math.sin(currentAngleX);
+  camera.position.z = radius * Math.cos(currentAngleX) * Math.cos(currentAngleY);
+  camera.lookAt(0, 1.5, 0);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  isDragging = true;
+  prevMousePos = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDragging) return;
+  const deltaX = (e.clientX - prevMousePos.x) * 0.006;
+  const deltaY = (e.clientY - prevMousePos.y) * 0.006;
+  currentAngleY -= deltaX;
+  currentAngleX = Math.max(0.2, Math.min(1.2, currentAngleX + deltaY));
+  prevMousePos = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+
+window.addEventListener('pointerup', () => { isDragging = false; });
+
+// Expose Camera View Preset hooks for HUD buttons
+window.setIsoView = () => {
+  currentAngleY = Math.PI / 4;
+  currentAngleX = 0.58;
+  updateCamera();
+};
+
+window.setTopView = () => {
+  currentAngleY = 0;
+  currentAngleX = 1.35;
+  updateCamera();
+};
+
+window.resetCamera = () => {
+  currentAngleY = Math.PI / 4;
+  currentAngleX = 0.52;
+  updateCamera();
+};
+
+// Animation Loop
+let clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Floating bounce on hotspots
+  hotspots.forEach((h, i) => {
+    h.group.position.y = h.initialY + Math.sin(t * 2 + i * 1.5) * 0.2;
+    h.ring.rotation.z = t * 1.2;
+    const pulse = 1 + Math.sin(t * 3 + i) * 0.15;
+    h.sphere.scale.set(pulse, pulse, pulse);
+  });
+
+  // Slow ambient drift if not user interacting
+  if (!isDragging) {
+    currentAngleY += 0.0008;
+    updateCamera();
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize handling
+window.addEventListener('resize', () => {
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+})();
+</script>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_1 -->
+</body>
+</html>

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-bright": "#343944", "surface-container-lowest": "#090e17", "primary": "#dbfcff", "outline-variant": "#3b494b", "on-secondary-container": "#00311f", "on-primary": "#00363a", "secondary-fixed": "#6ffbbe", "background": "#0f131d", "surface-dim": "#0f131d", "tertiary-fixed": "#ffddb8", "on-background": "#dee2f0", "tertiary-container": "#ffd19c", "surface": "#0f131d", "inverse-on-surface": "#2c303b", "on-secondary-fixed-variant": "#005236", "error": "#ffb4ab", "on-error-container": "#ffdad6", "primary-container": "#00f0ff", "on-surface-variant": "#b9cacb", "inverse-primary": "#006970", "on-error": "#690005", "secondary-container": "#00a572", "error-container": "#93000a", "on-secondary": "#003824", "primary-fixed-dim": "#00dbe9", "on-secondary-fixed": "#002113", "surface-container-low": "#171c25", "on-tertiary": "#472a00", "surface-variant": "#30353f", "primary-fixed": "#7df4ff", "inverse-surface": "#dee2f0", "surface-container-highest": "#30353f", "tertiary": "#fff3ea", "surface-container": "#1b2029", "on-primary-fixed": "#002022", "surface-tint": "#00dbe9", "secondary-fixed-dim": "#4edea3", "on-tertiary-container": "#855300", "on-tertiary-fixed": "#2a1700", "on-primary-container": "#006970", "secondary": "#4edea3", "outline": "#849495", "on-surface": "#dee2f0", "on-tertiary-fixed-variant": "#653e00", "on-primary-fixed-variant": "#004f54", "surface-container-high": "#252a34", "tertiary-fixed-dim": "#ffb95f" }, "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, "spacing": { "gutter-desktop": "1.5rem", "space-md": "1rem", "margin-tablet": "1.5rem", "margin-desktop": "2rem", "gutter-tablet": "1.25rem", "margin": "1rem", "space-sm": "0.5rem", "space-xs": "0.25rem", "space-lg": "1.5rem", "space-xl": "2rem", "gutter": "1rem" }, "fontFamily": { "body-md": [ "Space Grotesk" ], "display-lg-mobile": [ "Space Grotesk" ], "body-lg": [ "Space Grotesk" ], "telemetry-lg": [ "JetBrains Mono" ], "title-md": [ "Space Grotesk" ], "headline-md": [ "Space Grotesk" ], "label-caps": [ "JetBrains Mono" ], "headline-lg": [ "Space Grotesk" ], "display-lg": [ "Space Grotesk" ], "headline-lg-mobile": [ "Space Grotesk" ], "telemetry-md": [ "JetBrains Mono" ] }, "fontSize": { "body-md": [ "14px", { "lineHeight": "20px", "fontWeight": "400" } ], "display-lg-mobile": [ "32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" } ], "body-lg": [ "16px", { "lineHeight": "24px", "fontWeight": "400" } ], "telemetry-lg": [ "24px", { "lineHeight": "32px", "letterSpacing": "0.02em", "fontWeight": "500" } ], "title-md": [ "18px", { "lineHeight": "24px", "fontWeight": "500" } ], "headline-md": [ "22px", { "lineHeight": "28px", "fontWeight": "500" } ], "label-caps": [ "11px", { "lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600" } ], "headline-lg": [ "32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "500" } ], "display-lg": [ "48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600" } ], "headline-lg-mobile": [ "24px", { "lineHeight": "32px", "fontWeight": "500" } ], "telemetry-md": [ "14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "400" } ] } } } };</script></head><body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen"><header class="fixed top-0 left-0 right-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl border-b border-outline-variant/30"><div class="h-16 w-full px-gutter-desktop flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md min-w-[260px]"><div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center border border-primary-container/40 shadow-[0_0_12px_rgba(0,240,255,0.25)]"><span class="material-symbols-outlined text-primary-container text-[22px]">nest_multi_room</span></div><div class="flex flex-col"><span class="font-title-md text-title-md tracking-tight text-on-surface uppercase font-bold flex items-center gap-space-xs">Home Control <span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_8px_rgba(78,222,163,0.8)]"></span></span><span class="font-label-caps text-label-caps text-secondary tracking-widest">ONLINE • LOCAL NETWORK (10.0.0.12)</span></div></div><div class="flex items-center justify-center"><nav class="flex items-center bg-surface-container-low p-space-xs rounded-xl border border-outline-variant/40" data-active-classes="bg-primary-container text-on-primary-container font-medium shadow-[0_0_12px_rgba(0,240,255,0.2)]"><a aria-current="page" class="px-space-md py-space-xs rounded-lg transition-colors min-h-[36px] flex items-center bg-primary-container text-on-primary-container font-medium shadow-[0_0_12px_rgba(0,240,255,0.2)]" data-path="home-3d" href="#">Home 3D</a><a class="px-space-md py-space-xs rounded-lg font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors min-h-[36px] flex items-center" data-path="telemetry-sensors" href="#">Telemetry &amp; Sensors</a></nav></div><div class="flex items-center gap-space-md min-w-[260px] justify-end"><div class="hidden xl:flex items-center gap-space-xs font-label-caps text-label-caps bg-surface-container-low px-space-sm py-space-xs rounded-lg border border-outline-variant/40"><span class="text-on-surface-variant">CPU</span><span class="text-primary-container font-telemetry-md text-telemetry-md">14%</span><span class="text-outline-variant mx-space-xs">|</span><span class="text-on-surface-variant">RAM</span><span class="text-secondary font-telemetry-md text-telemetry-md">1.2GB</span><span class="text-outline-variant mx-space-xs">|</span><span class="text-on-surface-variant">NODES</span><span class="text-tertiary-fixed-dim font-telemetry-md text-telemetry-md">24</span></div><div class="hidden md:flex flex-col items-end px-space-sm"><span class="font-telemetry-md text-telemetry-md text-on-surface tracking-wider font-semibold">14:28:09</span><span class="font-label-caps text-label-caps text-on-surface-variant">UTC+01:00</span></div><a class="w-11 h-11 rounded-lg bg-surface-container-low hover:bg-surface-container hover:text-on-surface text-on-surface-variant border border-outline-variant/40 flex items-center justify-center transition-colors min-w-[44px] min-h-[44px]" data-path="system-settings" href="#" title="Quick Settings"><span class="material-symbols-outlined text-[20px]">tune</span></a><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="w-full pt-16 bg-background min-h-screen"><div class="flex flex-col w-full">
+<div class="w-full px-gutter-desktop py-space-md">
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
+<!-- LEFT SIDEBAR: Device Controls & Telemetry -->
+<section class="xl:col-span-4 flex flex-col gap-space-md w-full">
+<!-- System Quick Telemetry Strip -->
+<div class="p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs relative overflow-hidden">
+<div class="flex items-center justify-between text-secondary">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_rgba(78,222,163,0.8)]"></span>
+<span class="font-label-caps text-label-caps tracking-widest text-secondary font-bold">ALL SYSTEMS SYNCHRONIZED</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant font-medium">NODE MESH // 01</span>
+</div>
+<div class="flex items-baseline justify-between mt-space-xs">
+<span class="font-body-md text-body-md text-on-surface">4 Zones Monitored • 18 Live Actuators</span>
+<div class="flex items-baseline gap-1 font-telemetry-md text-telemetry-md text-primary-container font-semibold">
+<span class="text-on-surface-variant text-label-caps">LOAD</span>
+<span>2.14</span>
+<span class="text-label-caps font-normal text-on-surface-variant">kW</span>
+</div>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden mt-space-xs">
+<div class="bg-gradient-to-r from-secondary to-primary-container h-full w-[42%]"></div>
+</div>
+</div>
+<!-- Filter Pill Bar -->
+<div class="flex items-center gap-space-xs overflow-x-auto pb-space-xs" id="filter-pills">
+<button class="filter-pill shrink-0 px-space-md py-space-xs min-h-[44px] rounded-lg font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-primary-container text-on-primary-container shadow-[0_0_14px_rgba(0,240,255,0.35)]" data-cat="all">
+<span class="material-symbols-outlined text-[16px]">grid_view</span>
+<span>ALL (18)</span>
+</button>
+<button class="filter-pill shrink-0 px-space-md py-space-xs min-h-[44px] rounded-lg font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container" data-cat="lights">
+<span class="material-symbols-outlined text-[16px]">lightbulb</span>
+<span>LIGHTS (8)</span>
+</button>
+<button class="filter-pill shrink-0 px-space-md py-space-xs min-h-[44px] rounded-lg font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container" data-cat="climate">
+<span class="material-symbols-outlined text-[16px]">thermostat</span>
+<span>CLIMATE (4)</span>
+</button>
+<button class="filter-pill shrink-0 px-space-md py-space-xs min-h-[44px] rounded-lg font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container" data-cat="security">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span>SECURITY (3)</span>
+</button>
+<button class="filter-pill shrink-0 px-space-md py-space-xs min-h-[44px] rounded-lg font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container" data-cat="plugs">
+<span class="material-symbols-outlined text-[16px]">power</span>
+<span>PLUGS (3)</span>
+</button>
+</div>
+<!-- Scrollable Card Deck -->
+<div class="flex flex-col gap-space-sm max-h-[calc(100vh-290px)] overflow-y-auto pr-space-xs">
+<!-- Card 1: Ceiling Light (Cyan Hue) -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="lights">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary-container shadow-[0_0_12px_rgba(0,240,255,0.25)]">
+<span class="material-symbols-outlined text-[22px]">wb_twilight</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-title-md text-title-md text-on-surface font-semibold">Living Arc Light</span>
+<span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_6px_rgba(0,240,255,0.9)]"></span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">LIVING ZONE A // DALI-04</span>
+</div>
+</div>
+<!-- 44x44 Touch Toggle Switch -->
+<button aria-label="Toggle Living Arc Light" class="device-toggle w-12 h-7 min-w-[48px] rounded-full bg-primary-container/20 p-1 flex items-center transition-colors relative" data-active="true">
+<div class="w-5 h-5 rounded-full bg-primary-container shadow-[0_0_8px_rgba(0,240,255,0.8)] ml-auto transition-all"></div>
+</button>
+</div>
+<div class="flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant pt-space-xs">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary-container">brightness_medium</span>
+                INTENSITY
+              </span>
+<span class="font-telemetry-md text-telemetry-md text-primary-container font-medium" id="val-arc">82%</span>
+</div>
+<div class="relative flex items-center h-8">
+<input class="w-full h-2 rounded-full bg-surface-container-lowest appearance-none cursor-pointer accent-primary-container" max="100" min="0" oninput="document.getElementById('val-arc').innerText = this.value + '%'" type="range" value="82"/>
+</div>
+</div>
+<!-- Card 2: Kitchen Pendant Array (Warm Amber Hue) -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="lights">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-tertiary-fixed-dim shadow-[0_0_12px_rgba(255,185,95,0.25)]">
+<span class="material-symbols-outlined text-[22px]">light</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-title-md text-title-md text-on-surface font-semibold">Kitchen Island Pendant</span>
+<span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim shadow-[0_0_6px_rgba(255,185,95,0.9)]"></span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">CULINARY BAY // 2700K WARM</span>
+</div>
+</div>
+<button aria-label="Toggle Kitchen Island Pendant" class="device-toggle w-12 h-7 min-w-[48px] rounded-full bg-tertiary-fixed-dim/20 p-1 flex items-center transition-colors relative" data-active="true">
+<div class="w-5 h-5 rounded-full bg-tertiary-fixed-dim shadow-[0_0_8px_rgba(255,185,95,0.8)] ml-auto transition-all"></div>
+</button>
+</div>
+<div class="flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant pt-space-xs">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-tertiary-fixed-dim">tune</span>
+                WARM SPECTRUM
+              </span>
+<span class="font-telemetry-md text-telemetry-md text-tertiary-fixed-dim font-medium" id="val-kitchen">65%</span>
+</div>
+<div class="relative flex items-center h-8">
+<input class="w-full h-2 rounded-full bg-surface-container-lowest appearance-none cursor-pointer accent-tertiary-fixed-dim" max="100" min="0" oninput="document.getElementById('val-kitchen').innerText = this.value + '%'" type="range" value="65"/>
+</div>
+</div>
+<!-- Card 3: HVAC Thermostat -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="climate">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[22px]">mode_fan</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface font-semibold">Climate Engine</span>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-caps text-label-caps text-secondary font-semibold">HEAT PUMP ACTIVE</span>
+<span class="text-on-surface-variant font-label-caps text-label-caps">• 48% RH</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-lg">
+<button aria-label="Decrease temperature" class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface hover:text-primary-container text-body-lg font-bold" onclick="adjustTemp(-0.5)">-</button>
+<button aria-label="Increase temperature" class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface hover:text-primary-container text-body-lg font-bold" onclick="adjustTemp(0.5)">+</button>
+</div>
+</div>
+<!-- Temperature Metrics -->
+<div class="flex items-baseline justify-between py-space-xs px-space-sm bg-surface-container-lowest rounded-lg">
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface-variant">CURRENT AMBIENT</span>
+<span class="font-telemetry-lg text-telemetry-lg text-on-surface font-semibold tracking-tight">21.5°C</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-caps text-label-caps text-primary-container">TARGET SETPOINT</span>
+<span class="font-telemetry-lg text-telemetry-lg text-primary-container font-semibold tracking-tight" id="target-temp">22.0°C</span>
+</div>
+</div>
+<!-- Fan Mode Selectors -->
+<div class="grid grid-cols-3 gap-space-xs pt-space-xs">
+<button class="h-10 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps font-semibold flex items-center justify-center gap-1 shadow-[0_0_10px_rgba(0,240,255,0.25)]">
+<span class="material-symbols-outlined text-[14px]">autorenew</span>
+<span>AUTO</span>
+</button>
+<button class="h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">eco</span>
+<span>ECO</span>
+</button>
+<button class="h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">bolt</span>
+<span>TURBO</span>
+</button>
+</div>
+</div>
+<!-- Card 4: Bedroom Motorized Blinds -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="security">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-[22px]">blinds</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface font-semibold">Master Suite Blinds</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant block">EAST FACADE // SOMFY MOTOR</span>
+</div>
+</div>
+<span class="font-telemetry-md text-telemetry-md text-secondary font-medium" id="blind-val">75% Open</span>
+</div>
+<div class="relative flex items-center h-8">
+<input class="w-full h-2 rounded-full bg-surface-container-lowest appearance-none cursor-pointer accent-secondary" max="100" min="0" oninput="document.getElementById('blind-val').innerText = this.value + '% Open'" type="range" value="75"/>
+</div>
+<div class="flex items-center justify-between gap-space-xs">
+<button class="flex-1 min-h-[44px] rounded-lg bg-surface-container-lowest hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps transition-colors">
+                DAWN SCENE
+              </button>
+<button class="flex-1 min-h-[44px] rounded-lg bg-surface-container-lowest hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps transition-colors">
+                SHUT (0%)
+              </button>
+<button class="flex-1 min-h-[44px] rounded-lg bg-surface-container-lowest hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps transition-colors">
+                FULL (100%)
+              </button>
+</div>
+</div>
+<!-- Card 5: Smart Plug (Desk & Audio) -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="plugs">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-secondary shadow-[0_0_10px_rgba(78,222,163,0.2)]">
+<span class="material-symbols-outlined text-[22px]">electrical_services</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-title-md text-title-md text-on-surface font-semibold">Desk Workstation</span>
+<span class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_6px_rgba(78,222,163,0.9)]"></span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">STUDIO OUTLET // RELAY-08</span>
+</div>
+</div>
+<button aria-label="Toggle Desk Workstation" class="device-toggle w-12 h-7 min-w-[48px] rounded-full bg-secondary/20 p-1 flex items-center transition-colors relative" data-active="true">
+<div class="w-5 h-5 rounded-full bg-secondary shadow-[0_0_8px_rgba(78,222,163,0.8)] ml-auto transition-all"></div>
+</button>
+</div>
+<div class="flex items-center justify-between px-space-sm py-space-xs bg-surface-container-lowest rounded-lg">
+<span class="font-label-caps text-label-caps text-on-surface-variant">DRAW METRIC</span>
+<div class="flex items-baseline gap-1 font-telemetry-md text-telemetry-md text-secondary font-semibold">
+<span>142.4</span>
+<span class="text-label-caps font-normal text-on-surface-variant">WATTS</span>
+</div>
+</div>
+</div>
+<!-- Card 6: Front Hallway Cam & Perimeter -->
+<div class="p-space-md rounded-xl bg-surface-container transition-all hover:bg-surface-container-high group flex flex-col gap-space-sm shadow-sm relative overflow-hidden" data-device="security">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[22px]">videocam</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<span class="font-title-md text-title-md text-on-surface font-semibold">Vestibule PIR Sensor</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-label-caps font-bold bg-secondary/20 text-secondary">ARMED</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant">ENTRY PASSAGEWAY</span>
+</div>
+</div>
+<div class="w-2.5 h-2.5 rounded-full bg-secondary animate-ping"></div>
+</div>
+<div class="flex items-center justify-between text-label-caps font-label-caps text-on-surface-variant pt-space-xs">
+<span>LAST MOTION DETECTED</span>
+<span class="text-on-surface font-medium">12 MIN AGO // IDLE</span>
+</div>
+</div>
+</div>
+</section>
+<!-- RIGHT MAIN CANVAS: Interactive 3D Architectural HUD -->
+<section class="xl:col-span-8 flex flex-col w-full relative">
+<div class="relative w-full h-[680px] rounded-2xl overflow-hidden bg-surface-container-lowest shadow-2xl flex flex-col justify-between p-space-md" id="threejs-container">
+<!-- ThreeJS Scene Canvas -->
+<!-- STITCH_THREEJS_START:ANIMATION_1 class="absolute inset-0 w-full h-full bg-transparent" -->
+<div class="absolute inset-0 w-full h-full bg-transparent" style="display:block;">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-ANIMATION_1" style="width:100%;height:100%"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-ANIMATION_1');
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  // Interactive Three.js 3D Architectural Isometric Cutaway / Wireframe Floor Plan
+const container = document.getElementById('threejs-container') || document.body;
+const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0f18, 0.015);
+
+const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
+camera.position.set(28, 22, 28);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x1e293b, 1.2);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x00f0ff, 0.8);
+dirLight.position.set(20, 35, 15);
+scene.add(dirLight);
+
+const accentLight = new THREE.PointLight(0x10b981, 1.5, 40);
+accentLight.position.set(-10, 15, -10);
+scene.add(accentLight);
+
+// Room Glow Lights (Controlled by UI states)
+const roomGlows = {
+  living: new THREE.PointLight(0x00f0ff, 2.5, 14),
+  kitchen: new THREE.PointLight(0xf59e0b, 2.0, 12),
+  bedroom: new THREE.PointLight(0x8b5cf6, 1.8, 12),
+  office: new THREE.PointLight(0x00f0ff, 2.2, 12)
+};
+roomGlows.living.position.set(-4, 3, -4);
+roomGlows.kitchen.position.set(5, 3, -4);
+roomGlows.bedroom.position.set(-4, 3, 5);
+roomGlows.office.position.set(5, 3, 5);
+
+Object.values(roomGlows).forEach(light => scene.add(light));
+
+// Ground Grid Plane
+const gridHelper = new THREE.GridHelper(36, 36, 0x00f0ff, 0x1e293b);
+gridHelper.position.y = -0.05;
+scene.add(gridHelper);
+
+// Holographic Floor Base Plate
+const floorGeo = new THREE.BoxGeometry(22, 0.4, 22);
+const floorMat = new THREE.MeshPhongMaterial({
+  color: 0x0e1726,
+  transparent: true,
+  opacity: 0.85,
+  shininess: 40
+});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.position.y = -0.2;
+scene.add(floor);
+
+// Floor Edge Outline
+const floorEdge = new THREE.LineSegments(
+  new THREE.EdgesGeometry(floorGeo),
+  new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 })
+);
+floorEdge.position.y = -0.2;
+scene.add(floorEdge);
+
+// Materials for Architectural Wireframe Walls & Furniture
+const wallMat = new THREE.MeshPhongMaterial({
+  color: 0x1e293b,
+  transparent: true,
+  opacity: 0.35,
+  shininess: 80
+});
+
+const wallEdgeMat = new THREE.LineBasicMaterial({
+  color: 0x38bdf8,
+  transparent: true,
+  opacity: 0.85,
+  linewidth: 1.5
+});
+
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color: 0x00f0ff,
+  transparent: true,
+  opacity: 0.25,
+  roughness: 0.1,
+  transmission: 0.8,
+  thickness: 0.5
+});
+
+// Helper to create glowing wireframe architectural boxes
+function createWall(w, h, d, x, y, z) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mesh = new THREE.Mesh(geo, wallMat);
+  mesh.position.set(x, y + h / 2, z);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), wallEdgeMat);
+  mesh.add(edges);
+  scene.add(mesh);
+  return mesh;
+}
+
+// Exterior & Interior Cutaway Walls (low height for isometric visualization)
+createWall(21, 2.8, 0.4, 0, 0, -10.5); // Back wall
+createWall(0.4, 2.8, 21, -10.5, 0, 0); // Left wall
+createWall(21, 1.2, 0.4, 0, 0, 10.5);  // Front cutaway wall
+createWall(0.4, 1.2, 21, 10.5, 0, 0);  // Right cutaway wall
+
+// Interior Divider Walls
+createWall(0.3, 2.4, 21, 0.5, 0, 0);   // Center dividing wall
+createWall(10, 2.4, 0.3, -5.5, 0, 0.5); // Bedroom/Living divider
+createWall(10, 2.4, 0.3, 5.5, 0, 0.5);  // Kitchen/Office divider
+
+// Abstract Architectural Furniture
+function createFurniture(w, h, d, x, y, z, color = 0x1e293b, edgeColor = 0x00f0ff) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.6 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y + h / 2, z);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.7 }));
+  mesh.add(edges);
+  scene.add(mesh);
+  return mesh;
+}
+
+// Living Room: Sofa & Coffee Table
+createFurniture(5, 0.9, 2.2, -5, 0, -5.5, 0x152238, 0x00f0ff);
+createFurniture(3, 0.4, 1.5, -5, 0, -2.5, 0x0f172a, 0x38bdf8);
+// Media console / TV screen
+createFurniture(4.5, 1.8, 0.3, -5, 0, -9.8, 0x0a101d, 0x00f0ff);
+
+// Kitchen: Island & Counters
+createFurniture(6, 1.1, 2, 5.5, 0, -6, 0x1e293b, 0xf59e0b);
+createFurniture(2, 1.1, 4, 9, 0, -3.5, 0x1e293b, 0xf59e0b);
+
+// Bedroom: Bed & Nightstands
+createFurniture(4, 0.8, 5, -5, 0, 5.5, 0x182030, 0x8b5cf6);
+createFurniture(1, 0.6, 1, -8, 0, 7.5, 0x111827, 0x8b5cf6);
+createFurniture(1, 0.6, 1, -2, 0, 7.5, 0x111827, 0x8b5cf6);
+
+// Office: Desk & Workstation Setup
+createFurniture(4.5, 0.9, 2, 5.5, 0, 5.5, 0x162234, 0x00f0ff);
+createFurniture(2, 1.2, 0.2, 5.5, 0.9, 4.6, 0x00f0ff, 0x38bdf8);
+
+// Floating 3D Hotspot Markers
+const hotspots = [];
+const markerData = [
+  { id: 'living', name: 'Living Room Lights', pos: [-5, 4.2, -4], color: 0x00f0ff, icon: '💡' },
+  { id: 'kitchen', name: 'Kitchen Climate', pos: [5.5, 4.2, -4], color: 0xf59e0b, icon: '🌡️' },
+  { id: 'bedroom', name: 'Bedroom Blinds', pos: [-5, 4.2, 5.5], color: 0x8b5cf6, icon: '🪟' },
+  { id: 'office', name: 'Office Workstation', pos: [5.5, 4.2, 5.5], color: 0x10b981, icon: '⚡' }
+];
+
+markerData.forEach(data => {
+  const group = new THREE.Group();
+  group.position.set(...data.pos);
+
+  // Outer Glowing Ring
+  const ringGeo = new THREE.RingGeometry(0.55, 0.7, 32);
+  const ringMat = new THREE.MeshBasicMaterial({ color: data.color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  // Central Core Sphere
+  const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16);
+  const sphereMat = new THREE.MeshStandardMaterial({
+    color: data.color,
+    emissive: data.color,
+    emissiveIntensity: 0.8
+  });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  group.add(sphere);
+
+  // Beacon Vertical Line to Floor
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, -4.2, 0)
+  ]);
+  const lineMat = new THREE.LineDashedMaterial({
+    color: data.color,
+    dashSize: 0.3,
+    gapSize: 0.2,
+    transparent: true,
+    opacity: 0.6
+  });
+  const beaconLine = new THREE.Line(lineGeo, lineMat);
+  beaconLine.computeLineDistances();
+  group.add(beaconLine);
+
+  scene.add(group);
+  hotspots.push({ group, sphere, ring, initialY: data.pos[1], id: data.id });
+});
+
+// Interactive Orbit / Rotation Control Logic
+let isDragging = false;
+let prevMousePos = { x: 0, y: 0 };
+let rotationVelocity = { x: 0, y: 0 };
+let currentAngleY = Math.PI / 4;
+let currentAngleX = 0.52; // approx 30 deg isometric pitch
+const radius = 38;
+
+function updateCamera() {
+  camera.position.x = radius * Math.cos(currentAngleX) * Math.sin(currentAngleY);
+  camera.position.y = radius * Math.sin(currentAngleX);
+  camera.position.z = radius * Math.cos(currentAngleX) * Math.cos(currentAngleY);
+  camera.lookAt(0, 1.5, 0);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  isDragging = true;
+  prevMousePos = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDragging) return;
+  const deltaX = (e.clientX - prevMousePos.x) * 0.006;
+  const deltaY = (e.clientY - prevMousePos.y) * 0.006;
+  currentAngleY -= deltaX;
+  currentAngleX = Math.max(0.2, Math.min(1.2, currentAngleX + deltaY));
+  prevMousePos = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+
+window.addEventListener('pointerup', () => { isDragging = false; });
+
+// Expose Camera View Preset hooks for HUD buttons
+window.setIsoView = () => {
+  currentAngleY = Math.PI / 4;
+  currentAngleX = 0.58;
+  updateCamera();
+};
+
+window.setTopView = () => {
+  currentAngleY = 0;
+  currentAngleX = 1.35;
+  updateCamera();
+};
+
+window.resetCamera = () => {
+  currentAngleY = Math.PI / 4;
+  currentAngleX = 0.52;
+  updateCamera();
+};
+
+// Animation Loop
+let clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Floating bounce on hotspots
+  hotspots.forEach((h, i) => {
+    h.group.position.y = h.initialY + Math.sin(t * 2 + i * 1.5) * 0.2;
+    h.ring.rotation.z = t * 1.2;
+    const pulse = 1 + Math.sin(t * 3 + i) * 0.15;
+    h.sphere.scale.set(pulse, pulse, pulse);
+  });
+
+  // Slow ambient drift if not user interacting
+  if (!isDragging) {
+    currentAngleY += 0.0008;
+    updateCamera();
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize handling
+window.addEventListener('resize', () => {
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+})();
+</script>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_1 -->
+<!-- TOP HUD OVERLAYS -->
+<div class="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md pointer-events-none">
+<!-- Left Top Floating Level HUD -->
+<div class="pointer-events-auto flex items-center gap-space-sm bg-surface-container-lowest/85 backdrop-blur-md px-space-md py-space-sm rounded-xl shadow-lg">
+<div class="w-9 h-9 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">architecture</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-caps text-label-caps text-primary-container font-bold tracking-wider">LEVEL 01 • RESIDENCE</span>
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">148 m²</span>
+</div>
+<div class="flex items-center gap-space-xs text-on-surface-variant font-label-caps text-[10px]">
+<span>CAM: ISOMETRIC 38°</span>
+<span>•</span>
+<span>FPS: 60.0</span>
+<span>•</span>
+<span class="text-secondary font-semibold">RAYCAST ACTIVE</span>
+</div>
+</div>
+</div>
+<!-- Right Top Live Ambient Telemetry Chips -->
+<div class="pointer-events-auto flex items-center flex-wrap gap-space-xs">
+<div class="px-space-sm py-1.5 rounded-lg bg-surface-container-lowest/85 backdrop-blur-md flex items-center gap-1.5 font-label-caps text-label-caps shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span class="text-on-surface-variant">LIVING:</span>
+<span class="text-primary-container font-semibold">21.5°C</span>
+<span class="text-on-surface-variant">48% RH</span>
+</div>
+<div class="px-space-sm py-1.5 rounded-lg bg-surface-container-lowest/85 backdrop-blur-md flex items-center gap-1.5 font-label-caps text-label-caps shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim"></span>
+<span class="text-on-surface-variant">KITCHEN:</span>
+<span class="text-tertiary-fixed-dim font-semibold">22.8°C</span>
+</div>
+<div class="px-space-sm py-1.5 rounded-lg bg-surface-container-lowest/85 backdrop-blur-md flex items-center gap-1.5 font-label-caps text-label-caps shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="text-on-surface-variant">BED:</span>
+<span class="text-secondary font-semibold">20.0°C</span>
+</div>
+<div class="px-space-sm py-1.5 rounded-lg bg-surface-container-lowest/85 backdrop-blur-md flex items-center gap-1.5 font-label-caps text-label-caps shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="text-on-surface-variant">STUDIO:</span>
+<span class="text-primary font-semibold">21.2°C</span>
+</div>
+</div>
+</div>
+<!-- BOTTOM HUD OVERLAYS -->
+<div class="relative z-10 flex flex-col lg:flex-row items-end lg:items-end justify-between gap-space-md pointer-events-none mt-auto">
+<!-- Bottom Left Room Quick Selector Chips -->
+<div class="pointer-events-auto flex items-center flex-wrap gap-space-xs bg-surface-container-lowest/85 backdrop-blur-md p-1.5 rounded-xl shadow-lg">
+<button class="room-selector px-space-md py-space-xs rounded-lg min-h-[44px] font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-primary-container text-on-primary-container shadow-[0_0_12px_rgba(0,240,255,0.3)]">
+<span class="material-symbols-outlined text-[16px]">chair</span>
+<span>LIVING ROOM</span>
+</button>
+<button class="room-selector px-space-md py-space-xs rounded-lg min-h-[44px] font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-[16px]">soup_kitchen</span>
+<span>KITCHEN</span>
+</button>
+<button class="room-selector px-space-md py-space-xs rounded-lg min-h-[44px] font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-[16px]">bed</span>
+<span>MASTER SUITE</span>
+</button>
+<button class="room-selector px-space-md py-space-xs rounded-lg min-h-[44px] font-label-caps text-label-caps transition-all flex items-center gap-1.5 bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-[16px]">desk</span>
+<span>OFFICE</span>
+</button>
+</div>
+<!-- Bottom Right Minimal HUD Controls & Level Switch -->
+<div class="pointer-events-auto flex items-center gap-space-xs bg-surface-container-lowest/85 backdrop-blur-md p-1.5 rounded-xl shadow-lg">
+<!-- Floor Switch Segment -->
+<div class="flex items-center bg-surface-container rounded-lg p-0.5">
+<button class="px-space-sm min-h-[40px] rounded font-label-caps text-label-caps bg-primary-container text-on-primary-container font-semibold transition-all">
+                  FL 01
+                </button>
+<button class="px-space-sm min-h-[40px] rounded font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-all">
+                  FL 02
+                </button>
+</div>
+<div class="h-6 w-px bg-surface-container-highest mx-0.5"></div>
+<!-- Blueprint Mode Switch -->
+<button class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Toggle Blueprint 2D View">
+<span class="material-symbols-outlined text-[20px]">layers</span>
+</button>
+<!-- Isometric Camera Toggle -->
+<button class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Isometric Angle">
+<span class="material-symbols-outlined text-[20px]">view_in_ar</span>
+</button>
+<!-- Reset Camera Orbit -->
+<button class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Reset Orbit Camera">
+<span class="material-symbols-outlined text-[20px]">center_focus_strong</span>
+</button>
+</div>
+</div>
+</div>
+<!-- 3D HUD Telemetry Footer Strip -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm mt-space-sm px-space-xs font-label-caps text-label-caps text-on-surface-variant">
+<div class="flex items-center gap-space-md">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-secondary">wifi_tethering</span>
+<span>ZIGBEE MESH LATENCY: <strong class="text-secondary font-telemetry-md">9ms</strong></span>
+</span>
+<span class="hidden md:inline text-surface-container-highest">/</span>
+<span class="hidden md:flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary-container">lock</span>
+<span>TLS 1.3 ENCRYPTED INTRA-BUS</span>
+</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span>SCENE INTERACTION:</span>
+<span class="text-on-surface font-semibold">ORBIT [LEFT DRAG] • PAN [RIGHT DRAG]</span>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+<script>
+  // Filter pills interaction
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.filter-pill').forEach(p => {
+        p.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_14px_rgba(0,240,255,0.35)]');
+        p.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+      });
+      pill.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+      pill.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_14px_rgba(0,240,255,0.35)]');
+      
+      const cat = pill.getAttribute('data-cat');
+      const cards = document.querySelectorAll('[data-device]');
+      cards.forEach(card => {
+        if (cat === 'all' || card.getAttribute('data-device') === cat) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  // Room selector chips interaction
+  document.querySelectorAll('.room-selector').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.room-selector').forEach(b => {
+        b.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_12px_rgba(0,240,255,0.3)]');
+        b.classList.add('bg-surface-container', 'text-on-surface-variant');
+      });
+      btn.classList.remove('bg-surface-container', 'text-on-surface-variant');
+      btn.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-[0_0_12px_rgba(0,240,255,0.3)]');
+    });
+  });
+
+  // Device card toggle switches
+  document.querySelectorAll('.device-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const active = toggle.getAttribute('data-active') === 'true';
+      const thumb = toggle.querySelector('div');
+      if (active) {
+        toggle.setAttribute('data-active', 'false');
+        toggle.classList.remove('bg-primary-container/20', 'bg-tertiary-fixed-dim/20', 'bg-secondary/20');
+        toggle.classList.add('bg-surface-container-lowest');
+        thumb.classList.remove('ml-auto', 'bg-primary-container', 'bg-tertiary-fixed-dim', 'bg-secondary');
+        thumb.classList.add('mr-auto', 'bg-outline');
+      } else {
+        toggle.setAttribute('data-active', 'true');
+        toggle.classList.remove('bg-surface-container-lowest');
+        toggle.classList.add('bg-primary-container/20');
+        thumb.classList.remove('mr-auto', 'bg-outline');
+        thumb.classList.add('ml-auto', 'bg-primary-container');
+      }
+    });
+  });
+
+  // Thermostat target temperature step function
+  let curTarget = 22.0;
+  function adjustTemp(delta) {
+    curTarget = Math.round((curTarget + delta) * 10) / 10;
+    document.getElementById('target-temp').innerText = curTarget.toFixed(1) + '°C';
+  }
+</script></main><footer class="w-full bg-surface-container-lowest border-t border-outline-variant/30 py-space-md"><div class="w-full px-gutter-desktop flex flex-col md:flex-row items-center justify-between gap-space-sm font-label-caps text-label-caps text-on-surface-variant"><span>ENGINEERED HUD OS • CORE RELAY ACTIVE</span><span>ENCRYPTED LOCAL MESH // NODE 01</span></div></footer></body></html>
