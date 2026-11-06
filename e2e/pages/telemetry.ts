@@ -26,6 +26,11 @@ export class TelemetryPage {
   }
 
   gauge(label: string) {
-    return this.page.getByRole("img", { name: new RegExp(`^${label}:`) });
+    return this.page.getByRole("region", { name: "Levels" }).getByRole("img", { name: new RegExp(`^${label}:`) });
+  }
+
+  // One live chart card per numeric sensor, named by the sensor's friendly name.
+  chartCard(sensorName: string) {
+    return this.page.getByRole("region", { name: sensorName, exact: true });
   }
 }

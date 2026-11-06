@@ -11,6 +11,7 @@ import StatusChip from "@components/controls/StatusChip";
 import KpiCard from "@components/cards/KpiCard";
 import RingGauge from "@components/cards/RingGauge";
 import EventFeed from "@components/cards/EventFeed";
+import TelemetryChartsGrid from "@components/cards/TelemetryChartsGrid";
 import {
   airGrade,
   airQuality,
@@ -195,11 +196,8 @@ export default function TelemetryPage() {
         </section>
       )}
 
-      <section
-        aria-label="Climate history"
-        className="col-span-12 flex min-h-64 items-center justify-center rounded border border-outline-variant/30 p-space-md xl:col-span-8"
-      >
-        <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">CLIMATE HISTORY</span>
+      <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm xl:col-span-8">
+        <TelemetryChartsGrid sensors={entities} areaName={areaName} connection={connection} />
       </section>
 
       <div className="col-span-12 xl:col-span-4">
