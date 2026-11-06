@@ -16,5 +16,5 @@ id|slug|state|role|commit|commit_url
 112|telemetry-history|ENDED|frontend|39d2a7a|https://github.com/hectorrdez/home-control-frontend/commit/39d2a7a
 107|electron-shell|ENDED|frontend|b5ca0ee|https://github.com/hectorrdez/home-control-frontend/commit/b5ca0ee
 115|display-names|ENDED|frontend|33cab3a|https://github.com/hectorrdez/home-control-frontend/commit/33cab3a
-108|deploy-dokploy|PENDING|frontend||
+108|deploy-dokploy|ENDED|frontend|78a1e8e|https://github.com/hectorrdez/home-control-frontend/commit/78a1e8e
 114|telemetry-dashboard-editor|PENDING|frontend||
