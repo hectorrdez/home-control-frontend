@@ -28,6 +28,9 @@ function createLazyMockApi(search: string): HomeApi {
     getEntities: async (filter) => (await load()).getEntities(filter),
     runAction: async (entityId, action) => (await load()).runAction(entityId, action),
     getHistory: async (entityIds, hours) => (await load()).getHistory(entityIds, hours),
+    getAliases: async () => (await load()).getAliases(),
+    setAlias: async (entityId, alias) => (await load()).setAlias(entityId, alias),
+    deleteAlias: async (entityId) => (await load()).deleteAlias(entityId),
     subscribe(onEntity, onConnection) {
       let stop: (() => void) | undefined;
       let closed = false;

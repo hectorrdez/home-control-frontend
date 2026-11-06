@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Network, Thermometer, Wind, Zap } from "lucide-react";
 import PageGrid from "@layouts/PageGrid";
 import { useEntities } from "@/state/EntitiesProvider";
+import { useEntityName } from "@/features/names/useEntityName";
 import { UNASSIGNED } from "@/state/entities";
 import { allEntities, houseLoad } from "@/state/selectors";
 import type { ConnectionState, Entity } from "@/api/types";
@@ -70,6 +71,7 @@ function StatusStrip({ text }: { text: string }) {
 
 export default function TelemetryPage() {
   const { state, reload, connection } = useEntities();
+  const names = useEntityName();
 
   if (state.status === "error") {
     return (
@@ -110,7 +112,7 @@ export default function TelemetryPage() {
   const load = houseLoad(entities);
   const energy = energyToday(entities);
   const solar = solarPower(entities);
-  const gauges = ringGauges(entities);
+  const gauges = ringGauges(entities, undefined, names.displayName);
 
   if (sensors === 0) {
     return (

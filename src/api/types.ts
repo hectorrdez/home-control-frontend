@@ -14,6 +14,8 @@ export interface Entity {
   attributes: Record<string, unknown>;
   area: string | null;
   lastChanged: string;
+  // Feature 115 (backend 009): HA device name_by_user or name; null = no device / lookup failed. Absent on older backends.
+  deviceName?: string | null;
 }
 
 export interface Area {
@@ -32,6 +34,12 @@ export interface HistorySeries {
   entityId: string;
   unit: string | null;
   points: { t: string; v: number }[];
+}
+
+// Feature 115: user alias from backend 008 (/api/aliases). Entities never carry it; the client merges.
+export interface Alias {
+  entityId: string;
+  alias: string;
 }
 
 export type ConnectionState = "open" | "reconnecting" | "closed";

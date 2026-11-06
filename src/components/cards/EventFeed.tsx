@@ -2,6 +2,7 @@ import { Activity, Blinds, Lightbulb, Lock, Plug, Thermometer } from "lucide-rea
 import type { LucideIcon } from "lucide-react";
 import type { FeedEvent } from "@/state/feed";
 import Card from "./Card";
+import { useEntityName } from "@/features/names/useEntityName";
 
 const ICON: Record<string, LucideIcon> = {
   binary_sensor: Activity,
@@ -19,6 +20,7 @@ interface EventFeedProps {
 
 // Newest-first list of state changes. Session only: nothing is stored or fetched (no HA logbook endpoint).
 export default function EventFeed({ events, areaName }: EventFeedProps) {
+  const names = useEntityName();
   return (
     <Card role="region" aria-label="Event feed" className="flex flex-col gap-space-sm">
       <div className="flex flex-col gap-space-xs">
@@ -43,7 +45,7 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
                 <Icon size={16} className="shrink-0 text-primary-container" aria-hidden="true" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-sans text-body-md text-on-surface">
-                    {`${event.name} ${event.value}`}
+                    {`${names.displayName(event)} ${event.value}`}
                   </span>
                   <span className="truncate font-mono text-label-caps uppercase text-on-surface-variant">
                     {areaName(event.area)}

@@ -1,6 +1,7 @@
 import type { EntityFilter, HomeApi } from "../HomeApi";
 import {
   ApiError,
+  type Alias,
   type Area,
   type ConnectionState,
   type Entity,
@@ -8,7 +9,7 @@ import {
   type HaStatus,
   type HistorySeries,
 } from "../types";
-import { createFixtureEntities, FIXTURE_AREAS } from "./fixtures";
+import { createFixtureEntities, createRawNameEntities, FIXTURE_AREAS } from "./fixtures";
 import { createPrng, hashSeed } from "./prng";
 import { type Scenario } from "./scenarios";
 
@@ -42,7 +43,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const slowMs = options.slowMs ?? 2000;
 
   const entities = new Map<string, Entity>(
-    scenario === "empty" ? [] : createFixtureEntities().map((e) => [e.entityId, e]),
+    scenario === "empty" ? [] : [...createFixtureEntities(), ...(scenario === "raw-names" ? createRawNameEntities() : [])].map((e) => [e.entityId, e]),
   );
   const listeners = new Set<(e: Entity) => void>();
   const rng = createPrng(hashSeed(`stream:${seed}`));
@@ -162,7 +163,75 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     return { entityId, unit, points };
   }
 
+  // Feature 115: aliases persist in localStorage (per browser) and follow the backend 008 validation.
+  const ALIAS_KEY = "hc.mock.aliases.v1";
+  const ALIAS_CAP = 2000;
+  const ENTITY_ID = /^[a-z_]+\.[a-z0-9_]+$/;
+  const aliases = new Map<string, string>(loadAliases());
+
+  function loadAliases(): [string, string][] {
+    try {
+      const raw = globalThis.localStorage?.getItem(ALIAS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (row): row is Alias => typeof row?.entityId === "string" && typeof row?.alias === "string",
+      ).map((row) => [row.entityId, row.alias]);
+    } catch {
+      return []; // corrupt or blocked storage: start empty
+    }
+  }
+
+  function saveAliases(): void {
+    try {
+      globalThis.localStorage?.setItem(
+        ALIAS_KEY,
+        JSON.stringify([...aliases].map(([entityId, alias]) => ({ entityId, alias }))),
+      );
+    } catch {
+      // storage unavailable: aliases live for this page only
+    }
+  }
+
+  function aliasList(): Alias[] {
+    return [...aliases].map(([entityId, alias]) => ({ entityId, alias }));
+  }
+
+  function aliasWriteGuard(): void {
+    if (scenario === "alias-error") throw new ApiError("server", "aliases_write_failed", 500);
+  }
+
   return {
+    async getAliases(): Promise<Alias[]> {
+      if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");
+      if (scenario === "empty") return [];
+      return aliasList();
+    },
+
+    async setAlias(entityId: string, alias: string): Promise<Alias[]> {
+      if (!ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      const trimmed = alias.trim();
+      if (trimmed.length < 1 || trimmed.length > 80) throw new ApiError("server", "invalid_alias", 400);
+      if (!aliases.has(entityId) && aliases.size >= ALIAS_CAP) {
+        throw new ApiError("server", "too_many_aliases", 400);
+      }
+      await delay(actionDelayMs);
+      aliasWriteGuard();
+      aliases.set(entityId, trimmed);
+      saveAliases();
+      return aliasList();
+    },
+
+    async deleteAlias(entityId: string): Promise<Alias[]> {
+      if (!ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      await delay(actionDelayMs);
+      aliasWriteGuard();
+      aliases.delete(entityId);
+      saveAliases();
+      return aliasList();
+    },
+
     async getStatus(): Promise<HaStatus> {
       if (scenario === "unauthorized") throw new ApiError("unauthorized", "Mock scenario: unauthorized", 401);
       if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");

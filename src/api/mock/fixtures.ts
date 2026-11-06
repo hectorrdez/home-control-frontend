@@ -29,6 +29,7 @@ function entity(
     attributes,
     area,
     lastChanged: FIXTURE_TIME,
+    deviceName: null,
   };
 }
 
@@ -72,5 +73,23 @@ export function createFixtureEntities(): Entity[] {
     entity("sensor.solar_power", "960", { device_class: "power", unit_of_measurement: "W" }, null, "Solar power"),
     entity("sensor.entry_motion_battery", "87", { device_class: "battery", unit_of_measurement: "%" }, null, "Entry motion battery"),
     entity("scene.dawn", "2026-11-06T06:00:00.000Z", {}, null, "Dawn"),
+  ];
+}
+
+// Feature 115 "raw-names" scenario: the real HA names (sibling prefixes, ALL CAPS, double spaces) in the unassigned area.
+export function createRawNameEntities(): Entity[] {
+  const raw = (entityId: string, state: string, attributes: Record<string, unknown>, name: string, deviceName: string): Entity => ({
+    ...entity(entityId, state, attributes, null, name),
+    deviceName,
+  });
+  return [
+    raw("sensor.rt_ac65p_download_speed", "42", { device_class: "data_rate", state_class: "measurement", unit_of_measurement: "Mbit/s" }, "RT-AC65P Velocidad de descarga", "RT-AC65P"),
+    raw("sensor.rt_ac65p_upload_speed", "7", { device_class: "data_rate", state_class: "measurement", unit_of_measurement: "Mbit/s" }, "RT-AC65P Velocidad de subida", "RT-AC65P"),
+    raw("sensor.samsung_s24_battery_level", "76", { device_class: "battery", unit_of_measurement: "%" }, "samsung s24 hector Battery level", "samsung s24 hector"),
+    raw("sensor.samsung_s24_battery_state", "charging", {}, "samsung s24 hector Battery state", "samsung s24 hector"),
+    raw("sensor.backup_status", "idle", {}, "Backup Estado del administrador de copias de seguridad", "Backup"),
+    raw("sensor.backup_next", "2026-11-07T03:00:00.000Z", { device_class: "timestamp" }, "Backup Próxima copia de seguridad", "Backup"),
+    raw("binary_sensor.patio_door", "off", { device_class: "door" }, "ENCERRADO EN EL PATIO  Batería", "ENCERRADO EN EL PATIO"),
+    raw("sensor.patio_temperature", "14.2", { device_class: "temperature", unit_of_measurement: "°C" }, "ENCERRADO EN EL PATIO  Temperatura", "ENCERRADO EN EL PATIO"),
   ];
 }

@@ -4,12 +4,14 @@ import type { Entity } from "@/api/types";
 import { cssToken } from "@/features/telemetry/chartTokens";
 import { housePowerSensor, hourlyAverages, toPoints } from "@/features/telemetry/history";
 import { useHistory } from "@/features/telemetry/useHistory";
+import { useEntityName } from "@/features/names/useEntityName";
 import HistoryBody from "./HistoryBody";
 
 // Feature 112: hourly average watts of the house power sensor over 24 h. Peak hour is highlighted (tertiary).
 // Renders nothing when the house has no power sensor.
 export default function PowerHistoryBars({ entities }: { entities: Entity[] }) {
   const sensor = useMemo(() => housePowerSensor(entities), [entities]);
+  const names = useEntityName();
   const { state, retry } = useHistory(sensor ? [sensor.entityId] : [], 24);
   const bars = useMemo(() => {
     if (state.status !== "ready") return [];
@@ -22,9 +24,9 @@ export default function PowerHistoryBars({ entities }: { entities: Entity[] }) {
 
   return (
     <div className="flex flex-col gap-space-sm">
-      <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">{`${sensor.name} • HOURLY AVG W`}</p>
+      <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">{`${sensor ? names.displayName(sensor) : ""} • HOURLY AVG W`}</p>
       <HistoryBody state={state} retry={retry} empty={bars.length === 0}>
-        <div role="img" aria-label={`${sensor.name} hourly average watts over 24 hours, peak ${bars[peak]?.hour ?? "--"}`}>
+        <div role="img" aria-label={`${sensor ? names.displayName(sensor) : ""} hourly average watts over 24 hours, peak ${bars[peak]?.hour ?? "--"}`}>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={bars}>
               <XAxis dataKey="hour" minTickGap={24} />

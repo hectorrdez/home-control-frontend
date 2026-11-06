@@ -3,6 +3,8 @@ import StatusChip from "@components/controls/StatusChip";
 import type { Entity } from "@/api/types";
 import { useEntities } from "@/state/EntitiesProvider";
 import { useToast } from "@components/feedback/Toast";
+import EditableName from "@components/controls/EditableName";
+import { useEntityName } from "@/features/names/useEntityName";
 import type { Intent } from "@/state/actions";
 import DeviceControls from "./DeviceControls";
 import { describeState, domainHue, domainIcon } from "./deviceState";
@@ -38,16 +40,17 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
   const view = describeState(entity);
   const { state, sendIntent } = useEntities();
   const toast = useToast();
+  const names = useEntityName();
   const pending = Boolean(state.pending[entity.entityId]);
   const send = (intent: Intent) => {
     void sendIntent(entity, intent).then((ok) => {
-      if (!ok) toast.show(`Could not update ${entity.name}`);
+      if (!ok) toast.show(`Could not update ${names.displayName(entity)}`);
     });
   };
 
   return (
     <article
-      aria-label={entity.name}
+      aria-label={names.displayName(entity)}
       className={StringUtils.JoinClassName(
         "flex flex-col gap-space-sm rounded border border-outline-variant/30 bg-surface-container p-space-md transition-colors duration-150 hover:bg-surface-container-high",
         view.on ? `border-l-2 ${hueBorder[hue]}` : undefined,
@@ -64,7 +67,15 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-space-xs">
-            <span className="truncate font-sans text-title-md font-semibold text-on-surface">{entity.name}</span>
+            <EditableName
+              entityId={entity.entityId}
+              shown={names.shortName(entity)}
+              label={names.displayName(entity)}
+              raw={entity.name}
+              canRename={names.canRename}
+              onRename={(alias) => names.renameEntity(entity, alias)}
+              textClassName="font-sans text-title-md font-semibold text-on-surface"
+            />
             {(view.on || view.unavailable) && (
               <span
                 aria-hidden="true"

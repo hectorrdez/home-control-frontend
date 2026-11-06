@@ -8,6 +8,8 @@ export const SCENARIOS = [
   "offline",
   "unauthorized",
   "no-history",
+  "alias-error", // feature 115: setAlias/deleteAlias reject aliases_write_failed
+  "raw-names", // feature 115: adds the real HA names (siblings, ALL CAPS) so cleanup is visible
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

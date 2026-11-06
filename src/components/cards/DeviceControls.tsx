@@ -7,6 +7,7 @@ import Switch from "@components/controls/Switch";
 import type { Intent } from "@/state/actions";
 import type { Entity } from "@/api/types";
 import { domainHue, type Hue } from "./deviceState";
+import { useEntityName } from "@/features/names/useEntityName";
 
 // Feature 104: the domain controls of a device module. Each control maps to one Intent (see state/actions.ts).
 // Controls are disabled while the entity has an action in flight.
@@ -20,14 +21,16 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is
 
 interface ControlProps {
   entity: Entity;
+  label: string; // feature 115: display name (alias or cleaned); raw entity.name is never shown here
   hue: Hue;
   disabled: boolean;
   send: (intent: Intent) => void;
 }
 
-export default function DeviceControls({ entity, disabled, send }: Omit<ControlProps, "hue">) {
+export default function DeviceControls({ entity, disabled, send }: Omit<ControlProps, "hue" | "label">) {
   const hue = domainHue(entity.domain);
-  const props: ControlProps = { entity, hue, disabled, send };
+  const label = useEntityName().displayName(entity);
+  const props: ControlProps = { entity, label, hue, disabled, send };
   switch (entity.domain) {
     case "light":
       return <LightControls {...props} />;
@@ -52,10 +55,10 @@ export default function DeviceControls({ entity, disabled, send }: Omit<ControlP
   }
 }
 
-function PowerControl({ entity, disabled, send }: ControlProps) {
+function PowerControl({ entity, label, disabled, send }: ControlProps) {
   return (
     <Switch
-      aria-label={`${entity.name} power`}
+      aria-label={`${label} power`}
       checked={entity.state === "on"}
       disabled={disabled}
       onCheckedChange={(on) => send({ kind: "power", on })}
@@ -194,14 +197,14 @@ function CoverControls({ entity, hue, disabled, send }: ControlProps) {
 }
 
 // Locking is immediate; unlocking asks for a confirm step first (destructive style).
-function LockControl({ entity, disabled, send }: ControlProps) {
+function LockControl({ entity, label, disabled, send }: ControlProps) {
   const locked = entity.state === "locked";
   const [confirming, setConfirming] = useState(false);
 
   if (confirming) {
     return (
       <div className="flex flex-col gap-space-sm">
-        <p className="font-mono text-label-caps uppercase text-error">Unlock {entity.name}?</p>
+        <p className="font-mono text-label-caps uppercase text-error">Unlock {label}?</p>
         <div className="flex gap-space-sm">
           <Button
             variant="destructive"
@@ -224,7 +227,7 @@ function LockControl({ entity, disabled, send }: ControlProps) {
 
   return (
     <Switch
-      aria-label={`${entity.name} locked`}
+      aria-label={`${label} locked`}
       checked={locked}
       disabled={disabled}
       onCheckedChange={(next) => (next ? send({ kind: "lock", locked: true }) : setConfirming(true))}

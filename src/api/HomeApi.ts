@@ -5,6 +5,7 @@ import type {
   EntityAction,
   HaStatus,
   HistorySeries,
+  Alias,
 } from "./types";
 
 export interface EntityFilter {
@@ -23,4 +24,8 @@ export interface HomeApi {
     onConnection: (s: ConnectionState) => void,
   ): () => void;
   getHistory(entityIds: string[], hours: number): Promise<HistorySeries[]>;
+  // Feature 115 (backend 008). getAliases rejects with kind "not_found" when the backend has no aliases endpoint.
+  getAliases(): Promise<Alias[]>;
+  setAlias(entityId: string, alias: string): Promise<Alias[]>;
+  deleteAlias(entityId: string): Promise<Alias[]>;
 }

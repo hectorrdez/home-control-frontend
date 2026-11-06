@@ -1,5 +1,5 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { ApiError, type Alias, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 
@@ -146,6 +146,22 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
           .map((p) => ({ t: p.t, v: Number(p.v) }))
           .filter((p) => Number.isFinite(p.v)),
       }));
+    },
+
+    // Feature 115: backend 008. PUT/DELETE answer with the full alias list.
+    async getAliases(): Promise<Alias[]> {
+      return request<Alias[]>("/api/aliases");
+    },
+
+    async setAlias(entityId, alias): Promise<Alias[]> {
+      return request<Alias[]>(`/api/aliases/${encodeURIComponent(entityId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ alias }),
+      });
+    },
+
+    async deleteAlias(entityId): Promise<Alias[]> {
+      return request<Alias[]>(`/api/aliases/${encodeURIComponent(entityId)}`, { method: "DELETE" });
     },
   };
 }

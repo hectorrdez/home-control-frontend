@@ -1,4 +1,5 @@
 import type { Entity } from "@/api/types";
+import { displayName } from "@/features/names/displayName";
 import { CO2_FAIR_MAX, CO2_GOOD_MAX, GAUGE_LIMIT, GAUGE_OK_ABOVE, GAUGE_WARN_ABOVE } from "./constants";
 
 // Pure derivations for the telemetry view (feature 111). Components only render what these return.
@@ -117,7 +118,8 @@ export function gaugeHue(value: number): Hue {
   return "error";
 }
 
-export function ringGauges(entities: Entity[], limit: number = GAUGE_LIMIT): GaugeReading[] {
+// Feature 115: labels come from labelOf (the alias-aware name); regexes above keep matching on the raw name.
+export function ringGauges(entities: Entity[], limit: number = GAUGE_LIMIT, labelOf: (entity: Entity) => string = displayName): GaugeReading[] {
   const gauges: GaugeReading[] = [];
   const humidity: number[] = [];
   for (const entity of entities) {
@@ -128,7 +130,7 @@ export function ringGauges(entities: Entity[], limit: number = GAUGE_LIMIT): Gau
       humidity.push(value);
       continue;
     }
-    gauges.push({ id: entity.entityId, label: entity.name, value, hue: gaugeHue(value) });
+    gauges.push({ id: entity.entityId, label: labelOf(entity), value, hue: gaugeHue(value) });
   }
   if (humidity.length > 0) {
     const avg = humidity.reduce((sum, v) => sum + v, 0) / humidity.length;

@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 // One device module of the 104 device panel, addressed by its entity name.
 export class DeviceCard {
@@ -43,6 +43,23 @@ export class DeviceCard {
     return this.page.getByRole("switch", { name: `${this.name} locked`, exact: true });
   }
 
+  // Feature 115: inline rename (pencil -> textbox).
+  startRename(): Locator {
+    return this.page.getByRole("button", { name: `Rename ${this.name}`, exact: true });
+  }
+
+  nameInput(): Locator {
+    return this.card().getByRole("textbox");
+  }
+
+  async rename(name: string): Promise<void> {
+    await this.startRename().click();
+    await this.nameInput().fill(name);
+    await this.nameInput().press("Enter");
+    // The editor stays open (SENDING) until the save settles; wait so a following rename starts clean.
+    await expect(this.page.getByRole("textbox", { name: /^Name for / })).toBeHidden();
+  }
+
   confirmUnlock(): Locator {
     return this.card().getByRole("button", { name: "CONFIRM UNLOCK" });
   }
@@ -53,6 +70,6 @@ export class Toasts {
   constructor(private readonly page: Page) {}
 
   region(): Locator {
-    return this.page.getByRole("status");
+    return this.page.getByRole("status").filter({ hasText: /./ }).last();
   }
 }

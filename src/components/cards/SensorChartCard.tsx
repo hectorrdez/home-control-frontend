@@ -6,6 +6,8 @@ import { latestValue, trendDelta, type Point } from "@/features/telemetry/liveBu
 import { GAUGE_OK_ABOVE, GAUGE_WARN_ABOVE } from "@/features/telemetry/constants";
 import { cssToken } from "@/features/telemetry/chartTokens";
 import Card from "./Card";
+import EditableName from "@components/controls/EditableName";
+import { useEntityName } from "@/features/names/useEntityName";
 
 // Feature 113: one live chart per numeric sensor. Colors come from the shared token helper (features/telemetry/chartTokens).
 
@@ -100,17 +102,27 @@ interface SensorChartCardProps {
 
 function SensorChartCardView({ entity, areaName, widget, points, connection }: SensorChartCardProps) {
   const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement : "";
+  const names = useEntityName();
+  const label = names.displayName(entity);
   const current = latestValue(points);
   const value = current === null ? "--" : String(Math.round(current * 10) / 10);
   const now = points.length > 0 ? points[points.length - 1].t : 0;
   const trend = trendText(trendDelta(points, now), unit);
-  const summary = `${entity.name}: ${value}${unit ? ` ${unit}` : ""}, ${trend.label}`;
+  const summary = `${label}: ${value}${unit ? ` ${unit}` : ""}, ${trend.label}`;
 
   return (
-    <Card role="region" aria-label={entity.name} className={`flex flex-col gap-space-xs ${connection === "open" ? "" : "opacity-60"}`}>
+    <Card role="region" aria-label={label} className={`flex flex-col gap-space-xs ${connection === "open" ? "" : "opacity-60"}`}>
       <div className="flex items-start justify-between gap-space-xs">
         <div className="flex flex-col">
-          <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">{entity.name}</span>
+          <EditableName
+            entityId={entity.entityId}
+            shown={names.shortName(entity)}
+            label={label}
+            raw={entity.name}
+            canRename={names.canRename}
+            onRename={(alias) => names.renameEntity(entity, alias)}
+            textClassName="font-label-caps text-label-caps uppercase text-on-surface-variant"
+          />
           <span className="font-mono text-label-caps uppercase text-on-surface-variant">{areaName}</span>
         </div>
         <span className="font-mono text-label-caps uppercase text-on-surface-variant">{trend.text}</span>

@@ -7,6 +7,7 @@ export interface FeedEvent {
   key: string;
   entityId: string;
   name: string;
+  deviceName?: string | null; // feature 115: name is resolved at render time (alias may arrive later)
   value: string;
   area: string | null;
   at: string;
@@ -39,6 +40,7 @@ export function recordChange(feed: FeedEvent[], before: Entity | undefined, afte
     key: `${after.entityId}@${after.lastChanged}`,
     entityId: after.entityId,
     name: after.name,
+    deviceName: after.deviceName,
     value: next,
     area: after.area,
     at: after.lastChanged,
