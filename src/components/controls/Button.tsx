@@ -2,27 +2,31 @@ import StringUtils from "@utils/StringUtils";
 import type { ComponentProps } from "react";
 
 type ButtonProps = ComponentProps<"button"> & {
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "destructive";
 };
+
+const variants = {
+  primary: "bg-primary-container text-on-primary-container hover:bg-primary-fixed-dim",
+  secondary:
+    "border border-outline-variant bg-surface-container-high text-on-surface hover:bg-surface-container-highest",
+  destructive: "border border-error bg-error-container text-on-error-container hover:opacity-90",
+};
+
 export default function Button({
   variant = "primary",
   children,
   className,
-  onClick = () => {},
+  type = "button",
   ...args
 }: ButtonProps) {
-  const variants = {
-    primary: "text-on-primary bg-primary",
-    secondary: "text-on-secondary bg-secondary",
-  };
   const newClassName = StringUtils.JoinClassName(
-    "cursor-pointer min-w-[44px] min-h-[44px] flex flex-row justify-center items-center py-2 px-4 rounded-md font-semibold",
+    "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center gap-space-xs rounded px-space-md py-space-xs font-sans text-body-md font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container disabled:cursor-not-allowed disabled:opacity-50",
     variants[variant],
     className,
   );
 
   return (
-    <button className={newClassName} onClick={onClick} {...args}>
+    <button type={type} className={newClassName} {...args}>
       {children}
     </button>
   );

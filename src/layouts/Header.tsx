@@ -1,20 +1,30 @@
-import PathUtils from "@utils/PathUtils";
-import { NavLink } from "react-router-dom";
+import { House } from "lucide-react";
+import Clock from "./Clock";
+import { TopNav } from "./Navigation";
 
 export default function Header() {
   return (
-    <header className="flex h-16 items-center gap-6 px-4">
-      <span className="font-semibold">HOME CONTROL</span>
-      <nav aria-label="Main">
-        <ul className="flex gap-4">
-          <li>
-            <NavLink to={PathUtils.getRoutePath("home")}>Home 3D</NavLink>
-          </li>
-          <li>
-            <NavLink to={PathUtils.getRoutePath("telemetry")}>Telemetry</NavLink>
-          </li>
-        </ul>
-      </nav>
+    <header className="fixed inset-x-0 top-0 z-50 h-16 border-b border-outline-variant/30 bg-surface-container-lowest/90 backdrop-blur-xl">
+      <div className="flex h-full items-center justify-between gap-space-md px-gutter md:px-gutter-tablet xl:px-gutter-desktop">
+        <div className="flex min-w-0 items-center gap-space-md">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary-container/40 bg-surface-container shadow-glow-primary">
+            <House size={22} className="text-primary-container" aria-hidden="true" />
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <span className="font-sans text-title-md uppercase tracking-tight text-on-surface">
+              Home Control
+            </span>
+            <span className="font-mono text-label-caps tracking-widest text-on-surface-variant">
+              OFFLINE
+            </span>
+          </div>
+        </div>
+        <TopNav />
+        <div className="flex items-center gap-space-md">
+          <div data-slot="status-strip" className="hidden xl:flex" />
+          <Clock />
+        </div>
+      </div>
     </header>
   );
 }
