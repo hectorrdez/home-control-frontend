@@ -128,9 +128,116 @@ describe("TelemetryChartsGrid", () => {
     expect(screen.getByText("ALL CHARTS HIDDEN")).toBeTruthy();
     expect(screen.getByText("LIVE • 0 CHARTS")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "ALL" }));
+    // The Visibility pill is also named ALL (feature 118): pick the bulk button outside the filter groups.
+    const bulkAll = screen.getAllByRole("button", { name: "ALL" }).find((b) => b.closest('[role="group"]') === null)!;
+    fireEvent.click(bulkAll);
     expect(screen.queryByText("ALL CHARTS HIDDEN")).toBeNull();
     expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+  });
+
+  describe("search and filters (feature 118)", () => {
+    const counter = () => screen.getByRole("status", { name: "Charts shown" }).textContent;
+    const toggles = () => within(screen.getByRole("list", { name: "Chart toggles" })).queryAllByRole("switch");
+    const openPanel = () => fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    const pill = (group: string, name: RegExp) => within(screen.getByRole("group", { name: group })).getByRole("button", { name });
+    const bulk = (name: string) =>
+      screen.getAllByRole("button", { name }).find((b) => b.closest('[role="group"]') === null)!;
+
+    // Office sensor (no own name match), kitchen sensors, and an unassigned power sensor.
+    const mixed = () => [
+      { ...sensor("living"), area: "office", attributes: { device_class: "power", unit_of_measurement: "W", state_class: "measurement" } },
+      { ...sensor("bed"), area: null },
+      { ...sensor("kitchen_temp") },
+    ];
+    const areaOf = (id: string | null) => (id === "office" ? "Office" : id ? "Kitchen" : "Unassigned");
+    function renderMixed() {
+      const sensors = mixed();
+      const h = harness([{ areaId: "kitchen", name: "Kitchen", entities: sensors }]);
+      return render(
+        <Providers api={h.api}>
+          <TelemetryChartsGrid sensors={sensors} areaName={areaOf} connection="open" />
+        </Providers>,
+      );
+    }
+
+    it("shows the total and narrows the list by search", () => {
+      renderMixed();
+      openPanel();
+      expect(counter()).toBe("3 OF 3");
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
+      expect(counter()).toBe("1 OF 3");
+      expect(toggles()).toHaveLength(1);
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "zzz" } });
+      expect(screen.getByText("NO MATCHES")).toBeTruthy();
+      expect(screen.queryByRole("list", { name: "Chart toggles" })).toBeNull();
+    });
+
+    it("toggles zone and category pills (OR inside, AND across) and clears them", () => {
+      renderMixed();
+      openPanel();
+      fireEvent.click(pill("Zones", /^KITCHEN( \d+)?$/));
+      expect(counter()).toBe("1 OF 3");
+      fireEvent.click(pill("Zones", /^UNASSIGNED( \d+)?$/));
+      expect(counter()).toBe("2 OF 3");
+      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      expect(counter()).toBe("0 OF 3");
+      expect(screen.getByText("NO MATCHES")).toBeTruthy();
+
+      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      expect(counter()).toBe("2 OF 3");
+      fireEvent.click(pill("Zones", /^KITCHEN( \d+)?$/));
+      expect(pill("Zones", /^KITCHEN( \d+)?$/).getAttribute("aria-pressed")).toBe("false");
+      expect(counter()).toBe("1 OF 3");
+
+      fireEvent.click(screen.getByRole("button", { name: "CLEAR" }));
+      expect(counter()).toBe("3 OF 3");
+      expect(screen.getByRole("button", { name: "CLEAR" }).hasAttribute("disabled")).toBe(true);
+    });
+
+    it("visibility pills filter by switch state", () => {
+      renderMixed();
+      openPanel();
+      fireEvent.click(toggles()[0]);
+      fireEvent.click(pill("Visibility", /^OFF$/));
+      expect(counter()).toBe("1 OF 3");
+      fireEvent.click(pill("Visibility", /^ON$/));
+      expect(counter()).toBe("2 OF 3");
+      fireEvent.click(pill("Visibility", /^ALL$/));
+      expect(counter()).toBe("3 OF 3");
+    });
+
+    it("ALL and NONE only change the rows the filters show", () => {
+      renderMixed();
+      openPanel();
+      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      fireEvent.click(bulk("NONE"));
+      expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+      expect(screen.getByRole("switch", { name: "Show living sensor" }).getAttribute("aria-checked")).toBe("false");
+      expect(screen.queryByRole("switch", { name: "Show bed sensor" })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "CLEAR" }));
+      fireEvent.click(bulk("ALL"));
+      expect(screen.getByText("LIVE • 3 CHARTS")).toBeTruthy();
+    });
+
+    it("keeps a switch toggled through the filtered list in sync", () => {
+      renderMixed();
+      openPanel();
+      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      fireEvent.click(screen.getByRole("switch", { name: "Show living sensor" }));
+      expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+    });
+
+    it("does not persist filters: a fresh mount starts unfiltered", () => {
+      const first = renderMixed();
+      openPanel();
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
+      expect(counter()).toBe("1 OF 3");
+      first.unmount();
+      renderMixed();
+      openPanel();
+      expect(counter()).toBe("3 OF 3");
+    });
   });
 
   it("restores a saved layout from localStorage", () => {

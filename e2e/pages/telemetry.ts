@@ -33,6 +33,39 @@ export class TelemetryPage {
     return this.page.getByRole("switch", { name: `Show ${label}`, exact: true });
   }
 
+  // Feature 118: CHARTS side panel search and filters.
+  chartSearch() {
+    return this.page.getByRole("searchbox", { name: "Search charts" });
+  }
+
+  // Zone/category pill inside its group; pills carry a count suffix, e.g. "POWER 3".
+  chartFilter(group: string, label: string) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return this.page
+      .getByRole("group", { name: group, exact: true })
+      .getByRole("button", { name: new RegExp(`^${escaped}( \\d+)?$`) });
+  }
+
+  chartToggles() {
+    return this.page.getByRole("list", { name: "Chart toggles" }).getByRole("switch");
+  }
+
+  chartsShown() {
+    return this.page.getByRole("status", { name: "Charts shown" });
+  }
+
+  chartsClear() {
+    return this.page.getByRole("button", { name: "CLEAR", exact: true });
+  }
+
+  chartsNone() {
+    return this.page.getByRole("button", { name: "NONE", exact: true });
+  }
+
+  noMatches() {
+    return this.page.getByText("NO MATCHES", { exact: true });
+  }
+
   feedItems() {
     return this.page.getByRole("list", { name: "Event feed items" }).getByRole("listitem");
   }

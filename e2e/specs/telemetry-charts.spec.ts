@@ -63,6 +63,43 @@ test.describe("telemetry live charts", () => {
     await expect(telemetry.chartCard("Kitchen humidity")).toBeVisible();
   });
 
+  test("the charts panel searches and filters, and filters reset on reload", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await telemetry.open();
+    await telemetry.openChartsPanel();
+    await expect(telemetry.chartsShown()).toHaveText("16 OF 16");
+
+    await telemetry.chartSearch().fill("kitchen");
+    await expect(telemetry.chartToggles()).toHaveCount(2);
+    await telemetry.chartsClear().click();
+    await expect(telemetry.chartsShown()).toHaveText("16 OF 16");
+    await expect(telemetry.chartSearch()).toHaveValue("");
+
+    await telemetry.chartFilter("Categories", "POWER").click();
+    await telemetry.chartFilter("Zones", "OFFICE").click();
+    await expect(telemetry.chartToggles()).toHaveCount(1);
+    await expect(telemetry.chartToggle("Desk outlet power")).toBeVisible();
+
+    await telemetry.chartToggle("Desk outlet power").click();
+    await telemetry.chartFilter("Visibility", "OFF").click();
+    await expect(telemetry.chartToggle("Desk outlet power")).toBeVisible();
+    await telemetry.chartFilter("Visibility", "ON").click();
+    await expect(telemetry.noMatches()).toBeVisible();
+
+    await page.reload();
+    await telemetry.openChartsPanel();
+    await expect(telemetry.chartsShown()).toHaveText("16 OF 16");
+    await expect(telemetry.chartsClear()).toBeDisabled();
+    await expect(telemetry.chartToggle("Desk outlet power")).not.toBeChecked();
+
+    await telemetry.chartFilter("Categories", "CO2").click();
+    await telemetry.chartsNone().click();
+    await expect(telemetry.chartToggle("CO2")).not.toBeChecked();
+    await telemetry.chartsClear().click();
+    await expect(telemetry.chartToggle("CO2")).not.toBeChecked();
+    await expect(telemetry.chartToggle("Kitchen humidity")).toBeChecked();
+  });
+
   test("the empty house shows no charts", async ({ page }) => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open("?mock=empty");
