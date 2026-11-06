@@ -14,8 +14,6 @@ interface Envelope<T> {
   error?: string | { code?: string; message?: string };
 }
 
-type RawEntity = Entity & { areaName?: string | null };
-
 const UNASSIGNED = "unassigned";
 
 function kindFor(status: number, code: string | undefined): ApiErrorKind {
@@ -81,23 +79,9 @@ export function createLiveApi({ baseUrl, token, fetchImpl }: LiveApiOptions): Ho
     },
 
     async getAreas(): Promise<Area[]> {
-      // No areas endpoint yet: group the entities by their area.
-      const entities = await request<RawEntity[]>("/api/entities");
-      const groups = new Map<string, Area>();
-      for (const entity of entities) {
-        const areaId = entity.area ?? UNASSIGNED;
-        let group = groups.get(areaId);
-        if (!group) {
-          group = {
-            areaId,
-            name: entity.area === null ? "Unassigned" : (entity.areaName ?? areaId),
-            entities: [],
-          };
-          groups.set(areaId, group);
-        }
-        group.entities.push(entity);
-      }
-      return [...groups.values()];
+      // Backend 004: areas sorted by name, last group is the unassigned one with areaId null.
+      const areas = await request<Array<Omit<Area, "areaId"> & { areaId: string | null }>>("/api/areas");
+      return areas.map((area) => ({ ...area, areaId: area.areaId ?? UNASSIGNED }));
     },
 
     async runAction(entityId, action: EntityAction): Promise<Entity> {

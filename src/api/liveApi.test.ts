@@ -101,28 +101,23 @@ describe("liveApi request handling", () => {
     expect(url).toBe("http://panel.test/api/entities?domain=light&area=living");
   });
 
-  it("groups entities by area and puts entities without an area under unassigned", async () => {
-    const entity = (entityId: string, area: string | null, areaName?: string) => ({
-      entityId,
-      domain: "light",
-      name: entityId,
-      state: "on",
-      attributes: {},
-      area,
-      areaName,
-      lastChanged: "2026-11-06T10:00:00Z",
-    });
+  it("reads areas from /api/areas and maps the null unassigned group to unassigned", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse(200, {
-        data: [entity("light.a", "living", "Living"), entity("light.b", null), entity("light.c", "living", "Living")],
+        data: [
+          { areaId: "living", name: "Living", entities: [] },
+          { areaId: null, name: "Unassigned", entities: [] },
+        ],
       }),
     );
 
     const areas = await clientWith(fetchImpl).getAreas();
 
-    expect(areas.map((a) => [a.areaId, a.name, a.entities.length])).toEqual([
-      ["living", "Living", 2],
-      ["unassigned", "Unassigned", 1],
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toBe("http://panel.test/api/areas");
+    expect(areas.map((a) => [a.areaId, a.name])).toEqual([
+      ["living", "Living"],
+      ["unassigned", "Unassigned"],
     ]);
   });
 });

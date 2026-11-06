@@ -1,10 +1,10 @@
 import type { Page } from "@/types/page";
-import { SiteMap } from "@pages/Routes";
+import { ROUTE_PATHS } from "@pages/routePaths";
 import { Route } from "react-router-dom";
 
 export default class PathUtils {
   public static getRoutePath(name: string) {
-    return SiteMap.find((page) => page.name == name)?.path ?? "#";
+    return ROUTE_PATHS[name] ?? "#";
   }
 
   public static generateRoutes(routes: Array<Page>) {
