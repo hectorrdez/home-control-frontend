@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
@@ -56,7 +56,9 @@ function harness(overrides: { getAreas?: () => Promise<Area[]>; runAction?: Home
 }
 
 const wrapper = (api: HomeApi) => ({ children }: { children: ReactNode }) =>
-  createElement(ApiProvider, { api }, createElement(EntitiesProvider, null, children));
+  <ApiProvider api={api}>
+    <EntitiesProvider>{children}</EntitiesProvider>
+  </ApiProvider>;
 
 describe("EntitiesProvider", () => {
   it("throws when useEntities is used outside the provider", () => {
@@ -92,10 +94,10 @@ describe("EntitiesProvider", () => {
 
     act(() => {
       result.current.setSelectedArea("kitchen");
-      result.current.setSelectedGroup("lock");
+      result.current.setSelectedGroup("security");
     });
     expect(result.current.selectedArea).toBe("kitchen");
-    expect(result.current.selectedGroup).toBe("lock");
+    expect(result.current.selectedGroup).toBe("security");
   });
 
   it("merges stream entity updates into the store", async () => {

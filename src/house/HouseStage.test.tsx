@@ -53,11 +53,13 @@ const observers: Array<{ callback: () => void; disconnect: Mock }> = [];
 
 class FakeResizeObserver {
   disconnect = vi.fn();
-  constructor(public callback: () => void) {
-    observers.push(this);
-  }
+  callback: () => void;
   observe = vi.fn();
   unobserve = vi.fn();
+  constructor(callback: () => void) {
+    this.callback = callback;
+    observers.push(this);
+  }
 }
 
 const firstArea = DEFAULT_PLAN.floors[0].rooms[0].areaId;
