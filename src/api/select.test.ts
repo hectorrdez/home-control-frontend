@@ -25,6 +25,40 @@ describe("createDevApi", () => {
     await expect(api.getStatus()).resolves.toMatchObject({ online: true });
   });
 
+  it("forwards every HomeApi call of the lazy mock to the loaded mock implementation", async () => {
+    const api = createDevApi({ VITE_API_MODE: "mock", PROD: false }, "?seed=1");
+
+    const areas = await api.getAreas();
+    expect(areas.length).toBeGreaterThan(0);
+
+    const entities = await api.getEntities();
+    expect(entities.length).toBeGreaterThan(0);
+    const filtered = await api.getEntities({ area: areas[0].areaId });
+    expect(filtered.every((e) => e.area === areas[0].areaId)).toBe(true);
+
+    const target = entities.find((e) => e.domain === "light") ?? entities[0];
+    const after = await api.runAction(target.entityId, { action: "turn_on" });
+    expect(after.entityId).toBe(target.entityId);
+
+    const history = await api.getHistory([target.entityId], 1);
+    expect(Array.isArray(history)).toBe(true);
+  });
+
+  it("subscribes through the lazy mock and stops it on unsubscribe, even before the mock loads", async () => {
+    const api = createDevApi({ VITE_API_MODE: "mock", PROD: false }, "");
+    const onEntity = () => undefined;
+    const onConnection = () => undefined;
+
+    const stopEarly = api.subscribe(onEntity, onConnection);
+    stopEarly();
+    await new Promise((ok) => setTimeout(ok, 10));
+
+    const stop = api.subscribe(onEntity, onConnection);
+    await new Promise((ok) => setTimeout(ok, 10));
+    expect(typeof stop).toBe("function");
+    stop();
+  });
+
   it("returns a live client in live mode that calls the configured base URL", async () => {
     const calls: string[] = [];
     const original = globalThis.fetch;

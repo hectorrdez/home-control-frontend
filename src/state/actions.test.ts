@@ -59,6 +59,42 @@ describe("applyIntent (expected state shown before the server answers)", () => {
     expect(shut.state).toBe("closed");
     expect(shut.attributes.current_position).toBe(0);
   });
+
+  it("switches power, lock and HVAC state and records presets without touching the baseline", () => {
+    const fan = entity({ entityId: "fan.a", domain: "fan", state: "on" });
+    expect(applyIntent(fan, { kind: "power", on: false }).state).toBe("off");
+
+    const lock = entity({ entityId: "lock.a", domain: "lock", state: "locked" });
+    expect(applyIntent(lock, { kind: "lock", locked: false }).state).toBe("unlocked");
+
+    const climate = entity({ entityId: "climate.a", domain: "climate", state: "off", attributes: {} });
+    expect(applyIntent(climate, { kind: "hvac_mode", mode: "cool" }).state).toBe("cool");
+    expect(applyIntent(climate, { kind: "preset", preset: "away" }).attributes.preset_mode).toBe("away");
+    expect(climate.attributes).toEqual({});
+  });
+
+  it("turns a light off at 0% brightness and closes a cover at position 0 by slider", () => {
+    const light = entity({ entityId: "light.a", domain: "light", state: "on", attributes: { brightness: 200 } });
+    const dark = applyIntent(light, { kind: "brightness", pct: 0 });
+    expect(dark.state).toBe("off");
+    expect(dark.attributes.brightness).toBe(0);
+
+    const cover = entity({ entityId: "cover.a", domain: "cover", state: "open", attributes: { current_position: 70 } });
+    const slid = applyIntent(cover, { kind: "cover_position", position: 0 });
+    expect(slid.state).toBe("closed");
+    expect(slid.attributes.current_position).toBe(0);
+    expect(applyIntent(cover, { kind: "cover_position", position: 55 }).state).toBe("open");
+  });
+
+  it("opens a cover fully and leaves a scene or script state unchanged on activate", () => {
+    const cover = entity({ entityId: "cover.a", domain: "cover", state: "closed", attributes: { current_position: 0 } });
+    const up = applyIntent(cover, { kind: "cover_open" });
+    expect(up.state).toBe("open");
+    expect(up.attributes.current_position).toBe(100);
+
+    const scene = entity({ entityId: "scene.a", domain: "scene", state: "scening" });
+    expect(applyIntent(scene, { kind: "activate" })).toEqual(scene);
+  });
 });
 
 describe("optimistic reducer (apply / confirm / rollback / supersede)", () => {
