@@ -10,16 +10,19 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.tsx";
 import { ApiProvider } from "./api/ApiContext";
 import { EntitiesProvider } from "./state/EntitiesProvider";
+import { ToastProvider } from "./components/feedback/Toast";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ApiProvider>
-      <EntitiesProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </EntitiesProvider>
+      <ToastProvider>
+        <EntitiesProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </EntitiesProvider>
+      </ToastProvider>
     </ApiProvider>
   </StrictMode>,
 );

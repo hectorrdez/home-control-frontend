@@ -128,3 +128,17 @@ export function summarize(state: EntitiesState): SystemSummary {
     load: houseLoad(all),
   };
 }
+
+// Feature 104: switch id -> linked plug power sensor (same rule as plugPowerSensorIds), for "DRAW METRIC".
+export function plugDrawBySwitch(entities: Entity[]): Map<string, Entity> {
+  const sensors = entities.filter((e) => e.domain === "sensor" && deviceClass(e) === "power");
+  const map = new Map<string, Entity>();
+  for (const sw of entities) {
+    if (sw.domain !== "switch" || sw.area === null) continue;
+    const linked = sensors.find(
+      (sensor) => sensor.area === sw.area && sensor.name.toLowerCase().startsWith(sw.name.toLowerCase()),
+    );
+    if (linked) map.set(sw.entityId, linked);
+  }
+  return map;
+}

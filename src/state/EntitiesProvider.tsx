@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useApi } from "@/api/ApiContext";
+import type { Entity } from "@/api/types";
 import { entitiesReducer, initialEntitiesState, type EntitiesState } from "./entities";
+import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 
 interface EntitiesContextValue {
@@ -10,6 +12,8 @@ interface EntitiesContextValue {
   setSelectedArea: (areaId: string | null) => void;
   selectedGroup: DomainFilter;
   setSelectedGroup: (group: DomainFilter) => void;
+  // Optimistic action (104). Resolves true on success, false after a rollback.
+  sendIntent: (entity: Entity, intent: Intent) => Promise<boolean>;
 }
 
 const EntitiesContext = createContext<EntitiesContextValue | null>(null);
@@ -19,6 +23,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(entitiesReducer, initialEntitiesState);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<DomainFilter>("all");
+  const requestCounter = useRef(0);
 
   const load = useCallback(() => {
     dispatch({ type: "load" });
@@ -36,6 +41,29 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
+  const sendIntent = useCallback(
+    (entity: Entity, intent: Intent): Promise<boolean> => {
+      const requestId = ++requestCounter.current;
+      dispatch({
+        type: "actionStarted",
+        entityId: entity.entityId,
+        requestId,
+        optimistic: applyIntent(entity, intent),
+      });
+      return api.runAction(entity.entityId, intentAction(intent)).then(
+        (confirmed) => {
+          dispatch({ type: "actionConfirmed", entityId: entity.entityId, requestId, entity: confirmed });
+          return true;
+        },
+        () => {
+          dispatch({ type: "actionFailed", entityId: entity.entityId, requestId });
+          return false;
+        },
+      );
+    },
+    [api],
+  );
+
   const value = useMemo<EntitiesContextValue>(
     () => ({
       state,
@@ -44,8 +72,9 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       setSelectedArea,
       selectedGroup,
       setSelectedGroup,
+      sendIntent,
     }),
-    [state, load, selectedArea, selectedGroup],
+    [state, load, selectedArea, selectedGroup, sendIntent],
   );
 
   return <EntitiesContext.Provider value={value}>{children}</EntitiesContext.Provider>;

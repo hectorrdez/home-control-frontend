@@ -4,7 +4,9 @@ import {
   deckSections,
   groupCounts,
   summarize,
+  allEntities,
   formatPower,
+  plugDrawBySwitch,
   type DomainFilter,
   type PillGroup,
 } from "@/state/selectors";
@@ -30,6 +32,12 @@ function SkeletonDeck() {
       ))}
     </div>
   );
+}
+
+function drawLabel(sensor: { state: string; attributes: Record<string, unknown> } | undefined): string | undefined {
+  if (!sensor) return undefined;
+  const unit = typeof sensor.attributes.unit_of_measurement === "string" ? sensor.attributes.unit_of_measurement : "W";
+  return `${sensor.state} ${unit}`;
 }
 
 export default function DevicePanel() {
@@ -65,6 +73,7 @@ export default function DevicePanel() {
   const sections = deckSections(state, selectedArea, selectedGroup);
   const shown = sections.reduce((n, s) => n + s.entities.length, 0);
   const rooms = state.areas.filter((a) => a.entityIds.length > 0);
+  const draws = plugDrawBySwitch(allEntities(state));
 
   return (
     <section aria-label="Device panel" className="col-span-12 flex min-h-64 flex-col gap-space-md xl:col-span-4">
@@ -135,7 +144,11 @@ export default function DevicePanel() {
             {sections.flatMap((section) =>
               section.entities.map((entity) => (
                 <li key={entity.entityId}>
-                  <DeviceModule entity={entity} areaName={section.area.areaId === UNASSIGNED ? "UNASSIGNED" : section.area.name.toUpperCase()} />
+                  <DeviceModule
+                    entity={entity}
+                    areaName={section.area.areaId === UNASSIGNED ? "UNASSIGNED" : section.area.name.toUpperCase()}
+                    drawText={drawLabel(draws.get(entity.entityId))}
+                  />
                 </li>
               )),
             )}

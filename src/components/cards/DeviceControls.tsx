@@ -1,0 +1,233 @@
+import { useEffect, useRef, useState } from "react";
+import Button from "@components/controls/Button";
+import FilterPill from "@components/controls/FilterPill";
+import Slider from "@components/controls/Slider";
+import Stepper from "@components/controls/Stepper";
+import Switch from "@components/controls/Switch";
+import type { Intent } from "@/state/actions";
+import type { Entity } from "@/api/types";
+import { domainHue, type Hue } from "./deviceState";
+
+// Feature 104: the domain controls of a device module. Each control maps to one Intent (see state/actions.ts).
+// Controls are disabled while the entity has an action in flight.
+const CLIMATE_DEBOUNCE_MS = 600;
+const DEFAULT_TEMP_STEP = 0.5;
+const DEFAULT_MIN_TEMP = 7;
+const DEFAULT_MAX_TEMP = 35;
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+interface ControlProps {
+  entity: Entity;
+  hue: Hue;
+  disabled: boolean;
+  send: (intent: Intent) => void;
+}
+
+export default function DeviceControls({ entity, disabled, send }: Omit<ControlProps, "hue">) {
+  const hue = domainHue(entity.domain);
+  const props: ControlProps = { entity, hue, disabled, send };
+  switch (entity.domain) {
+    case "light":
+      return <LightControls {...props} />;
+    case "switch":
+    case "fan":
+      return <PowerControl {...props} />;
+    case "climate":
+      return <ClimateControls {...props} />;
+    case "cover":
+      return <CoverControls {...props} />;
+    case "lock":
+      return <LockControl {...props} />;
+    case "scene":
+    case "script":
+      return (
+        <Button variant="secondary" className="w-full" disabled={disabled} onClick={() => send({ kind: "activate" })}>
+          ACTIVATE
+        </Button>
+      );
+    default:
+      return null; // sensor / binary_sensor: read-only
+  }
+}
+
+function PowerControl({ entity, disabled, send }: ControlProps) {
+  return (
+    <Switch
+      aria-label={`${entity.name} power`}
+      checked={entity.state === "on"}
+      disabled={disabled}
+      onCheckedChange={(on) => send({ kind: "power", on })}
+    />
+  );
+}
+
+function LightControls(props: ControlProps) {
+  const { entity, send } = props;
+  const brightness = num(entity.attributes.brightness);
+  return (
+    <div className="flex flex-col gap-space-sm">
+      <PowerControl {...props} />
+      {brightness !== null && (
+        <Slider
+          label="INTENSITY"
+          value={Math.round((brightness / 255) * 100)}
+          min={0}
+          max={100}
+          unit="%"
+          hue="primary"
+          onCommit={(pct) => send({ kind: "brightness", pct })}
+        />
+      )}
+    </div>
+  );
+}
+
+// Stepper with a debounced commit: local draft moves at once, the action is sent 600 ms after the last step.
+function ClimateControls({ entity, disabled, send }: ControlProps) {
+  const target = num(entity.attributes.temperature) ?? DEFAULT_MIN_TEMP;
+  const current = num(entity.attributes.current_temperature);
+  const min = num(entity.attributes.min_temp) ?? DEFAULT_MIN_TEMP;
+  const max = num(entity.attributes.max_temp) ?? DEFAULT_MAX_TEMP;
+  const step = num(entity.attributes.target_temp_step) ?? DEFAULT_TEMP_STEP;
+  const modes = strings(entity.attributes.hvac_modes);
+  const presets = strings(entity.attributes.preset_modes);
+  const [draft, setDraft] = useState(target);
+  const dirty = useRef(false); // a local step is waiting to be sent
+
+  // Follow the store (confirmed, optimistic or rolled back) unless a local step is waiting.
+  useEffect(() => {
+    if (!dirty.current) setDraft(target);
+  }, [target]);
+
+  useEffect(() => {
+    if (!dirty.current) return;
+    if (draft === target) {
+      dirty.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      dirty.current = false;
+      send({ kind: "temperature", temperature: draft });
+    }, CLIMATE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+    // send is recreated per render with the current entity; the debounce is keyed on the draft only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  const stepTo = (value: number) => {
+    dirty.current = true;
+    setDraft(value);
+  };
+
+  return (
+    <div className="flex flex-col gap-space-sm">
+      <div className="flex justify-between font-mono text-label-caps uppercase text-on-surface-variant">
+        <span>{`CURRENT AMBIENT ${current === null ? "-" : `${current.toFixed(1)} °C`}`}</span>
+        <span>{`TARGET SETPOINT ${target.toFixed(1)} °C`}</span>
+      </div>
+      <Stepper
+        label="Target temperature"
+        value={draft}
+        min={min}
+        max={max}
+        step={step}
+        unit=" °C"
+        onChange={stepTo}
+      />
+      {modes.length > 0 && (
+        <div role="group" aria-label="HVAC mode" className="flex flex-wrap gap-space-xs">
+          {modes.map((mode) => (
+            <FilterPill
+              key={mode}
+              selected={entity.state === mode}
+              disabled={disabled}
+              onClick={() => send({ kind: "hvac_mode", mode })}
+            >
+              {mode.toUpperCase()}
+            </FilterPill>
+          ))}
+        </div>
+      )}
+      {presets.length > 0 && (
+        <div role="group" aria-label="Preset" className="flex flex-wrap gap-space-xs">
+          {presets.map((preset) => (
+            <FilterPill
+              key={preset}
+              selected={entity.attributes.preset_mode === preset}
+              disabled={disabled}
+              onClick={() => send({ kind: "preset", preset })}
+            >
+              {preset.toUpperCase()}
+            </FilterPill>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CoverControls({ entity, hue, disabled, send }: ControlProps) {
+  const position = num(entity.attributes.current_position) ?? (entity.state === "open" ? 100 : 0);
+  return (
+    <div className="flex flex-col gap-space-sm">
+      <Slider
+        label={`${position}% OPEN`}
+        value={position}
+        min={0}
+        max={100}
+        unit="%"
+        hue={hue}
+        onCommit={(value) => send({ kind: "cover_position", position: value })}
+      />
+      <div className="flex gap-space-sm">
+        <Button variant="secondary" className="flex-1" disabled={disabled} onClick={() => send({ kind: "cover_close" })}>
+          SHUT (0%)
+        </Button>
+        <Button variant="secondary" className="flex-1" disabled={disabled} onClick={() => send({ kind: "cover_open" })}>
+          FULL (100%)
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Locking is immediate; unlocking asks for a confirm step first (destructive style).
+function LockControl({ entity, disabled, send }: ControlProps) {
+  const locked = entity.state === "locked";
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <div className="flex flex-col gap-space-sm">
+        <p className="font-mono text-label-caps uppercase text-error">Unlock {entity.name}?</p>
+        <div className="flex gap-space-sm">
+          <Button
+            variant="destructive"
+            className="flex-1"
+            disabled={disabled}
+            onClick={() => {
+              setConfirming(false);
+              send({ kind: "lock", locked: false });
+            }}
+          >
+            CONFIRM UNLOCK
+          </Button>
+          <Button variant="secondary" className="flex-1" onClick={() => setConfirming(false)}>
+            CANCEL
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Switch
+      aria-label={`${entity.name} locked`}
+      checked={locked}
+      disabled={disabled}
+      onCheckedChange={(next) => (next ? send({ kind: "lock", locked: true }) : setConfirming(true))}
+    />
+  );
+}

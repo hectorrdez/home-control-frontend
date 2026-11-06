@@ -112,6 +112,13 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         } else fail();
         break;
       }
+      case "lock": {
+        // Feature 104: lock/unlock for the front door (mock only).
+        if (action.action === "lock") next.state = "locked";
+        else if (action.action === "unlock") next.state = "unlocked";
+        else fail();
+        break;
+      }
       default:
         throw new ApiError("server", "domain_not_allowed", 403);
     }

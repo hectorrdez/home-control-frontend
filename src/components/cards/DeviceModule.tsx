@@ -1,10 +1,16 @@
 import StringUtils from "@utils/StringUtils";
+import StatusChip from "@components/controls/StatusChip";
 import type { Entity } from "@/api/types";
+import { useEntities } from "@/state/EntitiesProvider";
+import { useToast } from "@components/feedback/Toast";
+import type { Intent } from "@/state/actions";
+import DeviceControls from "./DeviceControls";
 import { describeState, domainHue, domainIcon } from "./deviceState";
 
 type DeviceModuleProps = {
   entity: Entity;
   areaName: string;
+  drawText?: string; // linked plug power sensor, e.g. "42 W" (103 mapping)
 };
 
 const beaconTone = {
@@ -25,11 +31,19 @@ const hueBorder = {
   tertiary: "border-tertiary-fixed-dim",
 };
 
-// Read-only device card (feature 103). Controls arrive in 104.
-export default function DeviceModule({ entity, areaName }: DeviceModuleProps) {
+// Device card (103 read-only, 104 controls). Failed actions roll back and show an error toast.
+export default function DeviceModule({ entity, areaName, drawText }: DeviceModuleProps) {
   const Icon = domainIcon(entity.domain);
   const hue = domainHue(entity.domain);
   const view = describeState(entity);
+  const { state, sendIntent } = useEntities();
+  const toast = useToast();
+  const pending = Boolean(state.pending[entity.entityId]);
+  const send = (intent: Intent) => {
+    void sendIntent(entity, intent).then((ok) => {
+      if (!ok) toast.show(`Could not update ${entity.name}`);
+    });
+  };
 
   return (
     <article
@@ -74,6 +88,11 @@ export default function DeviceModule({ entity, areaName }: DeviceModuleProps) {
       >
         {view.text}
       </p>
+      {drawText && (
+        <p className="font-mono text-label-caps uppercase text-on-surface-variant">{`DRAW METRIC ${drawText}`}</p>
+      )}
+      <DeviceControls entity={entity} disabled={pending} send={send} />
+      {pending && <StatusChip tone="primary">SENDING</StatusChip>}
     </article>
   );
 }
