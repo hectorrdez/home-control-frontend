@@ -74,6 +74,9 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
   };
 
   const active = cursor === null ? undefined : rows[Math.min(cursor, rows.length - 1)];
+  const readout = active
+    ? `${clock(active.t)} ${fmt(active.temp)} °C ${fmt(active.hum, 0)} %`
+    : "FOCUS THE CURSOR AND USE ARROW KEYS TO READ VALUES";
 
   return (
     <div className="flex flex-col gap-space-sm">
@@ -98,14 +101,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
       </div>
 
       <HistoryBody state={state} retry={retry} empty={rows.length === 0}>
-        <div
-          role="img"
-          aria-label={`${roomLabel} climate, ${range}: ${climateSummary(rows)}`}
-          tabIndex={0}
-          onKeyDown={onKeyDown}
-          onBlur={() => setCursor(null)}
-          className="rounded focus-visible:outline-2 focus-visible:outline-primary-container"
-        >
+        <div role="img" aria-label={`${roomLabel} climate, ${range}: ${climateSummary(rows)}`}>
           <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={rows}>
               <CartesianGrid stroke={cssToken("outline-variant", "currentColor")} strokeOpacity={0.3} vertical={false} />
@@ -138,9 +134,20 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <p aria-live="polite" className="font-mono text-label-caps uppercase text-on-surface">
-          {active ? `${clock(active.t)} ${fmt(active.temp)} °C ${fmt(active.hum, 0)} %` : "FOCUS THE CHART AND USE ARROW KEYS TO READ VALUES"}
-        </p>
+        <div
+          role="slider"
+          tabIndex={0}
+          aria-label="Chart cursor: left and right arrow keys move through the history"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(rows.length - 1, 0)}
+          aria-valuenow={active ? Math.min(cursor ?? 0, rows.length - 1) : 0}
+          aria-valuetext={readout}
+          onKeyDown={onKeyDown}
+          onBlur={() => setCursor(null)}
+          className="rounded focus-visible:outline-2 focus-visible:outline-primary-container"
+        >
+          <p className="font-mono text-label-caps uppercase text-on-surface">{readout}</p>
+        </div>
         <p className="font-mono text-label-caps uppercase text-on-surface-variant">{climateSummary(rows)}</p>
         <table className="sr-only">
           <caption>{`${roomLabel} history, ${range}`}</caption>
