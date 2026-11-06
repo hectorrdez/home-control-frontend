@@ -15,7 +15,10 @@ Built with React 19, Vite, Tailwind 4 and Playwright.
 
 - `VITE_API_URL` - backend base URL (empty = same origin).
 - `VITE_API_TOKEN` - bearer token sent on every `/api` call.
-- `VITE_API_MODE` - `live` or `mock`.
+- `VITE_API_MODE` - `live` or `mock`. Unset: `mock` in dev and Playwright, `live` in production builds (the mock is never in the prod bundle).
+- `VITE_PROXY_TARGET` - backend the Vite dev proxy forwards `/api` to (default `http://localhost:3003`).
+
+Mock scenarios (dev/Playwright, `?mock=`): `default`, `empty`, `error`, `slow`, `action-error`, `stream-drop`, `offline`, `unauthorized`, `no-history`. `?seed=<n>` changes the generated data.
 
 ## Design
 

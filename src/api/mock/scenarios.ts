@@ -1,0 +1,25 @@
+export const SCENARIOS = [
+  "default",
+  "empty",
+  "error",
+  "slow",
+  "action-error",
+  "stream-drop",
+  "offline",
+  "unauthorized",
+  "no-history",
+] as const;
+
+export type Scenario = (typeof SCENARIOS)[number];
+
+// `?mock=` is read once at startup (mock mode only). Unknown values fall back to default.
+export function parseScenario(search: string): Scenario {
+  const value = new URLSearchParams(search).get("mock");
+  return (SCENARIOS as readonly string[]).includes(value ?? "") ? (value as Scenario) : "default";
+}
+
+export function parseSeed(search: string, fallback = 1): number {
+  const raw = new URLSearchParams(search).get("seed");
+  const n = raw === null ? Number.NaN : Number(raw);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}

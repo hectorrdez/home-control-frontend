@@ -5,8 +5,8 @@
 id|slug|state|role|commit|commit_url
 101|template-cleanup|ENDED|frontend|fcab15b|https://github.com/hectorrdez/home-control-frontend/commit/fcab15b
 109|design-tokens-and-shell|ENDED|frontend|a018b67|https://github.com/hectorrdez/home-control-frontend/commit/a018b67
-102|api-client|ENDED|frontend||
-110|mock-data-layer|PENDING|frontend||
+102|api-client|ENDED|frontend|19df5c5|https://github.com/hectorrdez/home-control-frontend/commit/19df5c5
+110|mock-data-layer|ENDED|frontend||
 103|areas-dashboard|PENDING|frontend||
 104|device-control|PENDING|frontend||
 105|realtime-updates|PENDING|frontend||

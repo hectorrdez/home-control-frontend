@@ -1,7 +1,7 @@
+import type { HomeApi } from "./HomeApi";
 import { createLiveApi } from "./liveApi";
 import { resolveMode } from "./mode";
-import type { HomeApi } from "./HomeApi";
-import { stubApi } from "./stubApi";
+import { parseScenario, parseSeed } from "./mock/scenarios";
 
 export interface ApiEnv {
   VITE_API_MODE?: string;
@@ -10,9 +10,40 @@ export interface ApiEnv {
   PROD: boolean;
 }
 
-// Picks the HomeApi implementation for the build/dev environment.
-export function createApiFromEnv(env: ApiEnv): HomeApi {
-  const mode = resolveMode({ VITE_API_MODE: env.VITE_API_MODE, PROD: env.PROD });
-  if (mode === "mock") return stubApi;
+export function createLiveFromEnv(env: ApiEnv): HomeApi {
   return createLiveApi({ baseUrl: env.VITE_API_URL ?? "", token: env.VITE_API_TOKEN ?? "" });
+}
+
+// The mock is loaded on first use, so dev-only code is not part of the production entry chunk.
+function createLazyMockApi(search: string): HomeApi {
+  let impl: Promise<HomeApi> | undefined;
+  const load = () =>
+    (impl ??= import("./mock/createMockApi").then(({ createMockApi }) =>
+      createMockApi({ scenario: parseScenario(search), seed: parseSeed(search) }),
+    ));
+
+  return {
+    getStatus: async () => (await load()).getStatus(),
+    getAreas: async () => (await load()).getAreas(),
+    getEntities: async (filter) => (await load()).getEntities(filter),
+    runAction: async (entityId, action) => (await load()).runAction(entityId, action),
+    getHistory: async (entityIds, hours) => (await load()).getHistory(entityIds, hours),
+    subscribe(onEntity, onConnection) {
+      let stop: (() => void) | undefined;
+      let closed = false;
+      void load().then((impl) => {
+        if (!closed) stop = impl.subscribe(onEntity, onConnection);
+      });
+      return () => {
+        closed = true;
+        stop?.();
+      };
+    },
+  };
+}
+
+// Dev/test selection: VITE_API_MODE decides (mock by default). `search` is the startup query string.
+export function createDevApi(env: ApiEnv, search: string): HomeApi {
+  const mode = resolveMode({ VITE_API_MODE: env.VITE_API_MODE, PROD: env.PROD });
+  return mode === "mock" ? createLazyMockApi(search) : createLiveFromEnv(env);
 }

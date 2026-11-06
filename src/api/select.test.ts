@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createApiFromEnv } from "./select";
+import { createDevApi } from "./select";
 import { resolveMode } from "./mode";
 
 describe("resolveMode", () => {
@@ -19,9 +19,9 @@ describe("resolveMode", () => {
   });
 });
 
-describe("createApiFromEnv", () => {
-  it("returns the stub in mock mode without touching the network", async () => {
-    const api = createApiFromEnv({ VITE_API_MODE: "mock", PROD: false });
+describe("createDevApi", () => {
+  it("returns the mock in mock mode, without touching the network", async () => {
+    const api = createDevApi({ VITE_API_MODE: "mock", PROD: false }, "");
     await expect(api.getStatus()).resolves.toMatchObject({ online: true });
   });
 
@@ -36,12 +36,10 @@ describe("createApiFromEnv", () => {
     }) as typeof fetch;
 
     try {
-      const api = createApiFromEnv({
-        VITE_API_MODE: "live",
-        VITE_API_URL: "http://backend.test",
-        VITE_API_TOKEN: "t",
-        PROD: false,
-      });
+      const api = createDevApi(
+        { VITE_API_MODE: "live", VITE_API_URL: "http://backend.test", VITE_API_TOKEN: "t", PROD: false },
+        "",
+      );
       await expect(api.getStatus()).resolves.toMatchObject({ online: false });
       expect(calls).toEqual(["http://backend.test/api/ha/status"]);
     } finally {

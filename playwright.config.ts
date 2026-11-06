@@ -15,8 +15,8 @@ export default defineConfig({
     command: `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
-    // Live client so the header status journey exercises HTTP (responses are routed per test).
-    env: { VITE_API_MODE: "live" },
+    // Mock house for every spec (feature 110); scenarios are selected with ?mock=.
+    env: { VITE_API_MODE: "mock" },
     timeout: 60_000,
   },
 });

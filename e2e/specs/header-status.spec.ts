@@ -1,45 +1,23 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { Header } from "../components/header";
 
-const STATUS_URL = "**/api/ha/status";
-
-async function routeStatus(page: Page, status: number, body: unknown) {
-  await page.route(STATUS_URL, (route) =>
-    route.fulfill({
-      status,
-      contentType: "application/json",
-      body: JSON.stringify(body),
-    }),
-  );
-}
-
+// Header HA status line, driven by the mock scenarios (Playwright runs with VITE_API_MODE=mock).
 test.describe("header HA status", () => {
-  test("shows ONLINE with the HA version when the backend reports online", async ({ page }) => {
-    await routeStatus(page, 200, {
-      data: [{ online: true, message: "ok", version: "2026.4.1" }],
-    });
+  test("shows ONLINE with the HA version by default", async ({ page }) => {
     const header = new Header(page);
-
     await page.goto("/");
-
     await expect(header.haStatus()).toHaveText("ONLINE // HA 2026.4.1");
   });
 
-  test("shows OFFLINE when the HA link is unreachable (503)", async ({ page }) => {
-    await routeStatus(page, 503, { error: { code: "ha_unreachable" } });
+  test("shows OFFLINE when HA reports offline", async ({ page }) => {
     const header = new Header(page);
-
-    await page.goto("/");
-
+    await page.goto("/?mock=offline");
     await expect(header.haStatus()).toHaveText("OFFLINE");
   });
 
-  test("shows UNAUTHORIZED when the API token is rejected (401)", async ({ page }) => {
-    await routeStatus(page, 401, { error: "unauthorized" });
+  test("shows UNAUTHORIZED when the API token is rejected", async ({ page }) => {
     const header = new Header(page);
-
-    await page.goto("/");
-
+    await page.goto("/?mock=unauthorized");
     await expect(header.haStatus()).toHaveText("UNAUTHORIZED");
   });
 });
