@@ -38,3 +38,6 @@ dist-ssr
 
 test-results/
 playwright-report/
+.scannerwork/
+.sonar-home/
+.sonar-scan.log

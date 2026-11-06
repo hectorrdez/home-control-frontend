@@ -8,10 +8,12 @@ id|slug|state|role|commit|commit_url
 102|api-client|ENDED|frontend|19df5c5|https://github.com/hectorrdez/home-control-frontend/commit/19df5c5
 110|mock-data-layer|ENDED|frontend|f6d60a6|https://github.com/hectorrdez/home-control-frontend/commit/f6d60a6
 103|areas-dashboard|ENDED|frontend|0108070|https://github.com/hectorrdez/home-control-frontend/commit/0108070
-104|device-control|ENDED|frontend||
+104|device-control|ENDED|frontend|df1b383|https://github.com/hectorrdez/home-control-frontend/commit/df1b383
 105|realtime-updates|PENDING|frontend||
 106|house-3d-view|PENDING|frontend||
 111|telemetry-view|PENDING|frontend||
+113|live-sensor-charts|PENDING|frontend||
 112|telemetry-history|PENDING|frontend||
 107|electron-shell|PENDING|frontend||
 108|deploy-dokploy|PENDING|frontend||
+114|telemetry-dashboard-editor|PENDING|frontend||
