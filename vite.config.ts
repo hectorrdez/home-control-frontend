@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
-      include: ["src/**/*.test.{ts,tsx}"],
+      include: ["src/**/*.test.{ts,tsx}", "electron/**/*.test.mjs"],
       coverage: {
         provider: "v8",
         include: ["src/**"],
