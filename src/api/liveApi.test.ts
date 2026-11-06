@@ -216,4 +216,27 @@ describe("liveApi history (feature 112, backend GET /api/history)", () => {
     expect((err as ApiError).kind).toBe("not_found");
     expect((err as ApiError).status).toBe(404);
   });
+
+  it("alias calls hit /api/aliases with encoded ids, PUT body and DELETE", async () => {
+    const list = [{ entityId: "light.a b", alias: "Lamp" }];
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: list }));
+    const api = clientWith(fetchImpl);
+
+    await expect(api.getAliases()).resolves.toEqual(list);
+    await expect(api.setAlias("light.a b", "Lamp")).resolves.toEqual(list);
+    await expect(api.deleteAlias("light.a b")).resolves.toEqual(list);
+
+    const calls = fetchImpl.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls[0][0]).toBe("http://panel.test/api/aliases");
+    expect(calls[1][0]).toBe("http://panel.test/api/aliases/light.a%20b");
+    expect(calls[1][1].method).toBe("PUT");
+    expect(JSON.parse(calls[1][1].body as string)).toEqual({ alias: "Lamp" });
+    expect(calls[2][1].method).toBe("DELETE");
+  });
+
+  it("getAliases maps 404 to not_found", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(404, { error: "not_found" }));
+    const err = await clientWith(fetchImpl).getAliases().catch((e: unknown) => e);
+    expect((err as ApiError).kind).toBe("not_found");
+  });
 });

@@ -176,3 +176,39 @@ describe("parsers", () => {
     expect(parseSeed("?seed=x")).toBe(1);
   });
 });
+
+describe("mock aliases", () => {
+  afterEach(() => {
+    globalThis.localStorage?.clear();
+  });
+
+  it("sets, trims, lists and deletes aliases", async () => {
+    const api = createMockApi(fast);
+    expect(await api.getAliases()).toEqual([]);
+    expect(await api.setAlias("light.living_room", "  Lamp  ")).toEqual([
+      { entityId: "light.living_room", alias: "Lamp" },
+    ]);
+    expect(await createMockApi(fast).getAliases()).toHaveLength(1);
+    expect(await api.deleteAlias("light.living_room")).toEqual([]);
+  });
+
+  it("rejects empty and over-long aliases and bad entity ids", async () => {
+    const api = createMockApi(fast);
+    await expect(api.setAlias("light.a", "   ")).rejects.toMatchObject({ message: "invalid_alias" });
+    await expect(api.setAlias("light.a", "x".repeat(81))).rejects.toMatchObject({ message: "invalid_alias" });
+    await expect(api.setAlias("bad id", "ok")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("alias-error scenario fails writes with aliases_write_failed", async () => {
+    const api = createMockApi({ ...fast, scenario: "alias-error" });
+    await expect(api.setAlias("light.a", "ok")).rejects.toMatchObject({ message: "aliases_write_failed" });
+    await expect(api.deleteAlias("light.a")).rejects.toMatchObject({ message: "aliases_write_failed" });
+  });
+
+  it("raw-names scenario adds entities with raw names", async () => {
+    const base = await createMockApi(fast).getAreas();
+    const raw = await createMockApi({ ...fast, scenario: "raw-names" }).getAreas();
+    const count = (a: typeof base) => a.reduce((n, x) => n + x.entities.length, 0);
+    expect(count(raw)).toBeGreaterThan(count(base));
+  });
+});

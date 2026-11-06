@@ -18,7 +18,7 @@ Built with React 19, Vite, Tailwind 4 and Playwright.
 - `VITE_API_MODE` - `live` or `mock`. Unset: `mock` in dev and Playwright, `live` in production builds (the mock is never in the prod bundle).
 - `VITE_PROXY_TARGET` - backend the Vite dev proxy forwards `/api` to (default `http://localhost:3003`).
 
-Mock scenarios (dev/Playwright, `?mock=`): `default`, `empty`, `error`, `slow`, `action-error`, `stream-drop`, `offline`, `unauthorized`, `no-history`. `?seed=<n>` changes the generated data.
+Mock scenarios (dev/Playwright, `?mock=`): `default`, `empty`, `error`, `slow`, `action-error`, `stream-drop`, `offline`, `unauthorized`, `no-history`, `alias-error` (alias writes fail with `aliases_write_failed`), `raw-names` (extra entities with raw HA-style names to exercise display-name cleanup). `?seed=<n>` changes the generated data.
 
 ## Design
 
