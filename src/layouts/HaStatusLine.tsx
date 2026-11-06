@@ -1,3 +1,5 @@
+import { useEntities } from "../state/EntitiesProvider";
+import StatusChip from "../components/controls/StatusChip";
 import { useHaStatus, type HaConnection } from "../api/useHaStatus";
 
 const LABEL: Record<HaConnection, string> = {
@@ -14,19 +16,32 @@ const TONE: Record<HaConnection, { text: string; beacon: string }> = {
   unauthorized: { text: "text-error", beacon: "bg-error shadow-glow-error" },
 };
 
+// Stale stream (105): the beacon turns amber and a RECONNECTING chip shows; values keep their last state.
 export default function HaStatusLine() {
   const { state, version } = useHaStatus();
+  const { connection } = useEntities();
   const label = state === "online" && version ? `ONLINE // HA ${version}` : LABEL[state];
   const tone = TONE[state];
+  const stale = connection === "reconnecting";
 
   return (
-    <span
-      role="status"
-      aria-label="Home Assistant status"
-      className={`flex items-center gap-space-xs font-mono text-label-caps tracking-widest ${tone.text}`}
-    >
-      <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${tone.beacon}`} aria-hidden="true" />
-      {label}
-    </span>
+    <div className="flex min-w-0 flex-wrap items-center gap-space-sm">
+      <span
+        role="status"
+        aria-label="Home Assistant status"
+        className={`flex items-center gap-space-xs font-mono text-label-caps tracking-widest ${stale ? "text-tertiary-fixed-dim" : tone.text}`}
+      >
+        <span
+          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${stale ? "bg-tertiary-fixed-dim" : tone.beacon}`}
+          aria-hidden="true"
+        />
+        {label}
+      </span>
+      {stale && (
+        <StatusChip tone="tertiary" beacon role="status" aria-label="Live updates">
+          RECONNECTING
+        </StatusChip>
+      )}
+    </div>
   );
 }

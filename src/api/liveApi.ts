@@ -1,10 +1,14 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type ApiErrorKind, type Area, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { ApiError, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { backoffDelay } from "./backoff";
+import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 
 export interface LiveApiOptions {
   baseUrl: string; // "" = same origin (Vite dev proxy forwards /api)
   token: string;
   fetchImpl?: typeof fetch;
+  // Tests inject a fake EventSource; the browser default is used otherwise.
+  eventSourceFactory?: EventSourceFactory;
 }
 
 interface Envelope<T> {
@@ -29,7 +33,8 @@ function errorCode(body: Envelope<unknown> | undefined): string | undefined {
   return typeof body.error === "string" ? body.error : body.error.code ?? body.code;
 }
 
-export function createLiveApi({ baseUrl, token, fetchImpl }: LiveApiOptions): HomeApi {
+export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }: LiveApiOptions): HomeApi {
+  const openSource: EventSourceFactory = eventSourceFactory ?? ((url) => new EventSource(url));
   const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -93,9 +98,38 @@ export function createLiveApi({ baseUrl, token, fetchImpl }: LiveApiOptions): Ho
       return entity;
     },
 
-    // Implemented in feature 105 (realtime) and 112 (history).
-    subscribe() {
-      throw new ApiError("unavailable", "Realtime subscribe not implemented yet");
+    // SSE on GET /api/stream. Reconnects with backoff (1 s .. 30 s, jitter); the server sends `ready` once the stream is up.
+    subscribe(onEntity, onConnection) {
+      let source: EventSource | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let attempt = 0;
+      let closed = false;
+
+      const connect = () => {
+        const es = openSource(streamUrl(baseUrl, token));
+        source = es;
+        es.addEventListener("ready", () => {
+          attempt = 0;
+          onConnection("open" satisfies ConnectionState);
+        });
+        es.addEventListener("state_changed", (event) => {
+          const entity = parseStateChanged((event as MessageEvent).data);
+          if (entity) onEntity(entity);
+        });
+        es.onerror = () => {
+          if (closed) return;
+          es.close();
+          onConnection("reconnecting");
+          timer = setTimeout(connect, backoffDelay(attempt++));
+        };
+      };
+
+      connect();
+      return () => {
+        closed = true;
+        clearTimeout(timer);
+        source?.close();
+      };
     },
 
     async getHistory(): Promise<HistorySeries[]> {

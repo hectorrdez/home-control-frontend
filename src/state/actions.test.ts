@@ -76,6 +76,7 @@ describe("optimistic reducer (apply / confirm / rollback / supersede)", () => {
       entityId: "light.a",
       requestId: 1,
       optimistic,
+      startedAt: 0,
     });
     expect(next.entities["light.a"].state).toBe("on");
     expect(next.pending["light.a"].requestId).toBe(1);
@@ -83,7 +84,7 @@ describe("optimistic reducer (apply / confirm / rollback / supersede)", () => {
   });
 
   it("confirms with the returned entity and clears pending", () => {
-    const started = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic });
+    const started = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic, startedAt: 0 });
     const confirmed = { ...light, state: "on", lastChanged: "2026-11-06T10:01:00.000Z" };
     const next = entitiesReducer(started, { type: "actionConfirmed", entityId: "light.a", requestId: 1, entity: confirmed });
     expect(next.entities["light.a"]).toEqual(confirmed);
@@ -91,19 +92,20 @@ describe("optimistic reducer (apply / confirm / rollback / supersede)", () => {
   });
 
   it("rolls back to the baseline on failure and clears pending", () => {
-    const started = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic });
+    const started = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic, startedAt: 0 });
     const next = entitiesReducer(started, { type: "actionFailed", entityId: "light.a", requestId: 1 });
     expect(next.entities["light.a"].state).toBe("off");
     expect(next.pending["light.a"]).toBeUndefined();
   });
 
   it("a newer action supersedes the older: the stale confirm is ignored, rollback keeps the original baseline", () => {
-    const first = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic });
+    const first = entitiesReducer(loaded, { type: "actionStarted", entityId: "light.a", requestId: 1, optimistic, startedAt: 0 });
     const second = entitiesReducer(first, {
       type: "actionStarted",
       entityId: "light.a",
       requestId: 2,
       optimistic: { ...light, state: "off" },
+      startedAt: 0,
     });
     expect(second.pending["light.a"].baseline.state).toBe("off");
 
@@ -121,13 +123,13 @@ describe("optimistic reducer (apply / confirm / rollback / supersede)", () => {
     expect(rolledBack.pending["light.a"]).toBeUndefined();
   });
 
-  it("entityUpdated replaces a known entity and ignores unknown ones", () => {
+  it("entityUpdated replaces a known entity and adds unknown ones to their area (105)", () => {
     const updated = { ...light, state: "on" };
     expect(entitiesReducer(loaded, { type: "entityUpdated", entity: updated }).entities["light.a"].state).toBe("on");
     const unknown = entitiesReducer(loaded, {
       type: "entityUpdated",
       entity: entity({ entityId: "light.zz", domain: "light" }),
     });
-    expect(unknown.entities["light.zz"]).toBeUndefined();
+    expect(unknown.entities["light.zz"].state).toBe("off");
   });
 });

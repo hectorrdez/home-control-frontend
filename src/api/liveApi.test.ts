@@ -121,3 +121,55 @@ describe("liveApi request handling", () => {
     ]);
   });
 });
+
+describe("liveApi realtime subscribe (105)", () => {
+  class FakeSource {
+    static instances: FakeSource[] = [];
+    listeners: Record<string, (event: { data?: string }) => void> = {};
+    onerror: (() => void) | null = null;
+    closed = false;
+    url: string;
+    constructor(url: string) {
+      this.url = url;
+      FakeSource.instances.push(this);
+    }
+    addEventListener(type: string, fn: (event: { data?: string }) => void) {
+      this.listeners[type] = fn;
+    }
+    close() {
+      this.closed = true;
+    }
+  }
+
+  it("connects with ?token=, reports open on ready, merges events and reconnects after an error", () => {
+    vi.useFakeTimers();
+    FakeSource.instances = [];
+    const api = createLiveApi({
+      baseUrl: "http://panel.test",
+      token: "tok",
+      eventSourceFactory: (url) => new FakeSource(url) as unknown as EventSource,
+    });
+    const events: string[] = [];
+    const states: string[] = [];
+    const stop = api.subscribe(
+      (e) => events.push(e.entityId),
+      (s) => states.push(s),
+    );
+
+    expect(FakeSource.instances[0].url).toBe("http://panel.test/api/stream?token=tok");
+    FakeSource.instances[0].listeners.ready({});
+    FakeSource.instances[0].listeners.state_changed({ data: '{"entityId":"light.a","state":"on"}' });
+    FakeSource.instances[0].onerror?.();
+    expect(FakeSource.instances[0].closed).toBe(true);
+    vi.advanceTimersByTime(1300);
+    expect(FakeSource.instances).toHaveLength(2);
+    FakeSource.instances[1].listeners.ready({});
+
+    expect(events).toEqual(["light.a"]);
+    expect(states).toEqual(["open", "reconnecting", "open"]);
+
+    stop();
+    expect(FakeSource.instances[1].closed).toBe(true);
+    vi.useRealTimers();
+  });
+});
