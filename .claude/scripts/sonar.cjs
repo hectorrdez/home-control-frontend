@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // sonar.cjs - run a SonarQube analysis, wait for the server, print quality gate + issues.
-// Usage: node .claude/scripts/sonar.cjs [--sources=src] [--exclusions=glob,glob] [--key=projectKey] [--tests=dir] [--lcov=path]
+// Usage: node .claude/scripts/sonar.cjs [--sources=src] [--exclusions=glob,glob] [--cov-exclusions=glob,glob] [--key=projectKey] [--tests=dir] [--lcov=path]
 // Exit: 0 gate OK and no OPEN issues, 1 gate ERROR or OPEN issues, 2 could not run.
 // Config (env overrides): SONAR_HOST_URL (default https://sonarqube.hectorrdez.es),
 //   SONAR_TOKEN or SONAR_TOKEN_FILE (default: first `sonar.token` found walking up from cwd).
@@ -58,6 +58,7 @@ const props = [
 ];
 if (args.tests) props.push(`-Dsonar.tests=${args.tests}`);
 if (args.lcov) props.push(`-Dsonar.javascript.lcov.reportPaths=${args.lcov}`);
+if (args["cov-exclusions"]) props.push(`-Dsonar.coverage.exclusions=${args["cov-exclusions"]}`);
 
 console.log(`sonar: analysing ${key} @ ${host}`);
 const env = { ...process.env, SONAR_TOKEN: token, SONAR_USER_HOME: home };
