@@ -8,6 +8,7 @@ export type Intent =
   | { kind: "hvac_mode"; mode: string } // climate
   | { kind: "preset"; preset: string } // climate
   | { kind: "cover_position"; position: number } // cover slider
+  | { kind: "cover_percent"; percent: number } // calibrated cover (feature 127): POST /cover-percent, not /action
   | { kind: "cover_open" } // cover FULL preset
   | { kind: "cover_close" } // cover SHUT preset
   | { kind: "cover_stop" } // cover STOP (assumed-state covers, no position)
@@ -28,6 +29,8 @@ export function intentAction(intent: Intent): EntityAction {
       return { action: "set_preset_mode", params: { preset_mode: intent.preset } };
     case "cover_position":
       return { action: "set_cover_position", params: { position: intent.position } };
+    case "cover_percent": // sent to /cover-percent by EntitiesProvider; this mapping is only the fallback shape
+      return { action: "set_cover_position", params: { position: intent.percent } };
     case "cover_open":
       return { action: "open_cover" };
     case "cover_close":
@@ -65,12 +68,17 @@ export function applyIntent(entity: Entity, intent: Intent): Entity {
       next.attributes.current_position = intent.position;
       next.state = intent.position > 0 ? "open" : "closed";
       break;
+    case "cover_percent":
+      next.attributes.estimated_position = intent.percent;
+      next.state = intent.percent > 0 ? "open" : "closed";
+      break;
+    // Covers without a position sensor (feature 127) have no current_position attribute: it is only moved when present.
     case "cover_open":
-      next.attributes.current_position = 100;
+      if ("current_position" in next.attributes) next.attributes.current_position = 100;
       next.state = "open";
       break;
     case "cover_close":
-      next.attributes.current_position = 0;
+      if ("current_position" in next.attributes) next.attributes.current_position = 0;
       next.state = "closed";
       break;
     case "lock":

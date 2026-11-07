@@ -3,13 +3,21 @@ import {
   ApiError,
   type Alias,
   type Area,
+  type CalibrationInput,
   type ConnectionState,
+  type CoverCalibration,
   type Entity,
   type EntityAction,
   type HaStatus,
   type HistorySeries,
 } from "../types";
-import { createFixtureEntities, createManyDeviceEntities, createRawNameEntities, FIXTURE_AREAS } from "./fixtures";
+import {
+  createFixtureEntities,
+  createManyDeviceEntities,
+  createRawNameEntities,
+  createUncalibratedCoverEntities,
+  FIXTURE_AREAS,
+} from "./fixtures";
 import { createPrng, hashSeed } from "./prng";
 import { type Scenario } from "./scenarios";
 
@@ -52,6 +60,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     scenario === "empty" ? [] : [
           ...createFixtureEntities(),
           ...(scenario === "raw-names" ? createRawNameEntities() : []),
+          ...(scenario === "cover-calibration" ? createUncalibratedCoverEntities() : []),
           ...(scenario === "many-devices" ? createManyDeviceEntities() : []),
         ].map((e) => [e.entityId, e]),
   );
@@ -121,12 +130,12 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       case "cover": {
         if (action.action === "open_cover") {
           next.state = "open";
-          attrs.current_position = 100;
+          setPosition(attrs, 100);
         } else if (action.action === "close_cover") {
           next.state = "closed";
-          attrs.current_position = 0;
+          setPosition(attrs, 0);
         } else if (action.action === "set_cover_position" && typeof params.position === "number") {
-          attrs.current_position = params.position;
+          setPosition(attrs, params.position);
           next.state = params.position > 0 ? "open" : "closed";
         } else if (action.action === "stop_cover") {
           // Stop leaves the cover where it is; the mock cover reports a position, so nothing changes.
@@ -146,6 +155,11 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
     next.lastChanged = new Date().toISOString();
     return next;
+  }
+
+  // Covers without a position sensor have no current_position attribute; only covers that report one get it.
+  function setPosition(attrs: Record<string, unknown>, position: number): void {
+    if ("current_position" in attrs) attrs.current_position = position;
   }
 
   function drift(current: Entity): Entity {
@@ -223,6 +237,71 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     if (scenario === "alias-error") throw new ApiError("server", "aliases_write_failed", 500);
   }
 
+  // Feature 127: cover calibrations (backend 010) and timed percent moves (backend 011). Mock only, in memory.
+  const CALIBRATION_CAP = 200;
+  const CALIBRATION_MIN_MS = 500;
+  const CALIBRATION_MAX_MS = 300_000;
+  const FULL_LEG_MARGIN = 1.1; // a full leg runs 10 % longer than the measured time, like the backend
+  const calibrations = new Map<string, CoverCalibration>();
+  const moves = new Map<string, { timer: ReturnType<typeof setTimeout>; startedAt: number; durationMs: number; from: number | null; target: number; full: boolean }>();
+
+  function calibrationList(): CoverCalibration[] {
+    return [...calibrations.values()].sort((a, b) => a.entityId.localeCompare(b.entityId)).map((c) => ({ ...c }));
+  }
+
+  function coverOf(entityId: string): Entity {
+    const current = entities.get(entityId);
+    if (!current) throw new ApiError("not_found", "entity_not_found", 404);
+    if (current.domain !== "cover") throw new ApiError("server", "domain_not_allowed", 403);
+    return current;
+  }
+
+  // Publishes the position estimate as the stream does (null while a move runs or when unknown).
+  function publishPosition(entityId: string, position: number | null): void {
+    const current = entities.get(entityId);
+    if (!current) return;
+    const next = clone(current);
+    next.attributes.estimated_position = position;
+    if (position !== null) next.state = position > 0 ? "open" : "closed";
+    next.lastChanged = new Date().toISOString();
+    entities.set(entityId, next);
+    emit(next);
+  }
+
+  // A running move ends early: the elapsed estimate is kept (a full leg has none, so the position stays unknown).
+  function cancelMove(entityId: string): void {
+    const move = moves.get(entityId);
+    const cal = calibrations.get(entityId);
+    if (!move) return;
+    clearTimeout(move.timer);
+    moves.delete(entityId);
+    if (!cal) return;
+    const ratio = Math.min(1, (Date.now() - move.startedAt) / move.durationMs);
+    const estimate = move.full || move.from === null ? null : Math.round(move.from + (move.target - move.from) * ratio);
+    cal.position = estimate;
+    publishPosition(entityId, estimate);
+  }
+
+  function startMove(entityId: string, cal: CoverCalibration, percent: number): void {
+    const full = percent === 0 || percent === 100;
+    const known = cal.position;
+    const opening = full ? percent === 100 : percent > (known ?? 0);
+    const leg = opening ? cal.openMs : cal.closeMs;
+    const durationMs = full ? leg * FULL_LEG_MARGIN : (Math.abs(percent - (known ?? 0)) / 100) * leg;
+    const timer = setTimeout(() => {
+      moves.delete(entityId);
+      cal.position = percent;
+      publishPosition(entityId, percent);
+    }, durationMs);
+    moves.set(entityId, { timer, startedAt: Date.now(), durationMs, from: full ? null : known, target: percent, full });
+    cal.position = null;
+    publishPosition(entityId, null);
+  }
+
+  function calibrationInRange(ms: unknown): boolean {
+    return Number.isInteger(ms) && (ms as number) >= CALIBRATION_MIN_MS && (ms as number) <= CALIBRATION_MAX_MS;
+  }
+
   return {
     async getAliases(): Promise<Alias[]> {
       if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");
@@ -251,6 +330,52 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       aliases.delete(entityId);
       saveAliases();
       return aliasList();
+    },
+
+    async getCalibrations(): Promise<CoverCalibration[]> {
+      return read(() => calibrationList());
+    },
+
+    async putCalibration(entityId: string, input: CalibrationInput): Promise<CoverCalibration[]> {
+      if (!ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      coverOf(entityId);
+      if (!calibrationInRange(input.openMs) || !calibrationInRange(input.closeMs)) {
+        throw new ApiError("server", "invalid_calibration", 400);
+      }
+      if (!calibrations.has(entityId) && calibrations.size >= CALIBRATION_CAP) {
+        throw new ApiError("server", "too_many_calibrations", 400);
+      }
+      await delay(actionDelayMs);
+      cancelMove(entityId);
+      calibrations.set(entityId, {
+        entityId,
+        openMs: input.openMs,
+        closeMs: input.closeMs,
+        position: null,
+        calibratedAt: new Date().toISOString(),
+      });
+      return calibrationList();
+    },
+
+    async deleteCalibration(entityId: string): Promise<CoverCalibration[]> {
+      if (!ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      await delay(actionDelayMs);
+      cancelMove(entityId);
+      calibrations.delete(entityId);
+      return calibrationList();
+    },
+
+    async setCoverPercent(entityId: string, percent: number): Promise<Entity> {
+      if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new ApiError("server", "invalid_params", 400);
+      coverOf(entityId);
+      const cal = calibrations.get(entityId);
+      if (!cal) throw new ApiError("server", "not_calibrated", 409);
+      // A new request cancels a running move (its estimate is kept) before the position rules are checked.
+      cancelMove(entityId);
+      const full = percent === 0 || percent === 100;
+      if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
+      startMove(entityId, cal, percent);
+      return clone(entities.get(entityId) as Entity);
     },
 
     async getStatus(): Promise<HaStatus> {
@@ -289,6 +414,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
     async runAction(entityId: string, action: EntityAction): Promise<Entity> {
       if (scenario === "action-error") throw new ApiError("server", "Mock scenario: action-error", 500);
+      if (action.action === "stop_cover") cancelMove(entityId);
       const current = entities.get(entityId);
       if (!current) throw new ApiError("not_found", "entity_not_found", 404);
       await delay(actionDelayMs);

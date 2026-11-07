@@ -113,7 +113,12 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         optimistic: applyIntent(entity, intent),
         startedAt: Date.now(),
       });
-      return api.runAction(entity.entityId, intentAction(intent)).then(
+      // Feature 127: the calibrated cover slider has its own endpoint (backend 011).
+      const request =
+        intent.kind === "cover_percent"
+          ? api.setCoverPercent(entity.entityId, intent.percent)
+          : api.runAction(entity.entityId, intentAction(intent));
+      return request.then(
         (confirmed) => {
           dispatch({ type: "actionConfirmed", entityId: entity.entityId, requestId, entity: confirmed });
           return true;

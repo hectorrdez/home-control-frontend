@@ -15,6 +15,7 @@ import StatusChip from "@components/controls/StatusChip";
 import Card from "@components/cards/Card";
 import DeviceControls from "@components/cards/DeviceControls";
 import EntityHistoryCard from "@components/cards/EntityHistoryCard";
+import CoverCalibrationPanel from "@components/cards/CoverCalibrationPanel";
 import { describeState, domainIcon, domainHue, type Hue } from "@components/cards/deviceState";
 import { useDeviceAction } from "@components/cards/useDeviceAction";
 import { attributeRows } from "@/features/devices/attributes";
@@ -124,6 +125,7 @@ function EntityBody({ entity }: { entity: Entity }) {
           ) : (
             <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">READ ONLY</p>
           )}
+          {entity.domain === "cover" && <CoverCalibrationPanel entity={entity} disabled={pending} />}
           {/* Live status for screen readers; the visible feedback is the loader inside the control. */}
           <span aria-live="polite" className="sr-only">
             {pending ? (settling ? "UPDATING" : "SENDING") : ""}

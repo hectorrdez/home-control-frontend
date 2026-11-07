@@ -57,3 +57,17 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+
+// Feature 127 (backend 010): cover travel-time calibration. position stays null until a percent move has ended.
+export interface CoverCalibration {
+  entityId: string;
+  openMs: number;
+  closeMs: number;
+  position: number | null;
+  calibratedAt: string;
+}
+
+export interface CalibrationInput {
+  openMs: number;
+  closeMs: number;
+}

@@ -34,6 +34,11 @@ function entity(
   };
 }
 
+// Feature 127 scenario "cover-calibration": a cover with open/close only (no current_position), like Persiana Salon.
+export function createUncalibratedCoverEntities(): Entity[] {
+  return [entity("cover.salon_blind", "closed", { estimated_position: null }, "living_room", "Salon blind")];
+}
+
 // Realistic HA-shaped house matching the Stitch reference (4 rooms, mixed domains, sensors).
 export function createFixtureEntities(): Entity[] {
   // Feature 123: a room's temperature and humidity are one physical sensor (shared deviceName).

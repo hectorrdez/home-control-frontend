@@ -69,4 +69,27 @@ export class DeviceDetailPage {
   toast(text: string): Locator {
     return this.page.getByRole("status").filter({ hasText: text });
   }
+
+  // Feature 127: a cover without position feedback. CALIBRATE opens the two-step wizard; the slider appears after calibration.
+  calibrationPanel(): Locator {
+    return this.page.getByRole("region", { name: "Calibration" }).first();
+  }
+
+  calibrate(): Locator {
+    return this.page.getByRole("button", { name: "CALIBRATE", exact: true });
+  }
+
+  // The wizard waits for a real move: a DONE press under 0.5 s is rejected, so wait until the clock shows it.
+  async finishMeasuredLeg() {
+    await this.page.getByText(/ELAPSED (0\.[5-9]|[1-9])/).waitFor();
+    await this.page.getByRole("button", { name: "DONE", exact: true }).click();
+  }
+
+  coverSlider(): Locator {
+    return this.state().getByRole("slider");
+  }
+
+  coverPresetButton(name: string): Locator {
+    return this.state().getByRole("button", { name, exact: true });
+  }
 }

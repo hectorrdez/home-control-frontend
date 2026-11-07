@@ -8,6 +8,7 @@ import type { Intent } from "@/state/actions";
 import type { Entity } from "@/api/types";
 import { domainHue, type Hue } from "./deviceState";
 import { useEntityName } from "@/features/names/useEntityName";
+import { useCalibrations } from "@/state/CalibrationsProvider";
 
 // Feature 104: the domain controls of a device module. Each control maps to one Intent (see state/actions.ts).
 // Controls are disabled while the entity has an action in flight.
@@ -173,9 +174,45 @@ function ClimateControls({ entity, disabled, send }: ControlProps) {
   );
 }
 
-// Covers that report no current_position are assumed-state: no slider, only SHUT / STOP / OPEN.
-function CoverControls({ entity, hue, disabled, send }: ControlProps) {
+// Feature 127: a calibrated cover without position feedback moves to a percentage (backend 011). The estimate is
+// null while a move runs or before the first end-to-end move, so only SHUT (0%) and FULL (100%) are sent then.
+function CalibratedCoverControls({ entity, hue, disabled, send }: ControlProps) {
+  const estimate = num(entity.attributes.estimated_position);
+  const label =
+    estimate !== null ? `${estimate}% OPEN (EST.)` : disabled ? "MOVING" : "POSITION UNKNOWN: move to an end first";
+  return (
+    <div className="flex flex-col gap-space-sm">
+      <Slider
+        label={label}
+        value={estimate ?? 0}
+        min={0}
+        max={100}
+        unit="%"
+        hue={hue}
+        busy={disabled}
+        disabled={estimate === null}
+        onCommit={(percent) => send({ kind: "cover_percent", percent })}
+      />
+      <div className="flex gap-space-sm">
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_percent", percent: 0 })}>
+          SHUT (0%)
+        </Button>
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_percent", percent: 100 })}>
+          FULL (100%)
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Covers that report no current_position are assumed-state: no slider, only SHUT / STOP / OPEN (until calibrated).
+function CoverControls(props: ControlProps) {
+  const { entity, hue, disabled, send } = props;
   const reported = num(entity.attributes.current_position);
+  const { status, calibrations } = useCalibrations();
+  if (reported === null && status === "ready" && calibrations[entity.entityId]) {
+    return <CalibratedCoverControls {...props} />;
+  }
   if (reported === null) {
     return (
       <div className="flex gap-space-sm">

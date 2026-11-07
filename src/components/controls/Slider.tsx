@@ -14,6 +14,7 @@ type SliderProps = {
   unit: string;
   hue: Hue;
   busy?: boolean;
+  disabled?: boolean; // feature 127: the calibrated cover has no estimate yet (only the 0 / 100 ends can be sent)
   onCommit: (value: number) => void;
 };
 
@@ -23,7 +24,7 @@ const accent = {
   tertiary: "accent-tertiary-fixed-dim",
 };
 
-export default function Slider({ label, value, min, max, step = 1, unit, hue, busy = false, onCommit }: SliderProps) {
+export default function Slider({ label, value, min, max, step = 1, unit, hue, busy = false, disabled = false, onCommit }: SliderProps) {
   const [draft, setDraft] = useState<number | null>(null);
   const shown = draft ?? value;
 
@@ -49,6 +50,7 @@ export default function Slider({ label, value, min, max, step = 1, unit, hue, bu
         type="range"
         aria-labelledby={labelId}
         aria-busy={busy || undefined}
+        disabled={disabled}
         min={min}
         max={max}
         step={step}

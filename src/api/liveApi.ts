@@ -1,5 +1,5 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type Alias, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { ApiError, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 
@@ -162,6 +162,30 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteAlias(entityId): Promise<Alias[]> {
       return request<Alias[]>(`/api/aliases/${encodeURIComponent(entityId)}`, { method: "DELETE" });
+    },
+    // Feature 127: backend 010 (calibrations, served from memory) and 011 (cover-percent).
+    async getCalibrations(): Promise<CoverCalibration[]> {
+      return request<CoverCalibration[]>("/api/calibrations");
+    },
+
+    async putCalibration(entityId, input: CalibrationInput): Promise<CoverCalibration[]> {
+      return request<CoverCalibration[]>(`/api/calibrations/${encodeURIComponent(entityId)}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+    },
+
+    async deleteCalibration(entityId): Promise<CoverCalibration[]> {
+      return request<CoverCalibration[]>(`/api/calibrations/${encodeURIComponent(entityId)}`, { method: "DELETE" });
+    },
+
+    async setCoverPercent(entityId, percent): Promise<Entity> {
+      const [entity] = await request<Entity[]>(`/api/entities/${encodeURIComponent(entityId)}/cover-percent`, {
+        method: "POST",
+        body: JSON.stringify({ percent }),
+      });
+      if (!entity) throw new ApiError("server", "Empty cover-percent response");
+      return entity;
     },
   };
 }

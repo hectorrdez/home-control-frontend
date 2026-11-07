@@ -6,6 +6,8 @@ import type {
   HaStatus,
   HistorySeries,
   Alias,
+  CalibrationInput,
+  CoverCalibration,
 } from "./types";
 
 export interface EntityFilter {
@@ -28,4 +30,9 @@ export interface HomeApi {
   getAliases(): Promise<Alias[]>;
   setAlias(entityId: string, alias: string): Promise<Alias[]>;
   deleteAlias(entityId: string): Promise<Alias[]>;
+  // Feature 127 (backend 010/011). Writes answer with the full list / the updated entity; errors are ApiError messages (e.g. not_calibrated).
+  getCalibrations(): Promise<CoverCalibration[]>;
+  putCalibration(entityId: string, input: CalibrationInput): Promise<CoverCalibration[]>;
+  deleteCalibration(entityId: string): Promise<CoverCalibration[]>;
+  setCoverPercent(entityId: string, percent: number): Promise<Entity>;
 }

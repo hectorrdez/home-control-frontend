@@ -31,6 +31,10 @@ function createLazyMockApi(search: string): HomeApi {
     getAliases: async () => (await load()).getAliases(),
     setAlias: async (entityId, alias) => (await load()).setAlias(entityId, alias),
     deleteAlias: async (entityId) => (await load()).deleteAlias(entityId),
+    getCalibrations: async () => (await load()).getCalibrations(),
+    putCalibration: async (entityId, input) => (await load()).putCalibration(entityId, input),
+    deleteCalibration: async (entityId) => (await load()).deleteCalibration(entityId),
+    setCoverPercent: async (entityId, percent) => (await load()).setCoverPercent(entityId, percent),
     subscribe(onEntity, onConnection) {
       let stop: (() => void) | undefined;
       let closed = false;
