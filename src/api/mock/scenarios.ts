@@ -10,6 +10,7 @@ export const SCENARIOS = [
   "no-history",
   "alias-error", // feature 115: setAlias/deleteAlias reject aliases_write_failed
   "raw-names", // feature 115: adds the real HA names (siblings, ALL CAPS) so cleanup is visible
+  "many-devices", // feature 120: 20 extra office lights so the device list overflows (119 scroll proof)
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

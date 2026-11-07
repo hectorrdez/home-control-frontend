@@ -6,6 +6,7 @@ import {
   groupCounts,
   summarize,
   allEntities,
+  isInteractive,
   isUnavailable,
   formatPower,
   plugDrawBySwitch,
@@ -34,6 +35,13 @@ function SkeletonDeck() {
       ))}
     </div>
   );
+}
+
+// Feature 120: the list holds only controllable devices, so the message says so.
+function emptyMessage(areaCount: number, selectedArea: string | null): string {
+  if (areaCount === 0) return "NO DEVICES";
+  if (selectedArea !== null) return "NO CONTROLLABLE DEVICES IN THIS ZONE";
+  return "NO CONTROLLABLE DEVICES";
 }
 
 function drawLabel(sensor: { state: string; attributes: Record<string, unknown> } | undefined): string | undefined {
@@ -74,7 +82,13 @@ export default function DevicePanel() {
   const synchronized = ha.state === "online" && summary.unavailable === 0;
   const sections = deckSections(state, selectedArea, selectedGroup);
   const shown = sections.reduce((n, s) => n + s.entities.length, 0);
-  const rooms = state.areas.filter((a) => a.entityIds.some((id) => state.entities[id] && !isUnavailable(state.entities[id])));
+  // A room chip needs at least one available, interactive device (read-only rooms have no chip).
+  const rooms = state.areas.filter((a) =>
+    a.entityIds.some((id) => {
+      const e = state.entities[id];
+      return e !== undefined && !isUnavailable(e) && isInteractive(e);
+    }),
+  );
   const draws = plugDrawBySwitch(allEntities(state));
 
   return (
@@ -138,8 +152,11 @@ export default function DevicePanel() {
 
       <div className="flex min-h-0 flex-1 flex-col">
         {shown === 0 ? (
-          <p className="rounded border border-outline-variant/30 p-space-md font-label-caps text-label-caps uppercase text-on-surface-variant">
-            {state.areas.length === 0 ? "NO DEVICES" : "NO DEVICES IN THIS ZONE"}
+          <p
+            role="status"
+            className="rounded border border-outline-variant/30 p-space-md font-label-caps text-label-caps uppercase text-on-surface-variant"
+          >
+            {emptyMessage(state.areas.length, selectedArea)}
           </p>
         ) : (
           <ul aria-label="Devices" className="flex min-h-0 flex-1 flex-col gap-space-sm overflow-y-auto pr-space-xs">

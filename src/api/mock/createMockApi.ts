@@ -9,7 +9,7 @@ import {
   type HaStatus,
   type HistorySeries,
 } from "../types";
-import { createFixtureEntities, createRawNameEntities, FIXTURE_AREAS } from "./fixtures";
+import { createFixtureEntities, createManyDeviceEntities, createRawNameEntities, FIXTURE_AREAS } from "./fixtures";
 import { createPrng, hashSeed } from "./prng";
 import { type Scenario } from "./scenarios";
 
@@ -45,7 +45,11 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const streamDelayMs = options.streamDelayMs ?? (scenario === "slow" ? 1500 : 300);
 
   const entities = new Map<string, Entity>(
-    scenario === "empty" ? [] : [...createFixtureEntities(), ...(scenario === "raw-names" ? createRawNameEntities() : [])].map((e) => [e.entityId, e]),
+    scenario === "empty" ? [] : [
+          ...createFixtureEntities(),
+          ...(scenario === "raw-names" ? createRawNameEntities() : []),
+          ...(scenario === "many-devices" ? createManyDeviceEntities() : []),
+        ].map((e) => [e.entityId, e]),
   );
   const listeners = new Set<(e: Entity) => void>();
   const rng = createPrng(hashSeed(`stream:${seed}`));

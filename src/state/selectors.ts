@@ -45,14 +45,22 @@ export function isUnavailable(entity: Entity): boolean {
   return entity.state === "unavailable" || entity.state === "unknown";
 }
 
+// Domains with a control in DeviceControls.tsx: keep the two in sync.
+export const INTERACTIVE_DOMAINS = new Set(["light", "switch", "fan", "climate", "cover", "lock", "scene", "script"]);
+
+// Domain only: availability is handled by isUnavailable, device_class is not read.
+export function isInteractive(entity: Entity): boolean {
+  return INTERACTIVE_DOMAINS.has(entity.domain);
+}
+
 export function allEntities(state: EntitiesState): Entity[] {
   return Object.values(state.entities);
 }
 
-// Counts for ALL and each group, over every entity in the house.
+// Counts for ALL and each group, over the available interactive entities in the house.
 export function groupCounts(state: EntitiesState): Record<DomainFilter, number> {
-  const all = allEntities(state).filter((e) => !isUnavailable(e));
-  const plugs = plugPowerSensorIds(all);
+  const all = allEntities(state).filter((e) => !isUnavailable(e) && isInteractive(e));
+  const plugs = plugPowerSensorIds(allEntities(state));
   const counts: Record<DomainFilter, number> = { all: all.length, lights: 0, climate: 0, security: 0, plugs: 0 };
   for (const e of all) {
     const group = domainGroupOf(e, plugs);
@@ -78,7 +86,7 @@ export function deckSections(
     if (selectedArea !== null && area.areaId !== selectedArea) continue;
     const entities = area.entityIds
       .map((id) => state.entities[id])
-      .filter((e): e is Entity => e !== undefined && !isUnavailable(e))
+      .filter((e): e is Entity => e !== undefined && !isUnavailable(e) && isInteractive(e))
       .filter((e) => filter === "all" || domainGroupOf(e, plugs) === filter)
       .sort((a, b) => {
         const rank = GROUP_RANK[domainGroupOf(a, plugs)] - GROUP_RANK[domainGroupOf(b, plugs)];

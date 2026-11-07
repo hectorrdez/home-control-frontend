@@ -15,19 +15,22 @@ for (const viewport of VIEWPORTS) {
   test.describe(`home at ${viewport.name} ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("the document does not scroll vertically", async ({ page }) => {
-      const home = new HomePage(page);
-      const layout = new HomeLayout(page);
-      await home.open();
-      await expect(home.deck.modules().first()).toBeVisible();
+    for (const query of ["", "?mock=many-devices"]) {
+      test(`the document does not scroll vertically (${query || "default house"})`, async ({ page }) => {
+        const home = new HomePage(page);
+        const layout = new HomeLayout(page);
+        await home.open(query);
+        await expect(home.deck.modules().first()).toBeVisible();
 
-      expect(await layout.documentScrollHeight()).toBeLessThanOrEqual(await layout.viewportHeight());
-    });
+        expect(await layout.documentScrollHeight()).toBeLessThanOrEqual(await layout.viewportHeight());
+      });
+    }
 
     test("the device list scrolls inside its own container", async ({ page }) => {
       const home = new HomePage(page);
       const layout = new HomeLayout(page);
-      await home.open();
+      // Feature 120: 9 cards may fit; the many-devices house overflows the list deterministically.
+      await home.open("?mock=many-devices");
       await expect(layout.deviceList()).toBeVisible();
 
       const metrics = await layout.listScrollMetrics();

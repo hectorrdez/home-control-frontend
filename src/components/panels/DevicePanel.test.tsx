@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
 import type { Area, Entity, HaStatus } from "@/api/types";
 import { AliasesProvider } from "@/state/AliasesProvider";
-import { EntitiesProvider } from "@/state/EntitiesProvider";
+import { EntitiesProvider, useEntities } from "@/state/EntitiesProvider";
 import { UNASSIGNED } from "@/state/entities";
 import { ToastProvider } from "@components/feedback/Toast";
 import DevicePanel from "./DevicePanel";
@@ -36,6 +37,18 @@ const areaOf = (id: string, name: string, entities: Entity[]): Area => ({
   name,
   entities,
 });
+
+// Feature 120: an area with only read-only entities (no chip, no controllable device).
+const garden: Area = areaOf("garden", "Garden", [
+  ent("sensor.garden_temperature", "14", "garden", { device_class: "temperature", unit_of_measurement: "°C" }, "Garden temperature"),
+  ent("binary_sensor.garden_motion", "off", "garden", { device_class: "motion" }, "Garden motion"),
+]);
+
+// Feature 120: a helper that picks a room the way the 3D stage does (provider state, no chip).
+function SelectArea({ areaId }: { areaId: string }) {
+  const { setSelectedArea } = useEntities();
+  return <button onClick={() => setSelectedArea(areaId)}>{`pick ${areaId}`}</button>;
+}
 
 const houseAreas = (): Area[] => [
   areaOf("kitchen", "Kitchen", kitchen),
@@ -74,13 +87,14 @@ function harness(setup: Setup) {
   return { api, getAreas };
 }
 
-function renderPanel(setup: Setup = {}) {
+function renderPanel(setup: Setup = {}, extra?: ReactNode) {
   const h = harness(setup);
   render(
     <ApiProvider api={h.api}>
       <ToastProvider>
         <EntitiesProvider>
           <AliasesProvider>
+            {extra}
             <DevicePanel />
           </AliasesProvider>
         </EntitiesProvider>
@@ -119,7 +133,9 @@ describe("DevicePanel", () => {
     expect(names.some((n) => n.includes("Kitchen lamp"))).toBe(false);
     expect(names.some((n) => n.includes("Ghost light"))).toBe(false);
     expect(names.some((n) => n.includes("Ceiling"))).toBe(true);
-    expect(names.some((n) => n.includes("42 W"))).toBe(true);
+    expect(names.some((n) => n.includes("Kettle power"))).toBe(false);
+    const kettle = within(list).getByRole("article", { name: "Kettle" });
+    expect(kettle.textContent).toContain("42 W");
 
     const rooms = screen.getByRole("group", { name: "Rooms" });
     expect(within(rooms).queryByRole("button", { name: /GHOST/ })).toBeNull();
@@ -162,8 +178,39 @@ describe("DevicePanel", () => {
     await screen.findByRole("list", { name: "Devices" });
     fireEvent.click(screen.getByRole("button", { name: /^SECURITY/ }));
     fireEvent.click(screen.getByRole("button", { name: /KITCHEN/ }));
-    expect(screen.getByText("NO DEVICES IN THIS ZONE")).toBeTruthy();
+    expect(screen.getByText("NO CONTROLLABLE DEVICES IN THIS ZONE")).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Devices" })).toBeNull();
+  });
+
+  it("hides the Kettle power sensor from the list and shows PLUGS with 1", async () => {
+    renderPanel();
+    await screen.findByRole("list", { name: "Devices" });
+    expect(screen.getByRole("button", { name: /^PLUGS/ }).textContent).toContain("1");
+    expect(screen.queryByRole("article", { name: "Kettle power" })).toBeNull();
+  });
+
+  it("gives no room chip to an area with only sensors", async () => {
+    renderPanel({ areas: [...houseAreas(), garden] });
+    await screen.findByRole("list", { name: "Devices" });
+    const rooms = screen.getByRole("group", { name: "Rooms" });
+    expect(within(rooms).queryByRole("button", { name: /GARDEN/ })).toBeNull();
+  });
+
+  it("shows the zone message when a room with only sensors is selected from the stage", async () => {
+    renderPanel({ areas: [...houseAreas(), garden] }, <SelectArea areaId="garden" />);
+    await screen.findByRole("list", { name: "Devices" });
+    fireEvent.click(screen.getByRole("button", { name: "pick garden" }));
+    const message = await screen.findByText("NO CONTROLLABLE DEVICES IN THIS ZONE");
+    expect(message.getAttribute("role")).toBe("status");
+    expect(screen.queryByRole("list", { name: "Devices" })).toBeNull();
+  });
+
+  it("shows NO CONTROLLABLE DEVICES when the house has only sensors", async () => {
+    renderPanel({ areas: [garden] });
+    const message = await screen.findByText("NO CONTROLLABLE DEVICES");
+    expect(message.getAttribute("role")).toBe("status");
+    expect(screen.queryByRole("group", { name: "Rooms" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^ALL\d*$/ }).textContent).toContain("0");
   });
 
   it("shows NO DEVICES when the house has no areas", async () => {

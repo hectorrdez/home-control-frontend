@@ -29,6 +29,11 @@ export class DeviceDeck {
       .getByRole("button", { name: new RegExp(`^${label}`) });
   }
 
+  // Feature 120: the message shown when the filtered list has no controllable device.
+  emptyState(): Locator {
+    return this.panel().getByRole("status");
+  }
+
   retryButton(): Locator {
     return this.panel().getByRole("button", { name: "RETRY" });
   }

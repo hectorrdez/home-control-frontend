@@ -76,6 +76,14 @@ export function createFixtureEntities(): Entity[] {
   ];
 }
 
+// Feature 120 "many-devices" scenario: 20 extra lights so the device list overflows its container (119 scroll proof).
+export function createManyDeviceEntities(): Entity[] {
+  return Array.from({ length: 20 }, (_, i) => {
+    const n = String(i + 1).padStart(2, "0");
+    return entity(`light.strip_${n}`, "off", { brightness: 0, supported_color_modes: ["brightness"] }, "office", `Strip ${n}`);
+  });
+}
+
 // Feature 115 "raw-names" scenario: the real HA names (sibling prefixes, ALL CAPS, double spaces) in the unassigned area.
 export function createRawNameEntities(): Entity[] {
   const raw = (entityId: string, state: string, attributes: Record<string, unknown>, name: string, deviceName: string): Entity => ({

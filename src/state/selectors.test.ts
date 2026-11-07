@@ -8,9 +8,20 @@ import {
   formatPower,
   groupCounts,
   houseLoad,
+  isInteractive,
   plugPowerSensorIds,
   summarize,
 } from "./selectors";
+
+const synthetic = (domain: string, state = "on"): Entity => ({
+  entityId: domain === "" ? ".thing" : `${domain}.thing`,
+  domain,
+  name: "Thing",
+  state,
+  attributes: {},
+  area: "kitchen",
+  lastChanged: "2026-11-06T08:00:00.000Z",
+});
 
 // Same grouping the live API returns: one group per area (fixture order), unassigned last.
 function areasFrom(entities: Entity[]): Area[] {
@@ -63,9 +74,9 @@ describe("domain groups", () => {
     expect(group("scene.dawn")).toBe("other");
   });
 
-  it("counts entities per pill and ALL over the whole house", () => {
+  it("counts only available interactive entities per pill and ALL", () => {
     const counts = groupCounts(loaded(house()));
-    expect(counts).toEqual({ all: house().length, lights: 4, climate: 9, security: 2, plugs: 2 });
+    expect(counts).toEqual({ all: 9, lights: 4, climate: 1, security: 1, plugs: 1 });
   });
 
   it("only links a power sensor to a switch in the same area by name", () => {
@@ -73,6 +84,46 @@ describe("domain groups", () => {
     const unrelated: Entity = { ...entities.find((e) => e.entityId === "sensor.solar_power")! };
     const linked = plugPowerSensorIds([...entities, unrelated]);
     expect([...linked]).toEqual(["sensor.office_desk_power"]);
+  });
+});
+
+describe("isInteractive", () => {
+  it.each(["light", "switch", "fan", "climate", "cover", "lock", "scene", "script"])("is true for %s", (domain) => {
+    expect(isInteractive(synthetic(domain))).toBe(true);
+  });
+
+  it.each(["sensor", "binary_sensor", "alarm_control_panel", "input_boolean", "button", "weather", ""])(
+    "is false for %s",
+    (domain) => {
+      expect(isInteractive(synthetic(domain))).toBe(false);
+    },
+  );
+
+  it("selects exactly the 9 interactive fixture entities", () => {
+    const ids = createFixtureEntities()
+      .filter(isInteractive)
+      .map((e) => e.entityId)
+      .sort();
+    expect(ids).toEqual([
+      "climate.living_room",
+      "cover.bedroom_blinds",
+      "light.bedroom_lamp",
+      "light.kitchen_ceiling",
+      "light.living_room_ceiling",
+      "light.office_desk",
+      "lock.front_door",
+      "scene.dawn",
+      "switch.office_desk",
+    ]);
+  });
+
+  it("keeps an unavailable light interactive but out of the deck and the counts", () => {
+    const light: Entity = { ...synthetic("light"), entityId: "light.gone", state: "unavailable" };
+    expect(isInteractive(light)).toBe(true);
+    const state = loaded([...house(), light]);
+    const shown = deckSections(state, null, "all").flatMap((s) => s.entities.map((e) => e.entityId));
+    expect(shown).not.toContain("light.gone");
+    expect(groupCounts(state).lights).toBe(4);
   });
 });
 
@@ -116,12 +167,31 @@ describe("deck sections", () => {
     const state = loaded(house());
     const sections = deckSections(state, "living_room", "all");
     expect(sections.map((s) => s.area.areaId)).toEqual(["living_room"]);
-    expect(sections[0].entities.map((e) => e.entityId)).toEqual([
-      "light.living_room_ceiling",
-      "sensor.living_room_humidity",
-      "sensor.living_room_temperature",
-      "climate.living_room",
-    ]);
+    expect(sections[0].entities.map((e) => e.entityId)).toEqual(["light.living_room_ceiling", "climate.living_room"]);
+  });
+
+  it("hides read-only entities from every section", () => {
+    const shown = deckSections(loaded(house()), null, "all").flatMap((s) => s.entities.map((e) => e.entityId));
+    expect(shown.some((id) => id.startsWith("sensor.") || id.startsWith("binary_sensor."))).toBe(false);
+  });
+
+  it("keeps a selected room even when it has no interactive entity in the filter", () => {
+    const sections = deckSections(loaded(house()), "living_room", "security");
+    expect(sections.map((s) => s.area.areaId)).toEqual(["living_room"]);
+    expect(sections[0].entities).toEqual([]);
+  });
+
+  it("lists an interactive entity with no area under UNASSIGNED", () => {
+    const loose: Entity = { ...synthetic("light"), entityId: "light.loose", name: "Loose", area: null };
+    const sections = deckSections(loaded([...house(), loose]), null, "all");
+    const unassigned = sections.find((s) => s.area.areaId === UNASSIGNED);
+    // The fixture's lock and scene are unassigned too; the loose light must be among them.
+    expect(unassigned?.entities.map((e) => e.entityId)).toContain("light.loose");
+  });
+
+  it("orders the office room as lights then plugs", () => {
+    const sections = deckSections(loaded(house()), "office", "all");
+    expect(sections[0].entities.map((e) => e.entityId)).toEqual(["light.office_desk", "switch.office_desk"]);
   });
 
   it("returns only matching entities for a domain group across rooms", () => {
@@ -138,6 +208,6 @@ describe("unavailable entities", () => {
     const state = loaded(entities);
     const shown = deckSections(state, null, "all").flatMap((sec) => sec.entities.map((e) => e.entityId));
     expect(shown).not.toContain("light.kitchen_ceiling");
-    expect(groupCounts(state).all).toBe(entities.length - 1);
+    expect(groupCounts(state).all).toBe(8);
   });
 });

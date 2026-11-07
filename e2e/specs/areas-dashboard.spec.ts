@@ -8,8 +8,8 @@ test.describe("device panel", () => {
     await home.open();
 
     await expect(page.getByText("ALL SYSTEMS SYNCHRONIZED")).toBeVisible();
-    await expect(home.deck.domainPill("ALL")).toContainText("26");
-    await expect(home.deck.modules()).toHaveCount(26);
+    await expect(home.deck.domainPill("ALL")).toContainText("9");
+    await expect(home.deck.modules()).toHaveCount(9);
     await expect(page.getByRole("group", { name: "Rooms" }).getByRole("button")).toHaveCount(6);
   });
 
@@ -31,7 +31,7 @@ test.describe("device panel", () => {
 
     await home.deck.selectRoom("KITCHEN");
 
-    await expect(home.deck.modules()).toHaveCount(3);
+    await expect(home.deck.modules()).toHaveCount(1);
     await expect(page.getByRole("article", { name: "Kitchen ceiling" })).toBeVisible();
     await expect(page.getByRole("article", { name: "Living room ceiling" })).toHaveCount(0);
   });

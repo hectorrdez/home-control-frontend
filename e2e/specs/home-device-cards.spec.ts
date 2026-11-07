@@ -24,7 +24,7 @@ test("entrance remains staggered past the sixth card", async ({ page }) => {
   const home = new HomePage(page);
   await home.open();
 
-  await expect(home.deck.modules()).toHaveCount(26);
+  await expect(home.deck.modules()).toHaveCount(9);
   const sixthDelay = await home.deck.modules().nth(5).evaluate((card) => parseFloat(getComputedStyle(card).animationDelay));
   const seventhDelay = await home.deck.modules().nth(6).evaluate((card) => parseFloat(getComputedStyle(card).animationDelay));
   expect(seventhDelay).toBeGreaterThan(sixthDelay);
