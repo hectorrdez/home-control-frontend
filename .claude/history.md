@@ -21,3 +21,4 @@ id|slug|state|role|commit|commit_url
 116|device-card-redesign|ENDED|frontend|77c7b27|https://github.com/hectorrdez/home-control-frontend/commit/77c7b27
 117|device-action-feedback|ENDED|frontend|45b2ba4|https://github.com/hectorrdez/home-control-frontend/commit/45b2ba4
 118|telemetry-chart-filters|ENDED|frontend|af3ce3b|https://github.com/hectorrdez/home-control-frontend/commit/af3ce3b
+119|home-no-page-scroll|IN_PROCESS|frontend|672767d|https://github.com/hectorrdez/home-control-frontend/commit/672767d
