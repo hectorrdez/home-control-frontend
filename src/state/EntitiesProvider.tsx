@@ -4,6 +4,7 @@ import type { ConnectionState, Entity } from "@/api/types";
 import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, type EntitiesState } from "./entities";
 import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
+import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -44,6 +45,14 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
+  // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
+  const refreshAreas = useCallback(() => {
+    void api.getAreas().then(
+      (areas) => dispatch({ type: "areasRefreshed", areas }),
+      () => undefined,
+    );
+  }, [api]);
+
   // One app-level subscription (105): stream events merge into the store; a reconnect re-fetches the areas once.
   useEffect(() => {
     let previous: ConnectionState = "open";
@@ -51,16 +60,26 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       (entity) => dispatch({ type: "entityUpdated", entity }),
       (next) => {
         setConnection(next);
-        if (next === "open" && previous === "reconnecting") {
-          void api.getAreas().then(
-            (areas) => dispatch({ type: "areasRefreshed", areas }),
-            () => undefined, // the stream is the source of truth for the next event; keep the last state
-          );
-        }
+        if (isStreamRecovery(previous, next)) refreshAreas();
         previous = next;
       },
     );
-  }, [api]);
+  }, [api, refreshAreas]);
+
+  // Feature 126: a tab that was hidden for more than 60 s may have missed changes; re-fetch when it is shown again.
+  useEffect(() => {
+    let hiddenSince: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenSince ??= Date.now();
+        return;
+      }
+      if (shouldResyncAfterHidden(hiddenSince, Date.now())) refreshAreas();
+      hiddenSince = null;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [refreshAreas]);
 
   // 117: an action whose answer still showed the old state waits for its stream event. After SETTLE_TIMEOUT_MS
   // the marker is dropped and the areas are re-fetched, so the server state takes over. Keyed on the settling
@@ -78,14 +97,11 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       const requestId = Number(entry.slice(separator + 1));
       return window.setTimeout(() => {
         dispatch({ type: "settleTimedOut", entityId, requestId });
-        void api.getAreas().then(
-          (areas) => dispatch({ type: "areasRefreshed", areas }),
-          () => undefined, // keep the last state; the next stream event or reload will correct it
-        );
+        refreshAreas(); // keeps the last state on failure; the next stream event or reload will correct it
       }, SETTLE_TIMEOUT_MS);
     });
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [settlingKey, api]);
+  }, [settlingKey, refreshAreas]);
 
   const sendIntent = useCallback(
     (entity: Entity, intent: Intent): Promise<boolean> => {

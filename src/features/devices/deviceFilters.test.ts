@@ -278,3 +278,43 @@ describe("resolveDeviceKey", () => {
     expect(resolveDeviceKey(all, "office~nope")).toBeNull();
   });
 });
+
+describe("device availability (126)", () => {
+  const hub = (id: string, state: string, device = "Hub") => entity({ entityId: id, deviceName: device, state, attributes: {} });
+
+  it("is offline only when every member is unavailable or unknown", () => {
+    const [row] = rows([hub("switch.hub", "unavailable"), hub("sensor.hub_power", "unknown")]);
+    expect(row.offline).toBe(true);
+  });
+
+  it("stays online while one member is still available", () => {
+    const [row] = rows([hub("switch.hub", "unavailable"), hub("sensor.hub_power", "42")]);
+    expect(row.offline).toBe(false);
+    expect(row.primary.entityId).toBe("switch.hub");
+    expect(row.statusEntity.entityId).toBe("sensor.hub_power");
+  });
+
+  it("shows the primary as status when it is available", () => {
+    const [row] = rows([hub("switch.hub", "on"), hub("sensor.hub_power", "unavailable")]);
+    expect(row.offline).toBe(false);
+    expect(row.statusEntity.entityId).toBe("switch.hub");
+  });
+
+  it("treats a cover or scene reporting unknown as available", () => {
+    const [cover] = rows([entity({ entityId: "cover.blinds", state: "unknown", attributes: {} })]);
+    expect(cover.offline).toBe(false);
+  });
+
+  it("an offline standalone sensor is offline; a live device row updates from the store", () => {
+    const [sensor] = rows([entity({ entityId: "sensor.co2", state: "unavailable", attributes: { device_class: "carbon_dioxide" } })]);
+    expect(sensor.offline).toBe(true);
+
+    const before = stateOf([hub("switch.hub", "on"), hub("sensor.hub_power", "42")]);
+    const after = entitiesReducer(before, {
+      type: "entityUpdated",
+      entity: hub("switch.hub", "unavailable"),
+    });
+    const later = entitiesReducer(after, { type: "entityUpdated", entity: hub("sensor.hub_power", "unavailable") });
+    expect(buildDeviceRows(later, plainLabel)[0].offline).toBe(true);
+  });
+});

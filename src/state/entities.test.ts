@@ -245,3 +245,34 @@ describe("superseded action events (117)", () => {
     expect(done.entities["light.a"].attributes.brightness).toBe(125);
   });
 });
+
+describe("live availability in the store (126)", () => {
+  const sensorArea = (state: string, lastChanged: string): Area[] => [
+    {
+      areaId: "office",
+      name: "Office",
+      entities: [{ ...light(state, lastChanged, "office"), entityId: "switch.desk", domain: "switch", deviceName: "Desk plug" }],
+    },
+  ];
+
+  it("a stream event to unavailable updates the entity and records a disconnected feed event", () => {
+    const next = entitiesReducer(entitiesReducer(initialEntitiesState, { type: "loaded", areas: sensorArea("on", at) }), {
+      type: "entityUpdated",
+      entity: { ...light("unavailable", "2026-01-01T10:00:05.000Z", "office"), entityId: "switch.desk", domain: "switch", deviceName: "Desk plug" },
+    });
+    expect(next.entities["switch.desk"].state).toBe("unavailable");
+    expect(next.feed).toMatchObject([{ entityId: "switch.desk", value: "disconnected", deviceKey: "office~desk plug" }]);
+  });
+
+  it("a resync after a reconnect records the changes missed while the stream was down", () => {
+    const loadedState = entitiesReducer(initialEntitiesState, { type: "loaded", areas: sensorArea("on", at) });
+    const next = entitiesReducer(loadedState, { type: "areasRefreshed", areas: sensorArea("unavailable", "2026-01-01T10:03:00.000Z") });
+    expect(next.entities["switch.desk"].state).toBe("unavailable");
+    expect(next.feed).toMatchObject([{ value: "disconnected" }]);
+  });
+
+  it("a resync with no changes leaves the feed as it was", () => {
+    const loadedState = entitiesReducer(initialEntitiesState, { type: "loaded", areas: sensorArea("on", at) });
+    expect(entitiesReducer(loadedState, { type: "areasRefreshed", areas: sensorArea("on", at) }).feed).toEqual([]);
+  });
+});

@@ -124,6 +124,35 @@ describe("EntitiesProvider", () => {
     expect(result.current.connection).toBe("open");
   });
 
+  it("re-fetches the areas when the tab is shown again after more than 60 s hidden (126)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const h = harness();
+      const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+      await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+      const setVisibility = (value: "hidden" | "visible") =>
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => value });
+
+      setVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.setSystemTime(Date.now() + 30_000);
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(h.getAreas).toHaveBeenCalledTimes(1);
+
+      setVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.setSystemTime(Date.now() + 61_000);
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await waitFor(() => expect(h.getAreas).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    }
+  });
+
   it("keeps the last state when the post-reconnect area refresh fails", async () => {
     let fail = false;
     const h = harness({

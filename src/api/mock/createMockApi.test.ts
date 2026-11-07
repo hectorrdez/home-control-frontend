@@ -115,6 +115,32 @@ describe("stream", () => {
     vi.advanceTimersByTime(3000);
     expect(connections.at(-1)).toBe("open");
   });
+
+  it("device-flap drops both Desk plug members in one tick at 1.5 s and restores them at 4 s (126)", () => {
+    vi.useFakeTimers();
+    const api = createMockApi({ ...fast, scenario: "device-flap" });
+    const batches: { tick: number; ids: string[]; states: string[] }[] = [];
+    let last = -1;
+    api.subscribe(
+      (e) => {
+        const now = Date.now();
+        if (now !== last) batches.push({ tick: now, ids: [], states: [] });
+        last = now;
+        batches.at(-1)!.ids.push(e.entityId);
+        batches.at(-1)!.states.push(e.state);
+      },
+      () => undefined,
+    );
+
+    vi.advanceTimersByTime(1500);
+    expect(batches).toHaveLength(1);
+    expect(batches[0].ids.sort()).toEqual(["sensor.office_desk_power", "switch.office_desk"]);
+    expect(batches[0].states).toEqual(["unavailable", "unavailable"]);
+
+    vi.advanceTimersByTime(2500);
+    expect(batches).toHaveLength(2);
+    expect(batches[1].states).toEqual(["on", "42.5"]);
+  });
 });
 
 describe("history", () => {

@@ -29,6 +29,11 @@ export class DevicesPage {
     return this.page.getByRole("list", { name: "Devices" }).getByRole("link", { name, exact: true });
   }
 
+  // The status text inside a row (e.g. "OFFLINE", "ON"); scoped to the row so two rows never collide.
+  rowState(name: string, state: string): Locator {
+    return this.row(name).getByText(state, { exact: true });
+  }
+
   shown(): Locator {
     return this.page.getByRole("status", { name: "Devices shown" });
   }

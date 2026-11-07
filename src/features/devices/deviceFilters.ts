@@ -1,6 +1,7 @@
 import type { Entity } from "@/api/types";
 import { UNASSIGNED, type EntitiesState } from "@/state/entities";
 import { INTERACTIVE_DOMAINS, isInteractive } from "@/state/selectors";
+import { isUnavailable } from "@/state/availability";
 import { normalize } from "@/features/telemetry/widgetFilters";
 import { cleanName, displayName } from "@/features/names/displayName";
 
@@ -16,6 +17,8 @@ export interface DeviceRow {
   entities: Entity[]; // ordered members (primary first)
   interactive: boolean; // any member interactive
   domains: string[]; // distinct member domains
+  offline: boolean; // feature 126: every member unavailable (partly available devices stay online)
+  statusEntity: Entity; // feature 126: the member whose state the row shows (primary, or the first available one)
 }
 
 export type DeviceKind = "all" | "interactive" | "readonly";
@@ -111,6 +114,7 @@ export function buildDeviceRows(state: EntitiesState, label: (entity: Entity) =>
     const entities = [...group.members].sort(compareMembers);
     const primary = entities[0];
     const text = group.device && primary.deviceName ? cleanName({ entityId: primary.entityId, name: primary.deviceName }) : label(primary);
+    const offline = entities.every(isUnavailable);
     const row: DeviceRow = {
       key: group.key,
       label: text,
@@ -120,6 +124,8 @@ export function buildDeviceRows(state: EntitiesState, label: (entity: Entity) =>
       entities,
       interactive: entities.some(isInteractive),
       domains: [...new Set(entities.map((e) => e.domain))],
+      offline,
+      statusEntity: isUnavailable(primary) ? (entities.find((e) => !isUnavailable(e)) ?? primary) : primary,
     };
     return { row, rank: group.rank };
   });

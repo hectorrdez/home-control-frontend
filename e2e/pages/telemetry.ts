@@ -75,6 +75,11 @@ export class TelemetryPage {
     return this.page.getByRole("list", { name: "Event feed items" }).getByRole("listitem");
   }
 
+  // Feed items whose text contains `text` (e.g. "Desk outlet disconnected").
+  feedItemsWith(text: string) {
+    return this.feedItems().filter({ hasText: text });
+  }
+
   gauge(label: string) {
     return this.page.getByRole("region", { name: "Levels" }).getByRole("img", { name: new RegExp(`^${label}:`) });
   }

@@ -24,6 +24,10 @@ export interface MockApiOptions {
 const HA_VERSION = "2026.4.1";
 const HISTORY_REF_TIME = Date.parse("2026-11-06T12:00:00.000Z");
 const UNASSIGNED = "unassigned";
+// Feature 126 "device-flap" scenario: the Desk plug device (switch + power sensor) drops and recovers.
+const DEVICE_FLAP_IDS = ["switch.office_desk", "sensor.office_desk_power"];
+const DEVICE_FLAP_DOWN_MS = 1500;
+const DEVICE_FLAP_UP_MS = 4000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -67,6 +71,14 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
   function emit(entity: Entity) {
     for (const listener of listeners) listener(clone(entity));
+  }
+
+  function setEntityState(entityId: string, state: string) {
+    const current = entities.get(entityId);
+    if (!current) return;
+    const next = { ...clone(current), state, lastChanged: new Date().toISOString() };
+    entities.set(entityId, next);
+    emit(next);
   }
 
   function applyAction(current: Entity, action: EntityAction): Entity {
@@ -137,6 +149,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   }
 
   function drift(current: Entity): Entity {
+    if (current.state === "unavailable") return current; // a device without a link does not report values
     const next = clone(current);
     if (next.domain === "sensor" && next.attributes.device_class === "temperature") {
       const v = asNumber(next.state) ?? 0;
@@ -297,6 +310,19 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       if (scenario === "stream-drop") {
         timeouts.push(setTimeout(() => onConnection("reconnecting"), 3000));
         timeouts.push(setTimeout(() => onConnection("open"), 6000));
+      }
+
+      // Feature 126 "device-flap": both members of the Desk plug device lose their link, then recover. Emitted in
+      // one tick, like a device dropping off the network, so the feed dedupes them into one event.
+      if (scenario === "device-flap") {
+        let saved: string[] = [];
+        timeouts.push(setTimeout(() => {
+          saved = DEVICE_FLAP_IDS.map((id) => entities.get(id)?.state ?? "on");
+          for (const id of DEVICE_FLAP_IDS) setEntityState(id, "unavailable");
+        }, DEVICE_FLAP_DOWN_MS));
+        timeouts.push(setTimeout(() => {
+          DEVICE_FLAP_IDS.forEach((id, i) => setEntityState(id, saved[i] ?? "on"));
+        }, DEVICE_FLAP_UP_MS));
       }
 
       const interval = setInterval(() => {

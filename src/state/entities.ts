@@ -141,7 +141,10 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
       for (const id of Object.keys(state.pending)) {
         if (state.entities[id]) entities[id] = state.entities[id];
       }
-      return { ...state, status: "ready", areas: groups, entities };
+      // Feature 126: changes missed while the stream was down show up in the feed as well.
+      let feed = state.feed;
+      for (const id of Object.keys(entities)) feed = recordChange(feed, state.entities[id], entities[id]);
+      return { ...state, status: "ready", areas: groups, entities, feed };
     }
     case "actionStarted": {
       const current = state.entities[action.entityId];

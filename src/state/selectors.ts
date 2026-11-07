@@ -1,5 +1,6 @@
 import type { Entity } from "@/api/types";
 import { UNASSIGNED, type AreaGroup, type EntitiesState } from "./entities";
+import { isUnavailable } from "./availability";
 
 export type DomainGroup = "lights" | "climate" | "security" | "plugs" | "other";
 // Filter pills in display order (ALL is added by the panel). "other" has no pill.
@@ -41,13 +42,7 @@ export function domainGroupOf(entity: Entity, plugSensors: Set<string>): DomainG
   return "other";
 }
 
-// Domains whose state may legitimately be "unknown" (assumed-state covers, scenes and scripts never report a state).
-export const UNKNOWN_STATE_DOMAINS = new Set(["cover", "scene", "script"]);
-
-export function isUnavailable(entity: Entity): boolean {
-  if (entity.state === "unavailable") return true;
-  return entity.state === "unknown" && !UNKNOWN_STATE_DOMAINS.has(entity.domain);
-}
+export { isUnavailable, UNKNOWN_STATE_DOMAINS } from "./availability";
 
 // Domains with a control in DeviceControls.tsx: keep the two in sync.
 export const INTERACTIVE_DOMAINS = new Set(["light", "switch", "fan", "climate", "cover", "lock", "scene", "script"]);

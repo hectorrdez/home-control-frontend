@@ -11,6 +11,7 @@ export const SCENARIOS = [
   "alias-error", // feature 115: setAlias/deleteAlias reject aliases_write_failed
   "raw-names", // feature 115: adds the real HA names (siblings, ALL CAPS) so cleanup is visible
   "many-devices", // feature 120: 20 extra office lights so the device list overflows (119 scroll proof)
+  "device-flap", // feature 126: the Desk plug device goes unavailable at 1.5 s and back at 4 s (row + feed live)
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

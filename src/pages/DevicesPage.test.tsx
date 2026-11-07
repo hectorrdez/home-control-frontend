@@ -116,13 +116,24 @@ describe("DevicesPage", () => {
     expect(screen.queryByRole("link", { name: "Living room ceiling" })).toBeNull();
   });
 
-  it("marks an unavailable device with an UNAVAILABLE chip", async () => {
+  it("marks a device whose members are all unavailable with an OFFLINE chip (126)", async () => {
     const entities = createFixtureEntities().map((e) =>
       e.entityId === "light.kitchen_ceiling" ? { ...e, state: "unavailable" } : e,
     );
     renderPage({ areas: areasOf(entities) });
     const row = await screen.findByRole("link", { name: "Kitchen ceiling" });
-    expect(row.textContent).toContain("UNAVAILABLE");
+    expect(row.textContent).toContain("OFFLINE");
+    expect(row.textContent).not.toContain("UNAVAILABLE");
+  });
+
+  it("keeps a partly available device online (126)", async () => {
+    const entities = createFixtureEntities().map((e) =>
+      e.entityId === "switch.office_desk" ? { ...e, state: "unavailable" } : e,
+    );
+    renderPage({ areas: areasOf(entities) });
+    const row = await screen.findByRole("link", { name: "Desk plug" });
+    expect(row.textContent).not.toContain("OFFLINE");
+    expect(row.textContent).toContain("43 W");
   });
 
   it("shows the loading state while devices load", () => {

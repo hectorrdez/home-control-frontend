@@ -15,10 +15,11 @@ const hueText: Record<Hue, string> = {
 
 export default function DeviceRow({ row }: { row: Row }) {
   const metaId = useId();
-  const { primary, label, areaName, entities } = row;
+  const { primary, label, areaName, entities, offline, statusEntity } = row;
   const Icon = domainIcon(primary.domain);
   const hue = domainHue(primary.domain);
-  const view = describeState(primary);
+  // Feature 126: OFFLINE only when every member is unavailable; otherwise the value of the first available member.
+  const view = describeState(statusEntity);
   const meta = entities.length >= 2 ? `${entities.length} ENTITIES` : primary.entityId;
 
   return (
@@ -42,8 +43,10 @@ export default function DeviceRow({ row }: { row: Row }) {
           {`${areaName} // ${meta}`}
         </span>
       </div>
-      {view.unavailable ? (
-        <StatusChip tone="error">UNAVAILABLE</StatusChip>
+      {offline ? (
+        <StatusChip tone="error" beacon>
+          OFFLINE
+        </StatusChip>
       ) : (
         <span
           className={StringUtils.JoinClassName(
