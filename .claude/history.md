@@ -32,7 +32,7 @@ id|slug|state|role|commit|commit_url
 127|cover-calibration-wizard|ENDED|frontend|2d338ab|https://github.com/hectorrdez/home-control-frontend/commit/2d338ab
 128|alert-rules-editor|ENDED|frontend|231e798|https://github.com/hectorrdez/home-control-frontend/commit/231e798
 129|alert-engine|ENDED|frontend|df547f3|https://github.com/hectorrdez/home-control-frontend/commit/df547f3
-130|zone-color-palette|PENDING|frontend
+130|zone-color-palette|ENDED|frontend|4731f59|https://github.com/hectorrdez/home-control-frontend/commit/4731f59
 131|history-all-rooms-lines|PENDING|frontend
 132|client-identity-server-events|PENDING|frontend
 133|settings-api-client|PENDING|frontend
