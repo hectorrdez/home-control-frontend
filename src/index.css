@@ -114,8 +114,8 @@
   --radius: 0.25rem;
   --radius-lg: 0.5rem;
 
-  /* Breakpoints: handheld < 768, tablet 768-1199, desktop >= 1200 */
-  --breakpoint-xl: 1200px;
+  /* Breakpoints: handheld < 768, tablet portrait 768-1023, desktop (incl. landscape tablet, Tab S7 ~1138px) >= 1024 */
+  --breakpoint-xl: 1024px;
 
   /* Motion: device card entrance (116). Stagger is per list index (--i), capped. */
   --duration-device-card: 200ms;
