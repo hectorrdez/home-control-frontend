@@ -31,13 +31,14 @@ const entity = (
 
 const row = (
   e: Entity,
-  opts: { visible?: boolean; label?: string; zoneId?: string; zoneName?: string } = {},
+  opts: { visible?: boolean; label?: string; deviceName?: string; zoneId?: string; zoneName?: string } = {},
 ): ChartRow => {
   const widget: Widget = { id: `widget.${e.entityId}`, entityId: e.entityId, kind: "line", visible: opts.visible ?? true, order: 0 };
   return {
     widget,
     entity: e,
     label: opts.label ?? e.name,
+    deviceName: opts.deviceName ?? "",
     zoneId: opts.zoneId ?? e.area ?? UNASSIGNED_ZONE,
     zoneName: opts.zoneName ?? (e.area ? "Kitchen" : "Unassigned"),
   };
@@ -187,6 +188,15 @@ describe("filterRows", () => {
 
   it("treats a whitespace-only query as empty", () => {
     expect(filterRows(rows, filters({ query: "  " }))).toEqual(rows);
+  });
+
+  it("matches the cleaned device name, accent- and case-insensitively", () => {
+    const hub = row(entity("sensor.hub_power", { device_class: "power" }), { label: "Potencia", deviceName: "Ático Hub", zoneName: "Office" });
+    const others = [kitchenTemp, hub];
+    expect(filterRows(others, filters({ query: "atico" }))).toEqual([hub]);
+    expect(filterRows(others, filters({ query: "HUB" }))).toEqual([hub]);
+    expect(filterRows(others, filters({ query: "potencia" }))).toEqual([hub]);
+    expect(filterRows(others, filters({ query: "zzz" }))).toEqual([]);
   });
 
   it("ANDs groups and ORs values within a group", () => {

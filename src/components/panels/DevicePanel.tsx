@@ -119,6 +119,7 @@ export default function DevicePanel() {
           <div className="flex items-center gap-space-xs">
             <FilterPill
               aria-label="Toggle filters"
+              className="px-space-sm"
               selected={filtersShown}
               icon={<SlidersHorizontal aria-hidden="true" className="size-4" />}
               onClick={toggleFilters}

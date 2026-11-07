@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "@/api/types";
-import { cleanName, displayName, shortName } from "./displayName";
+import { cleanName, deviceLabel, displayName, shortName } from "./displayName";
 
 function entity(name: string, deviceName?: string | null, extra: Partial<Entity> = {}): Entity {
   return {
@@ -69,6 +69,19 @@ describe("cleanName rules", () => {
   it("is idempotent on clean names", () => {
     const once = displayName(entity("RT-AC65P Velocidad de descarga", "RT-AC65P"));
     expect(displayName(entity(once, "RT-AC65P"))).toBe(once);
+  });
+});
+
+describe("deviceLabel (feature 124)", () => {
+  it("cleans the device name like /devices", () => {
+    expect(deviceLabel(entity("Living temperature", "ENCERRADO EN EL PATIO"))).toBe("Encerrado en el patio");
+    expect(deviceLabel(entity("Living temperature", "  Hub   X "))).toBe("Hub X");
+  });
+
+  it("is empty for absent, null or blank device names", () => {
+    expect(deviceLabel(entity("Living temperature"))).toBe("");
+    expect(deviceLabel(entity("Living temperature", null))).toBe("");
+    expect(deviceLabel(entity("Living temperature", "   "))).toBe("");
   });
 });
 

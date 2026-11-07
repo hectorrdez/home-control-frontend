@@ -82,6 +82,12 @@ export function displayName(entity: NameSource): string {
   return cleanName(entity);
 }
 
+// Feature 124: the physical device label (same cleanup as /devices). Empty when there is no usable device name.
+export function deviceLabel(entity: Pick<Entity, "entityId" | "deviceName">): string {
+  const raw = entity.deviceName ? collapse(entity.deviceName) : "";
+  return raw ? cleanName({ entityId: entity.entityId, name: raw }) : "";
+}
+
 // Visible card titles that already show the area next to the name.
 export function shortName(entity: NameSource, areaName: string | null | undefined): string {
   return cleanName(entity, { areaName, stripArea: true });

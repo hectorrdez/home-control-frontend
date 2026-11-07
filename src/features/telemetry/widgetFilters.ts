@@ -130,6 +130,7 @@ export interface ChartRow {
   widget: Widget;
   entity: Entity;
   label: string; // displayName
+  deviceName: string; // feature 124: cleaned device label, "" when the entity has none
   zoneId: string;
   zoneName: string;
 }
@@ -158,7 +159,7 @@ export function normalize(s: string): string {
 export function filterRows(rows: ChartRow[], f: ChartFilters): ChartRow[] {
   const q = normalize(f.query);
   return rows.filter((r) => {
-    if (q && ![r.label, r.entity.name, r.zoneName, r.entity.entityId].some((t) => normalize(t).includes(q))) return false;
+    if (q && ![r.label, r.entity.name, r.deviceName, r.zoneName, r.entity.entityId].some((t) => normalize(t).includes(q))) return false;
     if (f.zones.length > 0 && !f.zones.includes(r.zoneId)) return false;
     if (f.categories.length > 0 && !f.categories.includes(categoryOf(r.entity))) return false;
     if (f.visibility === "on" && !r.widget.visible) return false;

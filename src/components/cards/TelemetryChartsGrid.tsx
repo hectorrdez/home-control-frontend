@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { useEntityName } from "@/features/names/useEntityName";
+import { deviceLabel } from "@/features/names/displayName";
 import SideDrawer from "@components/panels/SideDrawer";
 import ChartFilters from "@components/panels/ChartFilters";
 import Switch from "@components/controls/Switch";
@@ -66,6 +67,7 @@ export default function TelemetryChartsGrid({ sensors, areaName, connection }: T
             widget: w,
             entity,
             label: names.displayName(entity),
+            deviceName: deviceLabel(entity),
             zoneId: entity.area ?? UNASSIGNED_ZONE,
             zoneName: areaName(entity.area),
           },
@@ -121,7 +123,10 @@ export default function TelemetryChartsGrid({ sensors, areaName, connection }: T
                   key={r.widget.id}
                   className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
                 >
-                  <span className="min-w-0 truncate font-sans text-body-md text-on-surface">{r.label}</span>
+                  <span className="min-w-0 truncate font-sans text-body-md text-on-surface">
+                    {r.label}
+                    {r.deviceName && <span className="font-mono text-label-caps uppercase text-on-surface-variant"> · {r.deviceName}</span>}
+                  </span>
                   <Switch
                     aria-label={`Show ${r.label}`}
                     checked={r.widget.visible}

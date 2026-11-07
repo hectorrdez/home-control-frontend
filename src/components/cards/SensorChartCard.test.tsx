@@ -125,6 +125,42 @@ describe("SensorChartCard", () => {
     expect(document.querySelector("svg")).not.toBeNull();
   });
 
+  describe("device name (feature 124)", () => {
+    const withDevice = (deviceName: string | null | undefined, name = entity.name): Entity => ({
+      ...entity,
+      name,
+      ...(deviceName === undefined ? {} : { deviceName }),
+    });
+
+    it("shows the cleaned device name before the zone", () => {
+      renderCard({ entity: withDevice("ENCERRADO EN EL PATIO") });
+      expect(screen.getByText("Encerrado en el patio · Living room")).toBeTruthy();
+      expect(screen.getByRole("region", { name: "Living temperature" })).toBeTruthy();
+      expect(screen.getByRole("img", { name: "Living temperature, Encerrado en el patio: 20 C, up" })).toBeTruthy();
+    });
+
+    it("shows only the zone when the device name is absent, null or blank", () => {
+      for (const deviceName of [undefined, null, "   "]) {
+        const { unmount } = renderCard({ entity: withDevice(deviceName) });
+        expect(screen.getByText("Living room")).toBeTruthy();
+        expect(screen.getByRole("region", { name: "Living temperature" })).toBeTruthy();
+        unmount();
+      }
+    });
+
+    it("omits the device when the visible title already contains it", () => {
+      renderCard({ entity: withDevice("temperature") });
+      expect(screen.getByText("Living room")).toBeTruthy();
+      expect(screen.getByRole("region", { name: "Living temperature" })).toBeTruthy();
+    });
+
+    it("compares the title with the device name accent- and case-insensitively", () => {
+      renderCard({ entity: withDevice("BATERIA", "Sensor de batería") });
+      expect(screen.getByText("Living room")).toBeTruthy();
+      expect(screen.getByRole("region", { name: "Sensor de batería" })).toBeTruthy();
+    });
+  });
+
   it("drops the unit when the entity has none", () => {
     renderCard({
       entity: { ...entity, attributes: {} },
