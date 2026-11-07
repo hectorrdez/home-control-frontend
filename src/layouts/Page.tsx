@@ -15,7 +15,7 @@ export default function Page() {
       <div
         className={StringUtils.JoinClassName(
           "flex flex-col pt-16 pb-20 md:pb-0",
-          fitViewport ? "h-dvh overflow-hidden" : "min-h-screen",
+          fitViewport ? "relative h-dvh overflow-hidden" : "min-h-screen",
         )}
       >
         <main className={StringUtils.JoinClassName("flex flex-1 flex-col", fitViewport ? "min-h-0" : undefined)}>
