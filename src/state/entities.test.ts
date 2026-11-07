@@ -276,3 +276,12 @@ describe("live availability in the store (126)", () => {
     expect(entitiesReducer(loadedState, { type: "areasRefreshed", areas: sensorArea("on", at) }).feed).toEqual([]);
   });
 });
+
+describe("alertLogged (feature 129)", () => {
+  it("prepends an alert event to the feed without touching the entities", () => {
+    const event = { key: "alert:r@t", entityId: "lock.front_door", name: "Front door", value: "UNLOCKED", area: null, at: "t", alert: "high" as const };
+    const next = entitiesReducer(initialEntitiesState, { type: "alertLogged", event });
+    expect(next.feed).toEqual([event]);
+    expect(next.entities).toEqual({});
+  });
+});

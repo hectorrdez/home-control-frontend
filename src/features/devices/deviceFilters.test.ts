@@ -3,6 +3,7 @@ import type { Area, Entity } from "@/api/types";
 import { createFixtureEntities, FIXTURE_AREAS } from "@/api/mock/fixtures";
 import { entitiesReducer, initialEntitiesState, UNASSIGNED, type EntitiesState } from "@/state/entities";
 import {
+  deviceRowKeyIn,
   EMPTY_DEVICE_FILTERS,
   buildDeviceRows,
   deviceFacets,
@@ -316,5 +317,13 @@ describe("device availability (126)", () => {
     });
     const later = entitiesReducer(after, { type: "entityUpdated", entity: hub("sensor.hub_power", "unavailable") });
     expect(buildDeviceRows(later, plainLabel)[0].offline).toBe(true);
+  });
+});
+
+describe("deviceRowKeyIn (feature 129)", () => {
+  it("keys a device by area and slug, a standalone entity by its id", () => {
+    const device = { entityId: "switch.office_desk", domain: "switch", name: "Desk", state: "on", attributes: {}, area: "office", lastChanged: "", deviceName: "Desk plug" } as Entity;
+    expect(deviceRowKeyIn("office", device)).toBe("office~desk_plug");
+    expect(deviceRowKeyIn("office", { ...device, deviceName: null })).toBe("switch.office_desk");
   });
 });

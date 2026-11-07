@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { useApi } from "@/api/ApiContext";
 import type { ConnectionState, Entity } from "@/api/types";
 import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, type EntitiesState } from "./entities";
+import type { FeedEvent } from "./feed";
 import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
@@ -17,6 +18,8 @@ interface EntitiesContextValue {
   sendIntent: (entity: Entity, intent: Intent) => Promise<boolean>;
   // Live stream state (105): "open" or "reconnecting". Values keep their last known state meanwhile.
   connection: ConnectionState;
+  // Feature 129: an alert raised by a rule is written to the event feed.
+  logAlert: (event: FeedEvent) => void;
 }
 
 const EntitiesContext = createContext<EntitiesContextValue | null>(null);
@@ -28,6 +31,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
   const [selectedGroup, setSelectedGroup] = useState<DomainFilter>("all");
   const [connection, setConnection] = useState<ConnectionState>("open");
   const requestCounter = useRef(0);
+  const logAlert = useCallback((event: FeedEvent) => dispatch({ type: "alertLogged", event }), []);
 
   const load = useCallback(() => {
     dispatch({ type: "load" });
@@ -142,8 +146,9 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       setSelectedGroup,
       sendIntent,
       connection,
+      logAlert,
     }),
-    [state, load, selectedArea, selectedGroup, sendIntent, connection],
+    [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert],
   );
 
   return <EntitiesContext.Provider value={value}>{children}</EntitiesContext.Provider>;

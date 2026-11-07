@@ -1,5 +1,5 @@
 import type { Area, Entity } from "@/api/types";
-import { recordChange, type FeedEvent } from "./feed";
+import { prependEvent, recordChange, type FeedEvent } from "./feed";
 
 // Single entity store (feature 103). Entities keyed by entityId; areas keep order and membership.
 // 104 adds optimistic actions (pending map with a rollback baseline); 105 merges stream events.
@@ -46,7 +46,8 @@ export type EntitiesAction =
   | { type: "actionConfirmed"; entityId: string; requestId: number; entity: Entity }
   | { type: "actionFailed"; entityId: string; requestId: number }
   | { type: "settleTimedOut"; entityId: string; requestId: number }
-  | { type: "entityUpdated"; entity: Entity };
+  | { type: "entityUpdated"; entity: Entity }
+  | { type: "alertLogged"; event: FeedEvent };
 
 export const initialEntitiesState: EntitiesState = {
   status: "loading",
@@ -197,6 +198,8 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
       const { [action.entityId]: _settled, ...rest } = state.pending;
       return { ...state, pending: rest };
     }
+    case "alertLogged":
+      return { ...state, feed: prependEvent(state.feed, action.event) };
     case "entityUpdated": {
       const next = applyEvent(state, action.entity);
       if (next === state) return state;

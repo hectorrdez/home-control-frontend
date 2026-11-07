@@ -98,4 +98,16 @@ describe("EventFeed", () => {
     );
     expect(container.querySelectorAll("li svg")).toHaveLength(2);
   });
+
+  it("marks alert events with the bell, their level and the alert style (feature 129)", () => {
+    const alert: FeedEvent = { ...event("lock.front_door", "Front door unlocked", "kitchen", "2026-11-07T10:00:00.000Z"), alert: "high" };
+    render(
+      <Providers>
+        <EventFeed events={[alert]} areaName={areaName} />
+      </Providers>,
+    );
+    const item = screen.getByRole("listitem");
+    expect(item.getAttribute("data-alert")).toBe("high");
+    expect(item.textContent).toContain("ALERT HIGH · Kitchen");
+  });
 });

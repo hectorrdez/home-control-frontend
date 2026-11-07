@@ -13,6 +13,7 @@ import { EntitiesProvider } from "./state/EntitiesProvider";
 import { AliasesProvider } from "./state/AliasesProvider";
 import { CalibrationsProvider } from "./state/CalibrationsProvider";
 import { AlertRulesProvider } from "./state/AlertRulesProvider";
+import { AlertsProvider } from "./state/AlertsProvider";
 import { ToastProvider } from "./components/feedback/Toast";
 import "./index.css";
 
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root")!).render(
             <CalibrationsProvider>
               <AlertRulesProvider>
                 <BrowserRouter>
-                  <App />
+                  <AlertsProvider>
+                    <App />
+                  </AlertsProvider>
                 </BrowserRouter>
               </AlertRulesProvider>
             </CalibrationsProvider>

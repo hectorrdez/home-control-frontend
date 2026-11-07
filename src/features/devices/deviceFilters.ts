@@ -51,6 +51,12 @@ function slugOf(entity: Entity): string {
   return typeof entity.deviceName === "string" ? deviceSlug(entity.deviceName) : "";
 }
 
+// Feature 129: the device row key of an entity inside one area (same rule buildDeviceRows uses).
+export function deviceRowKeyIn(areaId: string, entity: Entity): string {
+  const slug = slugOf(entity);
+  return slug ? `${areaId}~${slug}` : entity.entityId;
+}
+
 const INTERACTIVE_ORDER = ["light", "switch", "fan", "climate", "cover", "lock", "media_player", "scene", "script"];
 
 // Member order (primary = first): interactive domains, binary_sensor, sensors (temperature, other, battery), other domains.
@@ -93,7 +99,7 @@ export function buildDeviceRows(state: EntitiesState, label: (entity: Entity) =>
       const entity = state.entities[id];
       if (!entity || !LISTED_DOMAINS.has(entity.domain)) continue;
       const slug = slugOf(entity);
-      const key = slug ? `${area.areaId}~${slug}` : entity.entityId;
+      const key = deviceRowKeyIn(area.areaId, entity);
       let group = groups.get(key);
       if (!group) {
         group = {

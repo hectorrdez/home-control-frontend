@@ -39,6 +39,17 @@ const UNASSIGNED = "unassigned";
 const DEVICE_FLAP_IDS = ["switch.office_desk", "sensor.office_desk_power"];
 const DEVICE_FLAP_DOWN_MS = 1500;
 const DEVICE_FLAP_UP_MS = 4000;
+// Feature 129 "alerts" scenario: rules seeded at start; the timed changes fire MEDIUM, HIGH and LOW in that order.
+const ALERT_RULES: AlertRule[] = [
+  { id: "seed-medium", entityId: "sensor.office_desk_power", trigger: { type: "disconnects" }, level: "medium" },
+  { id: "seed-high", entityId: "lock.front_door", trigger: { type: "state_becomes", value: "unlocked" }, level: "high", message: "Front door unlocked" },
+  { id: "seed-low", entityId: "light.office_desk", trigger: { type: "state_becomes", value: "off" }, level: "low" },
+];
+const ALERT_TIMELINE: Array<{ ms: number; entityId: string; state: string }> = [
+  { ms: 1500, entityId: "sensor.office_desk_power", state: "unavailable" },
+  { ms: 4000, entityId: "lock.front_door", state: "unlocked" },
+  { ms: 6000, entityId: "light.office_desk", state: "off" },
+];
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -310,6 +321,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const ALERT_LEVELS: readonly string[] = ["off", "low", "medium", "high"];
   const alertRules = new Map<string, AlertRule>();
   let alertSeq = 0;
+  if (scenario === "alerts") for (const rule of ALERT_RULES) alertRules.set(rule.id, rule);
 
   function validTrigger({ type, value }: { type?: unknown; value?: unknown }): boolean {
     if (type === "connects" || type === "disconnects" || type === "interacted") return true;
@@ -512,6 +524,12 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
       // Feature 126 "device-flap": both members of the Desk plug device lose their link, then recover. Emitted in
       // one tick, like a device dropping off the network, so the feed dedupes them into one event.
+      if (scenario === "alerts") {
+        for (const change of ALERT_TIMELINE) {
+          timeouts.push(setTimeout(() => setEntityState(change.entityId, change.state), change.ms));
+        }
+      }
+
       if (scenario === "device-flap") {
         let saved: string[] = [];
         timeouts.push(setTimeout(() => {

@@ -7,4 +7,9 @@ export class Header {
   haStatus(): Locator {
     return this.page.getByRole("status", { name: "Home Assistant status" });
   }
+
+  // Feature 129: the one-time control that unlocks the alert sound for the session.
+  enableAlertSound() {
+    return this.page.getByRole("button", { name: "ENABLE ALERT SOUND" });
+  }
 }

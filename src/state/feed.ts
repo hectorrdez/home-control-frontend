@@ -1,4 +1,4 @@
-import type { Entity } from "@/api/types";
+import type { AlertLevel, Entity } from "@/api/types";
 import { isUnavailable } from "./availability";
 
 // Feature 111: session-only event feed (HA logbook endpoint does not exist). Newest first, in memory.
@@ -18,6 +18,7 @@ export interface FeedEvent {
   area: string | null;
   at: string;
   deviceKey?: string; // feature 126: set on availability events only (see deviceKeyOf)
+  alert?: Exclude<AlertLevel, "off">; // feature 129: an alert raised by a rule (own style in the feed)
 }
 
 // The value a feed tracks per entity, or null when the domain is not in the feed.
@@ -62,7 +63,8 @@ function sameDeviceRecently(feed: FeedEvent[], deviceKey: string, value: string,
   );
 }
 
-function prepend(feed: FeedEvent[], event: FeedEvent): FeedEvent[] {
+// Feature 129: prepends one event, keeping the newest FEED_LIMIT.
+export function prependEvent(feed: FeedEvent[], event: FeedEvent): FeedEvent[] {
   return [event, ...feed].slice(0, FEED_LIMIT);
 }
 
@@ -74,7 +76,7 @@ export function recordChange(feed: FeedEvent[], before: Entity | undefined, afte
   if (availability) {
     const deviceKey = deviceKeyOf(after);
     if (sameDeviceRecently(feed, deviceKey, availability, after.lastChanged)) return feed;
-    return prepend(feed, {
+    return prependEvent(feed, {
       key: `${after.entityId}@${after.lastChanged}:${availability}`,
       entityId: after.entityId,
       name: after.name,
@@ -89,7 +91,7 @@ export function recordChange(feed: FeedEvent[], before: Entity | undefined, afte
   const previous = feedValue(before);
   const next = feedValue(after);
   if (previous === null || next === null || previous === next) return feed;
-  return prepend(feed, {
+  return prependEvent(feed, {
     key: `${after.entityId}@${after.lastChanged}`,
     entityId: after.entityId,
     name: after.name,

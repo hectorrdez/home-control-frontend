@@ -50,3 +50,37 @@ describe("Toast", () => {
     expect(() => render(<Trigger text="x" />)).toThrow("useToast must be used inside ToastProvider");
   });
 });
+
+// Feature 129: a clickable toast with its own duration (alerts open their device).
+function Alerting({ onOpen }: { onOpen: () => void }) {
+  const toast = useToast();
+  return <button onClick={() => toast.show("Desk outlet: DISCONNECTS", { durationMs: 8000, onClick: onOpen })}>alert</button>;
+}
+
+describe("Toast options (feature 129)", () => {
+  it("renders a clickable toast that runs its action", () => {
+    const onOpen = vi.fn();
+    render(
+      <ToastProvider>
+        <Alerting onOpen={onOpen} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "alert" }));
+    fireEvent.click(screen.getByRole("button", { name: "Desk outlet: DISCONNECTS" }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a custom duration: still shown at 4 s, gone after 8 s", () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider>
+        <Alerting onOpen={() => undefined} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "alert" }));
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getByRole("status").textContent).toContain("Desk outlet");
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.getByRole("status").textContent).not.toContain("Desk outlet");
+  });
+});

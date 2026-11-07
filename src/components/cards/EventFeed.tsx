@@ -1,4 +1,4 @@
-import { Activity, Blinds, Lightbulb, Lock, Plug, Thermometer } from "lucide-react";
+import { Activity, Bell, Blinds, Lightbulb, Lock, Plug, Thermometer } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FeedEvent } from "@/state/feed";
 import Card from "./Card";
@@ -35,11 +35,13 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
       ) : (
         <ul aria-label="Event feed items" className="flex flex-col gap-space-xs overflow-y-auto">
           {events.map((event) => {
-            const Icon = ICON[event.entityId.split(".")[0]] ?? Activity;
+            // Feature 129: alerts get a bell and the level label; their text is the rule message or trigger.
+            const Icon = event.alert ? Bell : (ICON[event.entityId.split(".")[0]] ?? Activity);
             return (
               <li
                 key={event.key}
-                className="flex items-center gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                data-alert={event.alert}
+                className={`flex items-center gap-space-sm rounded border p-space-sm ${event.alert === "high" ? "border-error bg-error-container/40" : "border-outline-variant/30"}`}
               >
                 <Icon size={16} className="shrink-0 text-primary-container" aria-hidden="true" />
                 <div className="flex min-w-0 flex-1 flex-col">
@@ -47,7 +49,7 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
                     {`${names.displayName(event)} ${event.value}`}
                   </span>
                   <span className="truncate font-mono text-label-caps uppercase text-on-surface-variant">
-                    {areaName(event.area)}
+                    {event.alert ? `ALERT ${event.alert.toUpperCase()} · ${areaName(event.area) ?? ""}` : areaName(event.area)}
                   </span>
                 </div>
                 <time dateTime={event.at} className="shrink-0 font-mono text-label-caps text-on-surface-variant">

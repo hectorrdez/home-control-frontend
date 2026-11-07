@@ -31,4 +31,4 @@ id|slug|state|role|commit|commit_url
 126|devices-live-connection|ENDED|frontend|43c6dbb|https://github.com/hectorrdez/home-control-frontend/commit/43c6dbb
 127|cover-calibration-wizard|ENDED|frontend|2d338ab|https://github.com/hectorrdez/home-control-frontend/commit/2d338ab
 128|alert-rules-editor|ENDED|frontend|231e798|https://github.com/hectorrdez/home-control-frontend/commit/231e798
-129|alert-engine|PENDING|frontend
+129|alert-engine|ENDED|frontend
