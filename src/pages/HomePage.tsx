@@ -7,7 +7,7 @@ const HouseStage = lazy(() => import("@/house/HouseStage"));
 
 export default function HomePage() {
   return (
-    <PageGrid>
+    <PageGrid className="min-h-0 flex-1 grid-rows-[minmax(0,13fr)_minmax(0,7fr)] xl:grid-rows-1">
       <h1 className="sr-only">Home 3D</h1>
       <DevicePanel />
       <Suspense
@@ -15,7 +15,7 @@ export default function HomePage() {
           <section
             aria-label="House view"
             aria-busy="true"
-            className="col-span-12 min-h-96 animate-pulse rounded-xl bg-surface-container-low motion-reduce:animate-none xl:col-span-8"
+            className="col-span-12 min-h-0 animate-pulse rounded-xl bg-surface-container-low motion-reduce:animate-none xl:col-span-8"
           />
         }
       >

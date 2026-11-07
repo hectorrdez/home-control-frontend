@@ -78,7 +78,7 @@ export default function DevicePanel() {
   const draws = plugDrawBySwitch(allEntities(state));
 
   return (
-    <section aria-label="Device panel" className="col-span-12 flex min-h-64 flex-col gap-space-md xl:col-span-4">
+    <section aria-label="Device panel" className="col-span-12 flex min-h-0 flex-col gap-space-md xl:col-span-4">
       <div className="flex flex-col gap-space-xs rounded-xl bg-surface-container-low p-space-md">
         <div className="flex flex-wrap items-center justify-between gap-space-xs">
           {synchronized ? (
@@ -136,13 +136,13 @@ export default function DevicePanel() {
         </div>
       )}
 
-      <div className="flex flex-col gap-space-sm xl:max-h-screen xl:overflow-y-auto xl:pr-space-xs">
+      <div className="flex min-h-0 flex-1 flex-col">
         {shown === 0 ? (
           <p className="rounded border border-outline-variant/30 p-space-md font-label-caps text-label-caps uppercase text-on-surface-variant">
             {state.areas.length === 0 ? "NO DEVICES" : "NO DEVICES IN THIS ZONE"}
           </p>
         ) : (
-          <ul aria-label="Devices" className="flex flex-col gap-space-sm">
+          <ul aria-label="Devices" className="flex min-h-0 flex-1 flex-col gap-space-sm overflow-y-auto pr-space-xs">
             {sections
               .flatMap((section) => section.entities.map((entity) => ({ entity, section })))
               .map(({ entity, section }, index) => (

@@ -94,7 +94,7 @@ export default function HouseStage() {
   return (
     <section
       aria-label="House view"
-      className="relative col-span-12 min-h-96 overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest xl:col-span-8"
+      className="relative col-span-12 min-h-0 overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest xl:col-span-8"
     >
       <div ref={hostRef} className={`absolute inset-0 ${unavailable ? "hidden" : ""}`} />
 
