@@ -17,7 +17,7 @@ id|slug|state|role|commit|commit_url
 107|electron-shell|ENDED|frontend|b5ca0ee|https://github.com/hectorrdez/home-control-frontend/commit/b5ca0ee
 115|display-names|ENDED|frontend|33cab3a|https://github.com/hectorrdez/home-control-frontend/commit/33cab3a
 108|deploy-dokploy|ENDED|frontend|78a1e8e|https://github.com/hectorrdez/home-control-frontend/commit/78a1e8e
-114|telemetry-dashboard-editor|PENDING|frontend||
+114|telemetry-dashboard-editor|ENDED|frontend|e384a24|https://github.com/hectorrdez/home-control-frontend/commit/e384a24
 116|device-card-redesign|ENDED|frontend|77c7b27|https://github.com/hectorrdez/home-control-frontend/commit/77c7b27
 117|device-action-feedback|ENDED|frontend|45b2ba4|https://github.com/hectorrdez/home-control-frontend/commit/45b2ba4
 118|telemetry-chart-filters|ENDED|frontend|af3ce3b|https://github.com/hectorrdez/home-control-frontend/commit/af3ce3b
@@ -32,3 +32,15 @@ id|slug|state|role|commit|commit_url
 127|cover-calibration-wizard|ENDED|frontend|2d338ab|https://github.com/hectorrdez/home-control-frontend/commit/2d338ab
 128|alert-rules-editor|ENDED|frontend|231e798|https://github.com/hectorrdez/home-control-frontend/commit/231e798
 129|alert-engine|ENDED|frontend|df547f3|https://github.com/hectorrdez/home-control-frontend/commit/df547f3
+130|zone-color-palette|PENDING|frontend
+131|history-all-rooms-lines|PENDING|frontend
+132|client-identity-server-events|PENDING|frontend
+133|settings-api-client|PENDING|frontend
+134|synced-setting-store|PENDING|frontend
+135|widgets-synced|PENDING|frontend
+136|panels-synced|PENDING|frontend
+137|chart-filters-synced|PENDING|frontend
+138|resources-live-refetch|PENDING|frontend
+139|server-alerts|PENDING|frontend
+140|events-feed-from-server|PENDING|frontend
+141|event-history-page|PENDING|frontend
