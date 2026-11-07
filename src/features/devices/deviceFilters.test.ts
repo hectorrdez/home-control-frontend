@@ -6,13 +6,15 @@ import {
   EMPTY_DEVICE_FILTERS,
   buildDeviceRows,
   deviceFacets,
+  deviceSlug,
   filterDeviceRows,
   isFiltered,
+  resolveDeviceKey,
   type DeviceFilters,
   type DeviceRow,
 } from "./deviceFilters";
 
-// The mock house (26 entities; 9 interactive, 17 read-only) grouped the way the store groups it.
+// The mock house (26 entities) groups into 20 devices: 9 interactive rows, 11 read-only rows (feature 123).
 function stateOf(entities: Entity[]): EntitiesState {
   const areas: Area[] = FIXTURE_AREAS.map((a) => ({
     areaId: a.areaId,
@@ -25,24 +27,139 @@ function stateOf(entities: Entity[]): EntitiesState {
 
 const plainLabel = (entity: Entity) => (entity.entityId === "sensor.entry_motion_battery" ? "Batería" : entity.name);
 
-function rows(): DeviceRow[] {
-  return buildDeviceRows(stateOf(createFixtureEntities()), plainLabel);
+function rows(entities: Entity[] = createFixtureEntities()): DeviceRow[] {
+  return buildDeviceRows(stateOf(entities), plainLabel);
+}
+
+function entity(overrides: Partial<Entity> & Pick<Entity, "entityId">): Entity {
+  return {
+    domain: overrides.entityId.split(".")[0],
+    name: overrides.entityId,
+    state: "on",
+    attributes: {},
+    area: "kitchen",
+    lastChanged: "2026-11-06T08:00:00.000Z",
+    deviceName: null,
+    ...overrides,
+  };
 }
 
 const filter = (patch: Partial<DeviceFilters>) => filterDeviceRows(rows(), { ...EMPTY_DEVICE_FILTERS, ...patch });
-const ids = (list: DeviceRow[]) => list.map((r) => r.entity.entityId);
+const ids = (list: DeviceRow[]) => list.map((r) => r.key);
+const byKey = (list: DeviceRow[], key: string) => list.find((r) => r.key === key)!;
+
+describe("deviceSlug", () => {
+  it("strips accents, lowercases and joins symbol runs with underscores", () => {
+    expect(deviceSlug("Cocina Baño")).toBe("cocina_bano");
+    expect(deviceSlug("RT-AC65P")).toBe("rt_ac65p");
+    expect(deviceSlug("ENCERRADO EN EL PATIO")).toBe("encerrado_en_el_patio");
+    expect(deviceSlug("Desk  plug!!")).toBe("desk_plug");
+  });
+
+  it("returns an empty slug for names without letters or digits", () => {
+    expect(deviceSlug("---")).toBe("");
+    expect(deviceSlug("   ")).toBe("");
+  });
+});
 
 describe("buildDeviceRows", () => {
-  it("lists all 26 mock entities, areas in state order with Unassigned last", () => {
+  it("groups the mock house into 20 device rows, areas in state order with Unassigned last", () => {
     const all = rows();
-    expect(all).toHaveLength(26);
+    expect(all).toHaveLength(20);
     const areaSequence = [...new Set(all.map((r) => r.areaId))];
     expect(areaSequence).toEqual(["living_room", "kitchen", "bedroom", "office", UNASSIGNED]);
     expect(all.find((r) => r.areaId === UNASSIGNED)?.areaName).toBe("Unassigned");
   });
 
-  it("marks interactive rows from isInteractive", () => {
+  it("marks interactive rows: 9 interactive, 11 read-only", () => {
     expect(rows().filter((r) => r.interactive)).toHaveLength(9);
+    expect(rows().filter((r) => !r.interactive)).toHaveLength(11);
+  });
+
+  it("groups a switch and its power sensor into one device row with the switch as primary", () => {
+    const desk = byKey(rows(), "office~desk_plug");
+    expect(desk.entities.map((e) => e.entityId)).toEqual(["switch.office_desk", "sensor.office_desk_power"]);
+    expect(desk.primary.entityId).toBe("switch.office_desk");
+    expect(desk.label).toBe("Desk plug");
+    expect(desk.domains).toEqual(["switch", "sensor"]);
+    expect(desk.interactive).toBe(true);
+  });
+
+  it("keeps a standalone entity keyed by its entity id", () => {
+    const front = byKey(rows(), "lock.front_door");
+    expect(front.entities).toHaveLength(1);
+    expect(front.label).toBe("Front door");
+  });
+
+  it("uses the device name as label with whitespace collapsed and ALL CAPS fixed", () => {
+    const raw = rows(createFixtureEntities().concat([
+      entity({ entityId: "binary_sensor.patio_door", domain: "binary_sensor", area: null, deviceName: "ENCERRADO EN EL PATIO" }),
+      entity({ entityId: "sensor.patio_temperature", area: null, deviceName: "ENCERRADO EN EL PATIO", attributes: { device_class: "temperature" } }),
+    ]));
+    const patio = byKey(raw, "unassigned~encerrado_en_el_patio");
+    expect(patio.label).toBe("Encerrado en el patio");
+    expect(patio.primary.entityId).toBe("binary_sensor.patio_door");
+  });
+
+  it("makes two devices with the same name in different areas two rows", () => {
+    const twins = rows([
+      entity({ entityId: "sensor.a_temp", area: "kitchen", deviceName: "Hub", attributes: { device_class: "temperature" } }),
+      entity({ entityId: "sensor.b_temp", area: "office", deviceName: "Hub", attributes: { device_class: "temperature" } }),
+    ]);
+    expect(twins.map((r) => r.key)).toEqual(["kitchen~hub", "office~hub"]);
+  });
+
+  it("treats a missing, null, blank or letterless deviceName as standalone, keyed by entity id", () => {
+    const standalone = rows([
+      entity({ entityId: "light.a", area: "kitchen", deviceName: null }),
+      entity({ entityId: "light.b", area: "kitchen", deviceName: "  " }),
+      entity({ entityId: "light.c", area: "kitchen", deviceName: "---" }),
+      entity({ entityId: "light.d", area: "kitchen" }),
+    ]);
+    expect(standalone.map((r) => r.key)).toEqual(["light.a", "light.b", "light.c", "light.d"]);
+  });
+
+  it("device keys never contain a dot", () => {
+    for (const r of rows()) {
+      if (r.entities.length > 1) expect(r.key.includes(".")).toBe(false);
+    }
+  });
+
+  it("orders members: interactive first, then binary_sensor, sensors (temperature, other, battery), other domains, then entity id", () => {
+    const group = rows([
+      entity({ entityId: "sensor.hub_battery", deviceName: "Hub", attributes: { device_class: "battery" } }),
+      entity({ entityId: "sensor.hub_humidity", deviceName: "Hub", attributes: { device_class: "humidity" } }),
+      entity({ entityId: "sensor.hub_temperature", deviceName: "Hub", attributes: { device_class: "temperature" } }),
+      entity({ entityId: "event.hub_press", domain: "event", deviceName: "Hub", attributes: {} }),
+      entity({ entityId: "binary_sensor.hub_door", deviceName: "Hub", attributes: {} }),
+      entity({ entityId: "switch.hub_relay", deviceName: "Hub", attributes: {} }),
+    ]);
+    expect(group).toHaveLength(1);
+    expect(group[0].entities.map((e) => e.entityId)).toEqual([
+      "switch.hub_relay",
+      "binary_sensor.hub_door",
+      "sensor.hub_temperature",
+      "sensor.hub_humidity",
+      "sensor.hub_battery",
+      "event.hub_press",
+    ]);
+  });
+
+  it("breaks ties by entity id", () => {
+    const group = rows([
+      entity({ entityId: "sensor.z_other", deviceName: "Hub", attributes: {} }),
+      entity({ entityId: "sensor.a_other", deviceName: "Hub", attributes: {} }),
+    ]);
+    expect(group[0].entities.map((e) => e.entityId)).toEqual(["sensor.a_other", "sensor.z_other"]);
+  });
+
+  it("ignores availability in the member order", () => {
+    const group = rows([
+      entity({ entityId: "switch.hub", deviceName: "Hub", state: "unavailable" }),
+      entity({ entityId: "sensor.hub_power", deviceName: "Hub", state: "42", attributes: { device_class: "power" } }),
+    ]);
+    expect(group[0].primary.entityId).toBe("switch.hub");
+    expect(group[0].primary.state).toBe("unavailable");
   });
 });
 
@@ -53,25 +170,39 @@ describe("filterDeviceRows", () => {
     expect(isFiltered(EMPTY_DEVICE_FILTERS)).toBe(false);
   });
 
-  it("matches the query on label, raw name, area name and entity id, ignoring case and accents", () => {
-    expect(filter({ query: "ceiling" })).toHaveLength(2);
-    expect(filter({ query: "CEILING" })).toHaveLength(2);
-    expect(filter({ query: "desk" })).toHaveLength(3);
-    expect(ids(filter({ query: "lock.front" }))).toEqual(["lock.front_door"]);
-    expect(filter({ query: "master suite" })).toHaveLength(4);
-    expect(filter({ query: "bateria" }).map((r) => r.label)).toEqual(["Batería"]);
-    expect(filter({ query: "  " })).toHaveLength(26);
+  it("matches the query on the row label, area name, device name, and any member's name or entity id", () => {
+    expect(ids(filter({ query: "front door" }))).toEqual(["lock.front_door"]);
+    expect(ids(filter({ query: "office_desk_power" }))).toEqual(["office~desk_plug"]);
+    expect(ids(filter({ query: "desk outlet power" }))).toEqual(["office~desk_plug"]);
+    expect(ids(filter({ query: "entry pir" }))).toEqual(["unassigned~entry_pir"]);
+    expect(ids(filter({ query: "CEILING" }))).toEqual(
+      expect.arrayContaining(["light.living_room_ceiling", "light.kitchen_ceiling"]),
+    );
+    expect(filter({ query: "master suite" })).toHaveLength(3);
+    expect(ids(filter({ query: "battery" }))).toEqual(["unassigned~entry_pir"]);
+    expect(filter({ query: "  " })).toHaveLength(20);
   });
 
-  it("filters by kind", () => {
+  it("a match shows the whole device row", () => {
+    const matched = byKey(filter({ query: "office_desk_power" }), "office~desk_plug");
+    expect(matched.entities).toHaveLength(2);
+  });
+
+  it("filters by kind on device rows", () => {
     expect(filter({ kind: "interactive" })).toHaveLength(9);
-    expect(filter({ kind: "readonly" })).toHaveLength(17);
+    expect(filter({ kind: "readonly" })).toHaveLength(11);
+  });
+
+  it("matches a type when any member has that domain", () => {
+    const sensorRows = ids(filter({ domains: ["sensor"] }));
+    expect(sensorRows).toEqual(expect.arrayContaining(["office~desk_plug", "unassigned~entry_pir", "kitchen~kitchen_sensor"]));
+    expect(ids(filter({ domains: ["switch"] }))).toEqual(["office~desk_plug"]);
   });
 
   it("combines groups with AND and values inside a group with OR", () => {
     expect(filter({ areas: ["kitchen"], domains: ["light"] })).toHaveLength(1);
     expect(filter({ domains: ["light", "lock"] })).toHaveLength(5);
-    expect(filter({ areas: ["kitchen", "office"] })).toHaveLength(8);
+    expect(filter({ areas: ["kitchen", "office"] })).toHaveLength(5);
   });
 
   it("reports a filter as active only when a group or the query is set", () => {
@@ -82,20 +213,21 @@ describe("filterDeviceRows", () => {
 });
 
 describe("deviceFacets", () => {
-  it("counts areas, Unassigned last", () => {
+  it("counts device rows per area, Unassigned last", () => {
     const { areas } = deviceFacets(rows());
     expect(areas.map((a) => [a.id, a.count])).toEqual([
-      ["living_room", 4],
-      ["kitchen", 3],
-      ["bedroom", 4],
-      ["office", 5],
-      [UNASSIGNED, 10],
+      ["living_room", 3],
+      ["kitchen", 2],
+      ["bedroom", 3],
+      ["office", 3],
+      [UNASSIGNED, 9],
     ]);
   });
 
-  it("counts domains with uppercase spaced labels that sum to 26", () => {
+  it("counts a device once per domain it contains", () => {
     const { domains } = deviceFacets(rows());
-    expect(domains.reduce((n, d) => n + d.count, 0)).toBe(26);
+    expect(domains.find((d) => d.label === "SENSOR")?.count).toBe(12);
+    expect(domains.find((d) => d.label === "SWITCH")?.count).toBe(1);
     expect(domains.find((d) => d.label === "BINARY SENSOR")?.count).toBe(1);
     expect(domains.map((d) => d.label)).toEqual([...domains.map((d) => d.label)].sort((a, b) => a.localeCompare(b)));
   });
@@ -105,5 +237,32 @@ describe("deviceFacets", () => {
     const before = deviceFacets(all);
     filterDeviceRows(all, { ...EMPTY_DEVICE_FILTERS, kind: "interactive", query: "desk" });
     expect(deviceFacets(all)).toEqual(before);
+  });
+});
+
+describe("resolveDeviceKey", () => {
+  const all = rows();
+
+  it("a device key resolves to its row, canonical", () => {
+    const hit = resolveDeviceKey(all, "office~desk_plug");
+    expect(hit?.row.key).toBe("office~desk_plug");
+    expect(hit?.canonical).toBe(true);
+  });
+
+  it("a member entity id of a multi-entity device resolves to the device, not canonical", () => {
+    const hit = resolveDeviceKey(all, "sensor.office_desk_power");
+    expect(hit?.row.key).toBe("office~desk_plug");
+    expect(hit?.canonical).toBe(false);
+  });
+
+  it("a standalone entity id resolves to its own row, canonical", () => {
+    const hit = resolveDeviceKey(all, "lock.front_door");
+    expect(hit?.row.key).toBe("lock.front_door");
+    expect(hit?.canonical).toBe(true);
+  });
+
+  it("an unknown param resolves to null", () => {
+    expect(resolveDeviceKey(all, "light.nope")).toBeNull();
+    expect(resolveDeviceKey(all, "office~nope")).toBeNull();
   });
 });

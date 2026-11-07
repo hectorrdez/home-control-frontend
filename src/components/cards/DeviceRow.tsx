@@ -6,7 +6,7 @@ import type { DeviceRow as Row } from "@/features/devices/deviceFilters";
 import PathUtils from "@utils/PathUtils";
 import { describeState, domainHue, domainIcon, type Hue } from "./deviceState";
 
-// Feature 121: one device in the /devices list. The whole row is the link to the detail page; no controls here.
+// Feature 121/123: one physical device in the /devices list. The whole row links to the detail page; no controls here.
 const hueText: Record<Hue, string> = {
   primary: "text-primary-container",
   secondary: "text-secondary",
@@ -15,14 +15,15 @@ const hueText: Record<Hue, string> = {
 
 export default function DeviceRow({ row }: { row: Row }) {
   const metaId = useId();
-  const { entity, label, areaName } = row;
-  const Icon = domainIcon(entity.domain);
-  const hue = domainHue(entity.domain);
-  const view = describeState(entity);
+  const { primary, label, areaName, entities } = row;
+  const Icon = domainIcon(primary.domain);
+  const hue = domainHue(primary.domain);
+  const view = describeState(primary);
+  const meta = entities.length >= 2 ? `${entities.length} ENTITIES` : primary.entityId;
 
   return (
     <Link
-      to={PathUtils.deviceDetailPath(entity.entityId)}
+      to={PathUtils.deviceDetailPath(row.key)}
       aria-label={label}
       aria-describedby={metaId}
       className="flex min-h-11 items-center gap-space-sm rounded-xl border border-outline-variant/30 bg-surface-container p-space-sm transition-colors duration-150 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
@@ -38,7 +39,7 @@ export default function DeviceRow({ row }: { row: Row }) {
       <div className="min-w-0 flex-1">
         <span className="block truncate font-sans text-title-md font-semibold text-on-surface">{label}</span>
         <span id={metaId} className="block truncate font-mono text-label-caps uppercase text-on-surface-variant">
-          {`${areaName} // ${entity.entityId}`}
+          {`${areaName} // ${meta}`}
         </span>
       </div>
       {view.unavailable ? (

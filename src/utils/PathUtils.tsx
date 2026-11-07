@@ -7,9 +7,10 @@ export default class PathUtils {
     return ROUTE_PATHS[name] ?? "#";
   }
 
-  // Feature 122: concrete URL of one device's detail page. The id is encoded, RR7 decodes it for useParams.
-  public static deviceDetailPath(entityId: string) {
-    return `/devices/${encodeURIComponent(entityId)}`;
+  // Features 122/123: concrete URL of one device's detail page (device key or standalone entity id).
+  // The key is encoded, RR7 decodes it for useParams.
+  public static deviceDetailPath(deviceKey: string) {
+    return `/devices/${encodeURIComponent(deviceKey)}`;
   }
 
   public static generateRoutes(routes: Array<Page>) {

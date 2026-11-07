@@ -13,7 +13,7 @@ import { UNASSIGNED } from "@/state/entities";
 import { ToastProvider } from "@components/feedback/Toast";
 import DeviceDetailPage from "./DeviceDetailPage";
 
-// Feature 122: the detail page through the real providers, driven by a fake API.
+// Features 122/123: the detail page through the real providers, driven by a fake API.
 
 // Recharts measures its container; jsdom has no layout, so the container hands the chart a fixed size.
 vi.mock("recharts", async (importOriginal) => {
@@ -88,7 +88,7 @@ function renderPage(entityId: string, setup: Setup = {}) {
           <AliasesProvider>
             <MemoryRouter initialEntries={[`/devices/${encodeURIComponent(entityId)}`]}>
               <Routes>
-                <Route path="/devices/:entityId" element={<DeviceDetailPage />} />
+                <Route path="/devices/:deviceKey" element={<DeviceDetailPage />} />
                 <Route path="*" element={<div>other route</div>} />
               </Routes>
               <Location />
@@ -186,6 +186,36 @@ describe("DeviceDetailPage", () => {
       e.entityId === "light.kitchen_ceiling" ? { ...e, state: "unavailable" } : e,
     );
     renderPage("light.kitchen_ceiling", { areas: areasOf(entities) });
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.getAllByText("UNAVAILABLE").length).toBeGreaterThan(0);
+    expect(screen.queryByText("ONLINE")).toBeNull();
+  });
+
+  it("a device with several entities shows its label, one section per entity in order, and the entity count", async () => {
+    renderPage("office~desk_plug");
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Desk plug");
+    expect(screen.getByText("OFFICE // 2 ENTITIES")).toBeTruthy();
+    expect(screen.getByText("ONLINE")).toBeTruthy();
+    const sections = screen
+      .getAllByRole("region")
+      .map((r) => r.getAttribute("aria-label"))
+      .filter((label) => label === "Desk outlet" || label === "Desk outlet power");
+    expect(sections).toEqual(["Desk outlet", "Desk outlet power"]);
+    expect(screen.getByRole("switch", { name: "Desk outlet power" })).toBeTruthy();
+    expect(document.title).toBe("Desk plug - Home Control");
+  });
+
+  it("an old entity link to a member of a multi-entity device redirects to the device key", async () => {
+    renderPage("sensor.office_desk_power");
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Desk plug");
+    expect(location()).toBe("/devices/office~desk_plug");
+  });
+
+  it("a device whose entities are all unavailable shows the UNAVAILABLE chip and no ONLINE chip", async () => {
+    const entities = createFixtureEntities().map((e) =>
+      e.domain === "switch" || e.entityId === "sensor.office_desk_power" ? { ...e, state: "unavailable" } : e,
+    );
+    renderPage("office~desk_plug", { areas: areasOf(entities) });
     await screen.findByRole("heading", { level: 1 });
     expect(screen.getAllByText("UNAVAILABLE").length).toBeGreaterThan(0);
     expect(screen.queryByText("ONLINE")).toBeNull();

@@ -3,6 +3,6 @@
 export const ROUTE_PATHS: Record<string, string> = {
   home: "/",
   devices: "/devices",
-  deviceDetail: "/devices/:entityId", // feature 122; build concrete URLs with PathUtils.deviceDetailPath
+  deviceDetail: "/devices/:deviceKey", // features 122/123; build concrete URLs with PathUtils.deviceDetailPath
   telemetry: "/telemetry",
 };

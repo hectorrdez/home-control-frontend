@@ -1,11 +1,13 @@
-import { Fragment, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { Fragment, useEffect, useMemo } from "react";
+import { Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, CircleOff } from "lucide-react";
 import PageGrid from "@layouts/PageGrid";
 import { useEntities } from "@/state/EntitiesProvider";
 import { useEntityName } from "@/features/names/useEntityName";
 import { allEntities, formatPower, isInteractive, isUnavailable, plugDrawBySwitch } from "@/state/selectors";
 import type { Entity } from "@/api/types";
+import { buildDeviceRows, resolveDeviceKey, type DeviceRow } from "@/features/devices/deviceFilters";
+import PathUtils from "@utils/PathUtils";
 import Button from "@components/controls/Button";
 import ButtonLink from "@components/controls/ButtonLink";
 import EditableName from "@components/controls/EditableName";
@@ -19,7 +21,7 @@ import { attributeRows } from "@/features/devices/attributes";
 import { numericState } from "@/features/telemetry/telemetry";
 import StringUtils from "@utils/StringUtils";
 
-// Feature 122: one device on its own page (/devices/:entityId). Data only from the entities store.
+// Features 122/123: one device on its own page (/devices/:deviceKey). Data only from the entities store.
 
 const hueText: Record<Hue, string> = {
   primary: "text-primary-container",
@@ -56,13 +58,13 @@ function ErrorView({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function NotFoundView({ entityId }: { entityId: string }) {
+function NotFoundView({ deviceKey }: { deviceKey: string }) {
   return (
     <PageGrid>
       <Card className="col-span-12 flex flex-col gap-space-sm">
         <CircleOff size={32} aria-hidden="true" className="text-on-surface-variant" />
         <p className="font-label-caps text-label-caps uppercase text-on-surface">DEVICE NOT FOUND</p>
-        <p className="break-all font-mono text-telemetry-md text-on-surface-variant">{entityId}</p>
+        <p className="break-all font-mono text-telemetry-md text-on-surface-variant">{deviceKey}</p>
         <ButtonLink to="devices" className="self-start">
           BACK TO DEVICES
         </ButtonLink>
@@ -71,7 +73,9 @@ function NotFoundView({ entityId }: { entityId: string }) {
   );
 }
 
-function DeviceDetailView({ entity }: { entity: Entity }) {
+// The state, history and attributes of ONE entity (features 122/123). Hooks are per entity, so every device
+// section has its own pending and feedback state. Renders two grid items: State (xl:5) and History+Attributes (xl:7).
+function EntityBody({ entity }: { entity: Entity }) {
   const { state } = useEntities();
   const names = useEntityName();
   const { send, pending, settling, feedback } = useDeviceAction(entity);
@@ -80,18 +84,12 @@ function DeviceDetailView({ entity }: { entity: Entity }) {
   const Icon = domainIcon(entity.domain);
   const hue = domainHue(entity.domain);
   const interactive = isInteractive(entity);
-  const areaName = state.areas.find((a) => a.areaId === entity.area)?.name.toUpperCase() ?? "UNASSIGNED";
-  const meta = [areaName, entity.domain.toUpperCase(), entity.entityId, entity.deviceName].filter(Boolean).join(" // ");
   const draw = entity.domain === "switch" ? plugDrawBySwitch(allEntities(state)).get(entity.entityId) : undefined;
   const drawValue = draw ? numericState(draw) : null;
   const showHistory = entity.domain === "sensor" && numericState(entity) !== null;
   const attributes = attributeRows(entity);
   const changed = new Date(entity.lastChanged);
   const changedText = Number.isNaN(changed.getTime()) ? "--" : changed.toLocaleString();
-
-  useEffect(() => {
-    document.title = `${displayName} - Home Control`;
-  }, [displayName]);
 
   const feedbackClass =
     feedback === "success"
@@ -101,33 +99,7 @@ function DeviceDetailView({ entity }: { entity: Entity }) {
         : "";
 
   return (
-    <PageGrid>
-      <header className="col-span-12 flex flex-col gap-space-sm">
-        <ButtonLink to="devices" aria-label="Back to devices" className="self-start">
-          <ArrowLeft size={18} aria-hidden="true" />
-          BACK TO DEVICES
-        </ButtonLink>
-        <h1 className="min-w-0">
-          <EditableName
-            entityId={entity.entityId}
-            shown={names.shortName(entity)}
-            label={displayName}
-            raw={entity.name}
-            canRename={names.canRename}
-            onRename={(alias) => names.renameEntity(entity, alias)}
-            textClassName="font-sans text-headline-md uppercase text-on-surface"
-          />
-        </h1>
-        <p className="font-mono text-label-caps uppercase text-on-surface-variant">{meta}</p>
-        <div>
-          {isUnavailable(entity) ? (
-            <StatusChip tone="error">UNAVAILABLE</StatusChip>
-          ) : (
-            <StatusChip tone="secondary">ONLINE</StatusChip>
-          )}
-        </div>
-      </header>
-
+    <>
       <section aria-label="State" className="col-span-12 xl:col-span-5">
         <Card className={StringUtils.JoinClassName("flex flex-col gap-space-md", feedbackClass)} data-feedback={feedback ?? undefined}>
           <h2 className="font-label-caps text-label-caps uppercase text-on-surface-variant">STATE</h2>
@@ -185,17 +157,118 @@ function DeviceDetailView({ entity }: { entity: Entity }) {
           </p>
         </Card>
       </div>
+    </>
+  );
+}
+
+// A device with one entity: the 122 page (header with the entity name, then its body). Unchanged by 123.
+function SingleEntityView({ entity, areaName }: { entity: Entity; areaName: string }) {
+  const names = useEntityName();
+  const displayName = names.displayName(entity);
+  const meta = [areaName.toUpperCase(), entity.domain.toUpperCase(), entity.entityId, entity.deviceName].filter(Boolean).join(" // ");
+
+  useEffect(() => {
+    document.title = `${displayName} - Home Control`;
+  }, [displayName]);
+
+  return (
+    <PageGrid>
+      <header className="col-span-12 flex flex-col gap-space-sm">
+        <ButtonLink to="devices" aria-label="Back to devices" className="self-start">
+          <ArrowLeft size={18} aria-hidden="true" />
+          BACK TO DEVICES
+        </ButtonLink>
+        <h1 className="min-w-0">
+          <EditableName
+            entityId={entity.entityId}
+            shown={names.shortName(entity)}
+            label={displayName}
+            raw={entity.name}
+            canRename={names.canRename}
+            onRename={(alias) => names.renameEntity(entity, alias)}
+            textClassName="font-sans text-headline-md uppercase text-on-surface"
+          />
+        </h1>
+        <p className="font-mono text-label-caps uppercase text-on-surface-variant">{meta}</p>
+        <div>
+          {isUnavailable(entity) ? (
+            <StatusChip tone="error">UNAVAILABLE</StatusChip>
+          ) : (
+            <StatusChip tone="secondary">ONLINE</StatusChip>
+          )}
+        </div>
+      </header>
+      <EntityBody entity={entity} />
+    </PageGrid>
+  );
+}
+
+// A device with several entities (feature 123): one header for the device, then one section per entity, primary first.
+function MultiEntityView({ row }: { row: DeviceRow }) {
+  const names = useEntityName();
+  const allDown = row.entities.every(isUnavailable);
+
+  useEffect(() => {
+    document.title = `${row.label} - Home Control`;
+  }, [row.label]);
+
+  return (
+    <PageGrid>
+      <header className="col-span-12 flex flex-col gap-space-sm">
+        <ButtonLink to="devices" aria-label="Back to devices" className="self-start">
+          <ArrowLeft size={18} aria-hidden="true" />
+          BACK TO DEVICES
+        </ButtonLink>
+        <h1 className="min-w-0 font-sans text-headline-md uppercase text-on-surface">{row.label}</h1>
+        <p className="font-mono text-label-caps uppercase text-on-surface-variant">
+          {`${row.areaName.toUpperCase()} // ${row.entities.length} ENTITIES`}
+        </p>
+        <div>
+          {allDown ? <StatusChip tone="error">UNAVAILABLE</StatusChip> : <StatusChip tone="secondary">ONLINE</StatusChip>}
+        </div>
+      </header>
+      {row.entities.map((entity) => {
+        const displayName = names.displayName(entity);
+        return (
+          <section key={entity.entityId} aria-label={displayName} className="col-span-12 grid grid-cols-1 gap-space-sm xl:grid-cols-12">
+            <header className="col-span-12 flex flex-col gap-space-xs">
+              <h2 className="min-w-0">
+                <EditableName
+                  entityId={entity.entityId}
+                  shown={names.shortName(entity)}
+                  label={displayName}
+                  raw={entity.name}
+                  canRename={names.canRename}
+                  onRename={(alias) => names.renameEntity(entity, alias)}
+                  textClassName="font-sans text-title-md uppercase text-on-surface"
+                />
+              </h2>
+              <p className="font-mono text-label-caps uppercase text-on-surface-variant">{`${entity.domain.toUpperCase()} // ${entity.entityId}`}</p>
+            </header>
+            <EntityBody entity={entity} />
+          </section>
+        );
+      })}
     </PageGrid>
   );
 }
 
 export default function DeviceDetailPage() {
-  const { entityId = "" } = useParams();
+  const { deviceKey = "" } = useParams();
   const { state, reload } = useEntities();
+  const names = useEntityName();
+  const rows = useMemo(
+    () => (state.status === "ready" ? buildDeviceRows(state, names.displayName) : []),
+    [state, names.displayName],
+  );
 
   if (state.status === "loading") return <LoadingView />;
   if (state.status === "error") return <ErrorView onRetry={reload} />;
-  const entity = state.entities[entityId];
-  if (!entity) return <NotFoundView entityId={entityId} />;
-  return <DeviceDetailView entity={entity} />;
+  const resolved = resolveDeviceKey(rows, deviceKey);
+  if (!resolved) return <NotFoundView deviceKey={deviceKey} />;
+  // An old /devices/<entityId> link to a member of a multi-entity device moves to the device's own key.
+  if (!resolved.canonical) return <Navigate replace to={PathUtils.deviceDetailPath(resolved.row.key)} />;
+  const { row } = resolved;
+  if (row.entities.length === 1) return <SingleEntityView entity={row.primary} areaName={row.areaName} />;
+  return <MultiEntityView row={row} />;
 }

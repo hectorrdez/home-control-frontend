@@ -20,6 +20,7 @@ function entity(
   attributes: Record<string, unknown>,
   area: string | null,
   name: string,
+  deviceName: string | null = null,
 ): Entity {
   return {
     entityId,
@@ -29,15 +30,16 @@ function entity(
     attributes,
     area,
     lastChanged: FIXTURE_TIME,
-    deviceName: null,
+    deviceName,
   };
 }
 
 // Realistic HA-shaped house matching the Stitch reference (4 rooms, mixed domains, sensors).
 export function createFixtureEntities(): Entity[] {
+  // Feature 123: a room's temperature and humidity are one physical sensor (shared deviceName).
   const roomSensors = (areaId: string, label: string, temp: string, humidity: string): Entity[] => [
-    entity(`sensor.${areaId}_temperature`, temp, { device_class: "temperature", unit_of_measurement: "°C" }, areaId, `${label} temperature`),
-    entity(`sensor.${areaId}_humidity`, humidity, { device_class: "humidity", unit_of_measurement: "%" }, areaId, `${label} humidity`),
+    entity(`sensor.${areaId}_temperature`, temp, { device_class: "temperature", unit_of_measurement: "°C" }, areaId, `${label} temperature`, `${label} sensor`),
+    entity(`sensor.${areaId}_humidity`, humidity, { device_class: "humidity", unit_of_measurement: "%" }, areaId, `${label} humidity`, `${label} sensor`),
   ];
 
   return [
@@ -61,9 +63,10 @@ export function createFixtureEntities(): Entity[] {
       target_temp_step: 0.5,
     }, "living_room", "Thermostat"),
     entity("cover.bedroom_blinds", "open", { current_position: 70 }, "bedroom", "Bedroom blinds"),
-    entity("switch.office_desk", "on", {}, "office", "Desk outlet"),
-    entity("sensor.office_desk_power", "42.5", { device_class: "power", unit_of_measurement: "W" }, "office", "Desk outlet power"),
-    entity("binary_sensor.entry_motion", "off", { device_class: "motion" }, null, "Entry motion"),
+    // Feature 123: the plug and its power sensor are one device; the PIR and its battery are one device.
+    entity("switch.office_desk", "on", {}, "office", "Desk outlet", "Desk plug"),
+    entity("sensor.office_desk_power", "42.5", { device_class: "power", unit_of_measurement: "W" }, "office", "Desk outlet power", "Desk plug"),
+    entity("binary_sensor.entry_motion", "off", { device_class: "motion" }, null, "Entry motion", "Entry PIR"),
     entity("lock.front_door", "locked", {}, null, "Front door"),
     entity("sensor.house_power", "1240", { device_class: "power", unit_of_measurement: "W" }, null, "House power"),
     entity("sensor.energy_today", "8.6", { device_class: "energy", unit_of_measurement: "kWh" }, null, "Energy today"),
@@ -71,7 +74,7 @@ export function createFixtureEntities(): Entity[] {
     entity("sensor.pm25", "9", { device_class: "pm25", unit_of_measurement: "µg/m³" }, null, "PM2.5"),
     entity("sensor.hvac_filter_life", "82", { device_class: "battery", unit_of_measurement: "%" }, null, "HVAC filter life"),
     entity("sensor.solar_power", "960", { device_class: "power", unit_of_measurement: "W" }, null, "Solar power"),
-    entity("sensor.entry_motion_battery", "87", { device_class: "battery", unit_of_measurement: "%" }, null, "Entry motion battery"),
+    entity("sensor.entry_motion_battery", "87", { device_class: "battery", unit_of_measurement: "%" }, null, "Entry motion battery", "Entry PIR"),
     entity("scene.dawn", "2026-11-06T06:00:00.000Z", {}, null, "Dawn"),
   ];
 }

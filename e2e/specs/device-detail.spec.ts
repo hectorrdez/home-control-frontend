@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { DeviceDetailPage } from "../pages/device-detail";
 import { DevicesPage } from "../pages/devices";
 
-// Feature 122: the /devices/:entityId page over the mock house.
+// Features 122/123: the /devices/:deviceKey page over the mock house.
 test.describe("device detail on a tablet (1280x800)", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -21,7 +21,32 @@ test.describe("device detail on a tablet (1280x800)", () => {
 
     await detail.backLink().click();
     await expect(page).toHaveURL(/\/devices$/);
-    await expect(devices.rows()).toHaveCount(26);
+    await expect(devices.rows()).toHaveCount(20);
+  });
+
+  test("a multi-entity device opens one page with a section per entity, and its switch flips", async ({ page }) => {
+    const devices = new DevicesPage(page);
+    await devices.open();
+    await devices.row("Desk plug").click();
+
+    const detail = new DeviceDetailPage(page);
+    await expect(page).toHaveURL(/\/devices\/office~desk_plug$/);
+    await expect(detail.title()).toHaveText("Desk plug");
+    await expect(detail.entity("Desk outlet")).toBeVisible();
+    await expect(detail.entity("Desk outlet power")).toBeVisible();
+
+    await expect(detail.stateText("Desk outlet")).toHaveText("ON");
+    await detail.power("Desk outlet").click();
+    await expect(detail.stateText("Desk outlet")).toHaveText("OFF");
+
+    await expect(detail.history("Desk outlet power")).toBeVisible();
+  });
+
+  test("an old entity link to a member of a device moves to the device page", async ({ page }) => {
+    const detail = new DeviceDetailPage(page);
+    await detail.open("/devices/sensor.office_desk_power");
+    await expect(page).toHaveURL(/\/devices\/office~desk_plug$/);
+    await expect(detail.title()).toHaveText("Desk plug");
   });
 
   test("a deep link to a numeric sensor shows its history, and 7D changes the range", async ({ page }) => {

@@ -15,7 +15,7 @@ import {
   type DeviceFilters as Filters,
 } from "@/features/devices/deviceFilters";
 
-// Feature 121: every entity of the house (interactive and read-only, available or not), searchable and filterable.
+// Feature 121/123: every physical device of the house (one row per device; interactive and read-only, available or not), searchable and filterable.
 function SkeletonList() {
   return (
     <div aria-hidden="true" className="grid grid-cols-1 gap-space-sm md:grid-cols-2">
@@ -96,7 +96,7 @@ export default function DevicesPage() {
         ) : (
           <ul aria-label="Devices" className="grid grid-cols-1 gap-space-sm md:grid-cols-2">
             {shown.map((row) => (
-              <li key={row.entity.entityId}>
+              <li key={row.key}>
                 <DeviceRow row={row} />
               </li>
             ))}

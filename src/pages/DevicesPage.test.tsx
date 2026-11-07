@@ -11,7 +11,7 @@ import { UNASSIGNED } from "@/state/entities";
 import { ToastProvider } from "@components/feedback/Toast";
 import DevicesPage from "./DevicesPage";
 
-// Feature 121: the /devices list through the real providers, driven by a fake API.
+// Features 121/123: the /devices list (one row per device) through the real providers, driven by a fake API.
 function areasOf(entities: Entity[]): Area[] {
   const areas: Area[] = FIXTURE_AREAS.map((a) => ({
     areaId: a.areaId,
@@ -69,11 +69,11 @@ const pill = (group: string, label: RegExp | string) =>
 describe("DevicesPage", () => {
   afterEach(cleanup);
 
-  it("lists all 26 devices, each linking to its detail page", async () => {
+  it("lists 20 devices (one row per physical device), each linking to its detail page", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "Devices" })).toBeTruthy();
-    expect(rowLinks()).toHaveLength(26);
-    expect(shown().textContent).toBe("26 OF 26");
+    expect(rowLinks()).toHaveLength(20);
+    expect(shown().textContent).toBe("20 OF 20");
 
     expect(screen.getByRole("link", { name: "Living room ceiling" }).getAttribute("href")).toBe(
       "/devices/light.living_room_ceiling",
@@ -86,7 +86,7 @@ describe("DevicesPage", () => {
     await screen.findByRole("link", { name: "Living room ceiling" });
     fireEvent.change(screen.getByRole("searchbox", { name: "Search devices" }), { target: { value: "front door" } });
     expect(rowLinks()).toHaveLength(1);
-    expect(shown().textContent).toBe("1 OF 26");
+    expect(shown().textContent).toBe("1 OF 20");
   });
 
   it("pills toggle aria-pressed, filters combine, and CLEAR resets them", async () => {
@@ -98,16 +98,16 @@ describe("DevicesPage", () => {
     const readOnly = pill("Kind", "READ-ONLY");
     fireEvent.click(readOnly);
     expect(readOnly.getAttribute("aria-pressed")).toBe("true");
-    expect(rowLinks()).toHaveLength(17);
+    expect(rowLinks()).toHaveLength(11);
 
     fireEvent.click(pill("Areas", /^KITCHEN \d+$/));
-    expect(rowLinks()).toHaveLength(2);
+    expect(rowLinks()).toHaveLength(1);
     expect((clear as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(clear);
-    expect(rowLinks()).toHaveLength(26);
+    expect(rowLinks()).toHaveLength(20);
     expect(readOnly.getAttribute("aria-pressed")).toBe("false");
-    expect(shown().textContent).toBe("26 OF 26");
+    expect(shown().textContent).toBe("20 OF 20");
   });
 
   it("shows the alias as the device name", async () => {
@@ -149,6 +149,16 @@ describe("DevicesPage", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Search devices" }), { target: { value: "zzzz" } });
     expect(await screen.findByText("NO MATCHING DEVICES")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "CLEAR" }));
-    expect(rowLinks()).toHaveLength(26);
+    expect(rowLinks()).toHaveLength(20);
+  });
+
+  it("a device with several entities is one row with its entity count and links to the device key", async () => {
+    renderPage();
+    const desk = await screen.findByRole("link", { name: "Desk plug" });
+    expect(desk.getAttribute("href")).toBe("/devices/office~desk_plug");
+    expect(desk.textContent).toContain("Office // 2 ENTITIES");
+    expect(desk.textContent).toContain("ON");
+    expect(screen.queryByRole("link", { name: "Desk outlet power" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Entry motion battery" })).toBeNull();
   });
 });
