@@ -21,10 +21,10 @@ export interface HistoryPoint {
 }
 
 // Server already downsamples; this keeps any longer series within the chart budget (even stride, last point kept).
-export function downsample(points: HistoryPoint[], max: number = MAX_CHART_POINTS): HistoryPoint[] {
+export function downsample<T>(points: T[], max: number = MAX_CHART_POINTS): T[] {
   if (points.length <= max) return points;
   const step = (points.length - 1) / (max - 1);
-  const out: HistoryPoint[] = [];
+  const out: T[] = [];
   for (let i = 0; i < max; i++) out.push(points[Math.round(i * step)]);
   return out;
 }
@@ -119,6 +119,31 @@ export interface ClimateRow {
   t: string;
   temp: number | null;
   hum: number | null;
+}
+
+// ALL ROOMS: one room's temperature line (its own mean across the room's sensors).
+export interface RoomLine {
+  room: string;
+  points: HistoryPoint[];
+}
+
+// A climate row plus each plotted room's temperature at that timestamp, keyed by area id (absent when no point).
+export interface RoomClimateRow extends ClimateRow {
+  rooms: Partial<Record<string, number>>;
+}
+
+// ALL ROOMS merge: one row per timestamp across every room line, the total mean temperature and the humidity.
+export function mergeRoomClimate(lines: RoomLine[], temp: HistoryPoint[], hum: HistoryPoint[]): RoomClimateRow[] {
+  const rows = new Map<string, RoomClimateRow>();
+  const rowAt = (t: string): RoomClimateRow => {
+    const row = rows.get(t) ?? { t, temp: null, hum: null, rooms: {} };
+    rows.set(t, row);
+    return row;
+  };
+  for (const { room, points } of lines) for (const p of points) rowAt(p.t).rooms[room] = p.v;
+  for (const p of temp) rowAt(p.t).temp = p.v;
+  for (const p of hum) rowAt(p.t).hum = p.v;
+  return [...rows.values()].sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
 }
 
 export function mergeClimate(temp: HistoryPoint[], hum: HistoryPoint[]): ClimateRow[] {

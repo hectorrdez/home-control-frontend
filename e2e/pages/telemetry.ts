@@ -172,6 +172,20 @@ export class TelemetryPage {
     return this.page.getByText(/TEMP VARIANCE/).first();
   }
 
+  // Feature 131: ALL ROOMS legend (one entry per room plus TOTAL MEAN) and the card title above the selectors.
+  chartLegend() {
+    return this.page.getByRole("list", { name: "Chart legend" }).getByRole("listitem");
+  }
+
+  // Drawn curves of the climate chart (SVG paths have no accessible name, so they carry a data-testid).
+  climateCurves(room: string, kind: "room-line" | "mean-line" | "humidity-line" | "temp-area") {
+    return this.climateChart(room).getByTestId(`climate-${kind}`);
+  }
+
+  climateTitle() {
+    return this.page.getByRole("heading", { name: "CLIMATE HISTORY", exact: true });
+  }
+
   historyNotAvailable() {
     return this.page.getByText("HISTORY NOT AVAILABLE");
   }
