@@ -50,6 +50,15 @@
   --color-background: #0f131d;
   --color-on-background: #dee2f0;
   --color-surface-variant: #30353f;
+  /* Feature 130: zone chart palette (3D rooms, pills, legends). 8 hues spaced around the wheel at OKLCH L=0.78 (min pairwise deltaE_ok 0.092); distinct from semantic alarm/nominal colors. */
+  --color-zone-coral: #fd968f;
+  --color-zone-amber: #f9a216;
+  --color-zone-lime: #b5c31e;
+  --color-zone-green: #23d891;
+  --color-zone-cyan: #1acfdf;
+  --color-zone-blue: #7dbdfe;
+  --color-zone-violet: #bda7ff;
+  --color-zone-pink: #fd88d9;
 
   /* Fonts (self-hosted via @fontsource in main.tsx) */
   --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;

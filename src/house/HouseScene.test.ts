@@ -1,7 +1,8 @@
-import type * as THREE from "three";
+import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { HousePlan } from "./plan";
 import { HouseScene, type SceneCallbacks } from "./HouseScene";
+import { ZONE_TOKENS, zoneColorToken } from "../features/zones/zoneColors";
 
 // jsdom has no WebGL: replace only the renderer, keep real three.js geometry, raycasting and math.
 const hoisted = vi.hoisted(() => ({ renderers: [] as Array<FakeRendererHandle> }));
@@ -57,7 +58,7 @@ const plan: HousePlan = {
 
 interface Internals {
   camera: THREE.PerspectiveCamera;
-  rooms: Map<string, { present: boolean; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
+  rooms: Map<string, { group: THREE.Group; present: boolean; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
   disposed: boolean;
 }
 const internals = (scene: HouseScene) => scene as unknown as Internals;
@@ -198,6 +199,49 @@ describe("HouseScene", () => {
     expect(kitchen.light.visible).toBe(false);
     expect(kitchen.light.intensity).toBe(0);
     expect(kitchen.tintMat.opacity).toBeCloseTo(0.01);
+  });
+
+  it("tints and outlines each room with its own zone color (feature 130)", () => {
+    // Named CSS colors keep this file free of hex literals (lint:tokens); THREE.Color parses them.
+    const named = ["red", "green", "blue", "yellow", "magenta", "cyan", "white", "orange"];
+    const values: Record<string, string> = {};
+    ZONE_TOKENS.forEach((token, i) => {
+      values[`--color-${token}`] = named[i];
+    });
+    values["--color-primary-container"] = "black";
+    const original = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      (el: Element) =>
+        ({
+          getPropertyValue: (name: string) => (name in values ? values[name] : original(el).getPropertyValue(name)),
+        }) as unknown as CSSStyleDeclaration,
+    );
+
+    const { scene } = mountScene();
+    scene.setSelected(null);
+    const rooms = internals(scene).rooms;
+    for (const areaId of ["kitchen", "hall"]) {
+      const expected = new THREE.Color(values[`--color-${zoneColorToken(areaId)}`]).getHexString();
+      const room = rooms.get(areaId)!;
+      expect(room.tintMat.color.getHexString()).toBe(expected);
+      expect(room.outlineMat.color.getHexString()).toBe(expected);
+      const marker = room.group.children.find(
+        (c): c is THREE.Mesh => c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial,
+      )!;
+      const mat = marker.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHexString()).toBe(expected);
+      expect(mat.emissive.getHexString()).toBe(expected);
+    }
+
+    // Selected room swaps its outline to the active color at full opacity; deselecting restores the zone color.
+    const kitchen = rooms.get("kitchen")!;
+    const zoneHex = new THREE.Color(values[`--color-${zoneColorToken("kitchen")}`]).getHexString();
+    scene.setSelected("kitchen");
+    expect(kitchen.outlineMat.opacity).toBe(1);
+    expect(kitchen.outlineMat.color.getHexString()).toBe("000000");
+    scene.setSelected(null);
+    expect(kitchen.outlineMat.opacity).toBeCloseTo(0.5);
+    expect(kitchen.outlineMat.color.getHexString()).toBe(zoneHex);
   });
 
   it("highlights only the selected present room", () => {

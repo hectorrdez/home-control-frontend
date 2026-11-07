@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { RoomGlow } from "./glow";
 import { DEFAULT_PLAN, type Box, type HousePlan, type RoomPlan } from "./plan";
+import { zoneColorToken } from "../features/zones/zoneColors";
 
 // Procedural isometric house (106). Plain three + OrbitControls; render on demand (no idle loop).
 // Colors come from the CSS tokens of index.css, read once at mount. Nothing here is a hex literal.
@@ -30,7 +31,8 @@ interface RoomObjects {
   outlineMat: THREE.LineBasicMaterial;
   tintMat: THREE.MeshBasicMaterial;
   light: THREE.PointLight;
-  hue: THREE.Color;
+  hue: THREE.Color; // glow hue from the plan (lit state)
+  zone: THREE.Color; // stable zone color (feature 130): tint, outline and marker
 }
 
 const LABEL_HEIGHT = 3.2;
@@ -257,16 +259,17 @@ export class HouseScene {
     const { rect } = plan;
     const center = new THREE.Vector3(rect.x, LABEL_HEIGHT, rect.z);
     const hue = token(plan.hue);
+    const zone = token(zoneColorToken(plan.areaId));
     const group = new THREE.Group();
 
-    const tintMat = this.track(new THREE.MeshBasicMaterial({ color: hue, transparent: true, opacity: 0.04, side: THREE.DoubleSide }));
+    const tintMat = this.track(new THREE.MeshBasicMaterial({ color: zone, transparent: true, opacity: 0.04, side: THREE.DoubleSide }));
     const floorGeo = this.trackGeometry(new THREE.PlaneGeometry(rect.w, rect.d));
     const hit = new THREE.Mesh(floorGeo, tintMat);
     hit.rotation.x = -Math.PI / 2;
     hit.position.set(rect.x, 0.01, rect.z);
     group.add(hit);
 
-    const outlineMat = this.track(new THREE.LineBasicMaterial({ color: token("outline-variant"), transparent: true, opacity: 0.5 }));
+    const outlineMat = this.track(new THREE.LineBasicMaterial({ color: zone, transparent: true, opacity: 0.5 }));
     const outline = new THREE.LineSegments(this.trackGeometry(new THREE.EdgesGeometry(new THREE.BoxGeometry(rect.w, 0.02, rect.d))), outlineMat);
     outline.position.set(rect.x, 0.02, rect.z);
     group.add(outline);
@@ -276,7 +279,7 @@ export class HouseScene {
 
     const marker = new THREE.Mesh(
       this.trackGeometry(new THREE.SphereGeometry(0.3, 16, 16)),
-      this.track(new THREE.MeshStandardMaterial({ color: hue, emissive: hue, emissiveIntensity: 0.8 })),
+      this.track(new THREE.MeshStandardMaterial({ color: zone, emissive: zone, emissiveIntensity: 0.8 })),
     );
     marker.position.copy(center);
     group.add(marker);
@@ -299,6 +302,7 @@ export class HouseScene {
       tintMat,
       light,
       hue,
+      zone,
     });
   }
 
@@ -315,7 +319,8 @@ export class HouseScene {
   private applyHighlight(): void {
     for (const obj of this.rooms.values()) {
       const active = this.selected === obj.plan.areaId && obj.present;
-      obj.outlineMat.color.copy(active ? token("primary-container") : token("outline-variant"));
+      // Active = primary-container at full opacity (readable on every zone color); idle = the zone color.
+      obj.outlineMat.color.copy(active ? token("primary-container") : obj.zone);
       obj.outlineMat.opacity = active ? 1 : 0.5;
       obj.tintMat.opacity = !obj.present ? 0.01 : active ? 0.14 : 0.04;
     }
