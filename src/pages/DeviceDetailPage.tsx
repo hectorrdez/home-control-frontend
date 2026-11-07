@@ -16,6 +16,7 @@ import Card from "@components/cards/Card";
 import DeviceControls from "@components/cards/DeviceControls";
 import EntityHistoryCard from "@components/cards/EntityHistoryCard";
 import CoverCalibrationPanel from "@components/cards/CoverCalibrationPanel";
+import AlertRulesPanel from "@components/cards/AlertRulesPanel";
 import { describeState, domainIcon, domainHue, type Hue } from "@components/cards/deviceState";
 import { useDeviceAction } from "@components/cards/useDeviceAction";
 import { attributeRows } from "@/features/devices/attributes";
@@ -140,6 +141,7 @@ function EntityBody({ entity }: { entity: Entity }) {
             <EntityHistoryCard entity={entity} displayName={displayName} />
           </Card>
         )}
+        <AlertRulesPanel entity={entity} />
         <Card role="region" aria-label="Attributes" className="flex flex-col gap-space-sm">
           <h2 className="font-label-caps text-label-caps uppercase text-on-surface-variant">ATTRIBUTES</h2>
           {attributes.length === 0 ? (

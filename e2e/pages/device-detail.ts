@@ -85,6 +85,11 @@ export class DeviceDetailPage {
     await this.page.getByRole("button", { name: "DONE", exact: true }).click();
   }
 
+  // Feature 128: the ALERTS section of a device (scoped to one entity when it has several).
+  alerts(entity?: string): Locator {
+    return this.scope(entity).getByRole("region", { name: "Alerts" });
+  }
+
   coverSlider(): Locator {
     return this.state().getByRole("slider");
   }

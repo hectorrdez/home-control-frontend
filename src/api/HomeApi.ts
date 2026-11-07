@@ -8,6 +8,8 @@ import type {
   Alias,
   CalibrationInput,
   CoverCalibration,
+  AlertRule,
+  AlertRuleInput,
 } from "./types";
 
 export interface EntityFilter {
@@ -35,4 +37,9 @@ export interface HomeApi {
   putCalibration(entityId: string, input: CalibrationInput): Promise<CoverCalibration[]>;
   deleteCalibration(entityId: string): Promise<CoverCalibration[]>;
   setCoverPercent(entityId: string, percent: number): Promise<Entity>;
+  // Feature 128 (backend 012). Writes answer with the stored rule; errors are ApiError messages (e.g. duplicate_rule).
+  listAlertRules(): Promise<AlertRule[]>;
+  createAlertRule(rule: AlertRuleInput): Promise<AlertRule>;
+  updateAlertRule(id: string, rule: AlertRuleInput): Promise<AlertRule>;
+  deleteAlertRule(id: string): Promise<void>;
 }

@@ -71,3 +71,23 @@ export interface CalibrationInput {
   openMs: number;
   closeMs: number;
 }
+
+// Feature 128 (backend 012): notification rule. Evaluation happens in the frontend (feature 129); the API only stores rules.
+export type AlertLevel = "off" | "low" | "medium" | "high";
+
+export type AlertTrigger =
+  | { type: "connects" }
+  | { type: "disconnects" }
+  | { type: "interacted" }
+  | { type: "state_becomes"; value: string }
+  | { type: "above" | "below"; value: number };
+
+export interface AlertRule {
+  id: string;
+  entityId: string;
+  trigger: AlertTrigger;
+  level: AlertLevel;
+  message?: string;
+}
+
+export type AlertRuleInput = Omit<AlertRule, "id">;

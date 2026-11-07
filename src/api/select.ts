@@ -35,6 +35,10 @@ function createLazyMockApi(search: string): HomeApi {
     putCalibration: async (entityId, input) => (await load()).putCalibration(entityId, input),
     deleteCalibration: async (entityId) => (await load()).deleteCalibration(entityId),
     setCoverPercent: async (entityId, percent) => (await load()).setCoverPercent(entityId, percent),
+    listAlertRules: async () => (await load()).listAlertRules(),
+    createAlertRule: async (rule) => (await load()).createAlertRule(rule),
+    updateAlertRule: async (id, rule) => (await load()).updateAlertRule(id, rule),
+    deleteAlertRule: async (id) => (await load()).deleteAlertRule(id),
     subscribe(onEntity, onConnection) {
       let stop: (() => void) | undefined;
       let closed = false;

@@ -12,6 +12,7 @@ import { ApiProvider } from "./api/ApiContext";
 import { EntitiesProvider } from "./state/EntitiesProvider";
 import { AliasesProvider } from "./state/AliasesProvider";
 import { CalibrationsProvider } from "./state/CalibrationsProvider";
+import { AlertRulesProvider } from "./state/AlertRulesProvider";
 import { ToastProvider } from "./components/feedback/Toast";
 import "./index.css";
 
@@ -22,9 +23,11 @@ createRoot(document.getElementById("root")!).render(
         <EntitiesProvider>
           <AliasesProvider>
             <CalibrationsProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
+              <AlertRulesProvider>
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </AlertRulesProvider>
             </CalibrationsProvider>
           </AliasesProvider>
         </EntitiesProvider>

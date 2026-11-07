@@ -1,5 +1,5 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { ApiError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 
@@ -177,6 +177,28 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteCalibration(entityId): Promise<CoverCalibration[]> {
       return request<CoverCalibration[]>(`/api/calibrations/${encodeURIComponent(entityId)}`, { method: "DELETE" });
+    },
+
+    // Feature 128: backend 012 (alert rules, served from memory). Writes answer with `data: [rule]`.
+    async listAlertRules(): Promise<AlertRule[]> {
+      return request<AlertRule[]>("/api/alert-rules");
+    },
+
+    async createAlertRule(rule): Promise<AlertRule> {
+      const [stored] = await request<AlertRule[]>("/api/alert-rules", { method: "POST", body: JSON.stringify(rule) });
+      return stored;
+    },
+
+    async updateAlertRule(id, rule): Promise<AlertRule> {
+      const [stored] = await request<AlertRule[]>(`/api/alert-rules/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(rule),
+      });
+      return stored;
+    },
+
+    async deleteAlertRule(id): Promise<void> {
+      await request<unknown[]>(`/api/alert-rules/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
 
     async setCoverPercent(entityId, percent): Promise<Entity> {

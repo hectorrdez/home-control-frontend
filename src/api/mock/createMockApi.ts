@@ -2,6 +2,9 @@ import type { EntityFilter, HomeApi } from "../HomeApi";
 import {
   ApiError,
   type Alias,
+  type AlertRule,
+  type AlertRuleInput,
+  type AlertTrigger,
   type Area,
   type CalibrationInput,
   type ConnectionState,
@@ -302,6 +305,44 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     return Number.isInteger(ms) && (ms as number) >= CALIBRATION_MIN_MS && (ms as number) <= CALIBRATION_MAX_MS;
   }
 
+  // Feature 128: notification rules (backend 012). Mock only, in memory; validation and duplicates follow the backend.
+  const ALERT_CAP = 500;
+  const ALERT_LEVELS: readonly string[] = ["off", "low", "medium", "high"];
+  const alertRules = new Map<string, AlertRule>();
+  let alertSeq = 0;
+
+  function validTrigger({ type, value }: { type?: unknown; value?: unknown }): boolean {
+    if (type === "connects" || type === "disconnects" || type === "interacted") return true;
+    if (type === "state_becomes") return typeof value === "string" && value.length >= 1 && value.length <= 40;
+    if (type === "above" || type === "below") return typeof value === "number" && Number.isFinite(value);
+    return false;
+  }
+
+  function validMessage(message: unknown): boolean {
+    return message === undefined || (typeof message === "string" && message.length >= 1 && message.length <= 120);
+  }
+
+  // A rule clashes with another one of the same entity and trigger type+value (the id being replaced is ignored).
+  function checkAlertInput(rule: AlertRuleInput, exceptId?: string): void {
+    if (!ENTITY_ID.test(rule.entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+    if (!ALERT_LEVELS.includes(rule.level) || !validTrigger(rule.trigger) || !validMessage(rule.message)) {
+      throw new ApiError("server", "invalid_rule", 400);
+    }
+    const key = triggerKey(rule.trigger);
+    const clash = [...alertRules.values()].some(
+      (other) => other.id !== exceptId && other.entityId === rule.entityId && triggerKey(other.trigger) === key,
+    );
+    if (clash) throw new ApiError("server", "duplicate_rule", 409);
+  }
+
+  function triggerKey(trigger: AlertTrigger): string {
+    return "value" in trigger ? `${trigger.type}:${trigger.value}` : trigger.type;
+  }
+
+  function storedRule(id: string, rule: AlertRuleInput): AlertRule {
+    return { id, entityId: rule.entityId, trigger: { ...rule.trigger }, level: rule.level, ...(rule.message === undefined ? {} : { message: rule.message }) };
+  }
+
   return {
     async getAliases(): Promise<Alias[]> {
       if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");
@@ -376,6 +417,37 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
       startMove(entityId, cal, percent);
       return clone(entities.get(entityId) as Entity);
+    },
+
+    async listAlertRules(): Promise<AlertRule[]> {
+      return read(() =>
+        [...alertRules.values()]
+          .sort((a, b) => a.entityId.localeCompare(b.entityId) || a.id.localeCompare(b.id))
+          .map((rule) => clone(rule)),
+      );
+    },
+
+    async createAlertRule(rule: AlertRuleInput): Promise<AlertRule> {
+      checkAlertInput(rule);
+      if (alertRules.size >= ALERT_CAP) throw new ApiError("server", "too_many_rules", 400);
+      await delay(actionDelayMs);
+      const stored = storedRule(`rule-${++alertSeq}`, rule);
+      alertRules.set(stored.id, stored);
+      return clone(stored);
+    },
+
+    async updateAlertRule(id: string, rule: AlertRuleInput): Promise<AlertRule> {
+      if (!alertRules.has(id)) throw new ApiError("not_found", "rule_not_found", 404);
+      checkAlertInput(rule, id);
+      await delay(actionDelayMs);
+      const stored = storedRule(id, rule);
+      alertRules.set(id, stored);
+      return clone(stored);
+    },
+
+    async deleteAlertRule(id: string): Promise<void> {
+      await delay(actionDelayMs);
+      alertRules.delete(id);
     },
 
     async getStatus(): Promise<HaStatus> {
