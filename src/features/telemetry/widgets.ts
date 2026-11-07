@@ -10,6 +10,8 @@ export interface Widget {
   kind: WidgetKind;
   visible: boolean;
   order: number;
+  // Feature 114: wide chart spans 2 grid columns from md. Absent = false (schema v1 compatible).
+  wide?: boolean;
 }
 
 export const WIDGET_STORAGE_KEY = "hc.telemetry.widgets.v1";
@@ -94,6 +96,7 @@ function isWidget(value: unknown): value is Widget {
     typeof w.entityId === "string" &&
     typeof w.visible === "boolean" &&
     typeof w.order === "number" &&
+    (w.wide === undefined || typeof w.wide === "boolean") &&
     KINDS.includes(w.kind as WidgetKind)
   );
 }

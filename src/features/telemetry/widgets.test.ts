@@ -126,3 +126,38 @@ describe("storage wrapper", () => {
     expect(() => saveWidgets(deriveWidgets([temp]))).not.toThrow();
   });
 });
+
+describe("wide field (feature 114)", () => {
+  const base: Widget = { id: "w", entityId: "sensor.a", kind: "line", visible: true, order: 0 };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+  });
+
+  it("accepts a widget without wide and one with a boolean wide", () => {
+    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [base] }))).toEqual([base]);
+    const wide = { ...base, wide: true };
+    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [wide] }))).toEqual([wide]);
+  });
+
+  it("rejects a non-boolean wide and the whole layout falls back", () => {
+    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [{ ...base, wide: "yes" }] }))).toBeNull();
+  });
+
+  it("round-trips wide: true through storage", () => {
+    const widgets: Widget[] = [{ ...base, wide: true }];
+    saveWidgets(widgets);
+    expect(loadWidgets()).toEqual(widgets);
+  });
+
+  it("reconcileWidgets keeps saved wide and kind for a sensor that is still present", () => {
+    const saved: Widget[] = [
+      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, wide: true },
+    ];
+    const result = reconcileWidgets(saved, [humidity]);
+    expect(result).toEqual([
+      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, wide: true },
+    ]);
+  });
+});

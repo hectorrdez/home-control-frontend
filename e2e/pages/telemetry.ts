@@ -89,6 +89,72 @@ export class TelemetryPage {
     return this.page.getByRole("region", { name: sensorName, exact: true });
   }
 
+  // Feature 114: edit mode on the live charts grid.
+  editButton() {
+    return this.page.getByRole("button", { name: /^(EDIT|DONE)$/ });
+  }
+
+  editBar(label: string) {
+    return this.page.getByRole("group", { name: `Edit ${label}`, exact: true });
+  }
+
+  moveUp(label: string) {
+    return this.page.getByRole("button", { name: `Move ${label} up`, exact: true });
+  }
+
+  moveDown(label: string) {
+    return this.page.getByRole("button", { name: `Move ${label} down`, exact: true });
+  }
+
+  hideChart(label: string) {
+    return this.page.getByRole("button", { name: `Hide ${label}`, exact: true });
+  }
+
+  chartType(label: string, kind: string) {
+    return this.page
+      .getByRole("group", { name: `Chart type for ${label}`, exact: true })
+      .getByRole("button", { name: kind, exact: true });
+  }
+
+  wideToggle(label: string) {
+    return this.page.getByRole("button", { name: `Wide ${label}`, exact: true });
+  }
+
+  // Saved chart layout (localStorage, feature 113/114). Read/replace the widget list for seeding edge cases.
+  async savedWidgets(): Promise<Array<Record<string, unknown>>> {
+    return this.page.evaluate(() => JSON.parse(window.localStorage.getItem("hc.telemetry.widgets.v1") ?? "{}").widgets ?? []);
+  }
+
+  async setSavedWidgets(widgets: Array<Record<string, unknown>>) {
+    await this.page.evaluate(
+      (list) => window.localStorage.setItem("hc.telemetry.widgets.v1", JSON.stringify({ version: 1, widgets: list })),
+      widgets,
+    );
+  }
+
+  // Chart type pills that are pressed for a sensor (should be none when the saved kind is not offered).
+  pressedChartTypes(label: string) {
+    return this.page.getByRole("group", { name: `Chart type for ${label}`, exact: true }).getByRole("button", { pressed: true });
+  }
+
+  resetLayout() {
+    return this.page.getByRole("button", { name: "RESET LAYOUT", exact: true });
+  }
+
+  confirmReset() {
+    return this.page.getByRole("button", { name: "CONFIRM RESET", exact: true });
+  }
+
+  cancelReset() {
+    return this.page.getByRole("button", { name: "CANCEL", exact: true });
+  }
+
+  // Accessible names of the chart cards inside the "Live charts" list, in DOM order.
+  async chartOrder(): Promise<string[]> {
+    const items = this.page.getByRole("list", { name: "Live charts", exact: true }).getByRole("region");
+    return items.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""));
+  }
+
   // Feature 112: the climate history chart (named "<room> climate, <range>: ...").
   climateChart(room: string) {
     return this.page.getByRole("img", { name: new RegExp(`^${room} climate,`) });

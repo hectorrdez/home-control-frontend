@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { useEntityName } from "@/features/names/useEntityName";
 import { deviceLabel } from "@/features/names/displayName";
@@ -7,7 +7,16 @@ import ChartFilters from "@components/panels/ChartFilters";
 import Switch from "@components/controls/Switch";
 import type { ConnectionState, Entity } from "@/api/types";
 import { useLiveBuffers } from "@/features/telemetry/useLiveBuffers";
-import { loadWidgets, numericSensors, reconcileWidgets, saveWidgets } from "@/features/telemetry/widgets";
+import { loadWidgets, numericSensors, reconcileWidgets, saveWidgets, type Widget } from "@/features/telemetry/widgets";
+import {
+  canMove,
+  moveWidget,
+  resetWidgets,
+  setKind,
+  setVisible,
+  setWide,
+  validKinds,
+} from "@/features/telemetry/widgetEditor";
 import {
   EMPTY_FILTERS,
   UNASSIGNED_ZONE,
@@ -19,6 +28,9 @@ import {
 } from "@/features/telemetry/widgetFilters";
 import Button from "@components/controls/Button";
 import SensorChartCard from "./SensorChartCard";
+import ChartEditBar from "./ChartEditBar";
+
+const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
 
 // Feature 113: live chart grid for every visible numeric sensor. Renders inside the telemetry "Climate history" region.
 const PAGE_SIZE = 24;
@@ -104,6 +116,73 @@ export default function TelemetryChartsGrid({
   // Feature 125: the search query filters the fixed panels too; ALL/NONE stay chart-only.
   const fixedShown = fixedPanels.filter((p) => normalize(p.label).includes(normalize(filters.query)));
 
+  // Feature 114: edit mode is session UI state only (never persisted).
+  const [editing, setEditing] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const resetRef = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<{ id: string; dir: "up" | "down" } | null>(null);
+  const resetReturnFocus = useRef(false);
+
+  // After a move the card node may be re-inserted: restore focus on the same move button (or the opposite one at an edge).
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    const item = Array.from(listRef.current?.children ?? []).find(
+      (el) => (el as HTMLElement).dataset.widgetId === pending.id,
+    );
+    item?.querySelector<HTMLButtonElement>(`button[data-move="${pending.dir}"]`)?.focus();
+  }, [widgets]);
+
+  useEffect(() => {
+    if (!resetOpen && resetReturnFocus.current) {
+      resetReturnFocus.current = false;
+      resetRef.current?.focus();
+    }
+  }, [resetOpen]);
+
+  const labelOf = (entity: Entity) => names.displayName(entity);
+  const visibleOf = (ws: Widget[]) =>
+    ws.filter((w) => w.visible && byId.has(w.entityId)).sort((a, b) => a.order - b.order);
+
+  const move = (w: Widget, dir: -1 | 1) => {
+    const next = moveWidget(widgets, w.id, dir);
+    if (next === widgets) return;
+    setSaved(next);
+    const shown = visibleOf(next);
+    const position = shown.findIndex((x) => x.id === w.id) + 1;
+    // Reveal the moved chart before focus is restored: a move past the rendered slice would otherwise leave no node to focus.
+    if (position > limit) setLimit(Math.ceil(position / PAGE_SIZE) * PAGE_SIZE);
+    setAnnouncement(`Moved ${labelOf(byId.get(w.entityId)!)} to position ${position} of ${shown.length}`);
+    pendingFocus.current = { id: w.id, dir: side(canMove(next, w.id, dir) ? dir : (-dir as -1 | 1)) };
+  };
+
+  const hide = (w: Widget) => {
+    setSaved(setVisible(widgets, w.id, false));
+    setAnnouncement(`${labelOf(byId.get(w.entityId)!)} hidden`);
+    editRef.current?.focus();
+  };
+
+  const leaveEdit = () => {
+    setEditing(false);
+    setResetOpen(false);
+  };
+
+  const confirmReset = () => {
+    setSaved(resetWidgets(numeric));
+    setResetOpen(false);
+    setAnnouncement("Layout reset");
+    resetReturnFocus.current = true;
+  };
+
+  const cancelReset = () => {
+    setResetOpen(false);
+    resetReturnFocus.current = true;
+  };
+
   if (numeric.length === 0) {
     return <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">NO NUMERIC SENSORS</p>;
   }
@@ -116,11 +195,40 @@ export default function TelemetryChartsGrid({
             {`${LABEL[connection]} • ${visible.length} CHARTS`}
           </span>
         </p>
-        <Button variant="secondary" aria-expanded={panelOpen} onClick={() => setPanelOpen((v) => !v)}>
-          <SlidersHorizontal size={16} aria-hidden="true" />
-          CHARTS
-        </Button>
+        <div className="flex items-center gap-space-xs">
+          <Button
+            ref={editRef}
+            variant="secondary"
+            aria-pressed={editing}
+            onClick={() => (editing ? leaveEdit() : setEditing(true))}
+          >
+            {editing ? "DONE" : "EDIT"}
+          </Button>
+          <Button variant="secondary" aria-expanded={panelOpen} onClick={() => setPanelOpen((v) => !v)}>
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            CHARTS
+          </Button>
+        </div>
       </div>
+      {editing && (
+        <div className="flex flex-wrap items-center gap-space-sm">
+          {resetOpen ? (
+            <>
+              <p className="font-mono text-label-caps uppercase text-error">Reset layout to defaults?</p>
+              <Button variant="destructive" onClick={confirmReset}>
+                CONFIRM RESET
+              </Button>
+              <Button variant="secondary" onClick={cancelReset}>
+                CANCEL
+              </Button>
+            </>
+          ) : (
+            <Button ref={resetRef} variant="secondary" onClick={() => setResetOpen(true)}>
+              RESET LAYOUT
+            </Button>
+          )}
+        </div>
+      )}
       <SideDrawer side="left" title="Charts" open={panelOpen} onClose={closePanel}>
         <div className="flex flex-col gap-space-sm">
           <ChartFilters filters={filters} onChange={setFilters} facets={facets} shown={filtered.length} total={rows.length} />
@@ -176,23 +284,51 @@ export default function TelemetryChartsGrid({
           )}
         </div>
       </SideDrawer>
+      <p role="status" aria-label="Layout changes" className="sr-only">
+        {announcement}
+      </p>
       {visible.length === 0 ? (
-        <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">ALL CHARTS HIDDEN</p>
+        <>
+          <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">ALL CHARTS HIDDEN</p>
+          {editing && (
+            <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">OPEN CHARTS TO ADD THEM BACK</p>
+          )}
+        </>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-3">
+          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-3">
             {visible.slice(0, limit).map((w) => {
               const entity = byId.get(w.entityId);
               if (!entity) return null;
               return (
-                <SensorChartCard
+                <div
                   key={w.id}
-                  entity={entity}
-                  areaName={areaName(entity.area)}
-                  widget={w}
-                  points={buffers[w.entityId] ?? []}
-                  connection={connection}
-                />
+                  role="listitem"
+                  data-widget-id={w.id}
+                  className={w.wide ? "md:col-span-2" : undefined}
+                >
+                  <SensorChartCard
+                    entity={entity}
+                    areaName={areaName(entity.area)}
+                    widget={w}
+                    points={buffers[w.entityId] ?? []}
+                    connection={connection}
+                  />
+                  {editing && (
+                    <ChartEditBar
+                      label={labelOf(entity)}
+                      kind={w.kind}
+                      kinds={validKinds(entity)}
+                      wide={w.wide === true}
+                      canUp={canMove(widgets, w.id, -1)}
+                      canDown={canMove(widgets, w.id, 1)}
+                      onMove={(dir) => move(w, dir)}
+                      onKind={(kind) => setSaved(setKind(widgets, w.id, kind))}
+                      onWide={(wide) => setSaved(setWide(widgets, w.id, wide))}
+                      onHide={() => hide(w)}
+                    />
+                  )}
+                </div>
               );
             })}
           </div>
