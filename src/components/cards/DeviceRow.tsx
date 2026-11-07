@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import StringUtils from "@utils/StringUtils";
 import StatusChip from "@components/controls/StatusChip";
 import type { DeviceRow as Row } from "@/features/devices/deviceFilters";
-import { devicePath } from "@/pages/routePaths";
+import PathUtils from "@utils/PathUtils";
 import { describeState, domainHue, domainIcon, type Hue } from "./deviceState";
 
 // Feature 121: one device in the /devices list. The whole row is the link to the detail page; no controls here.
@@ -22,7 +22,7 @@ export default function DeviceRow({ row }: { row: Row }) {
 
   return (
     <Link
-      to={devicePath(entity.entityId)}
+      to={PathUtils.deviceDetailPath(entity.entityId)}
       aria-label={label}
       aria-describedby={metaId}
       className="flex min-h-11 items-center gap-space-sm rounded-xl border border-outline-variant/30 bg-surface-container p-space-sm transition-colors duration-150 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"

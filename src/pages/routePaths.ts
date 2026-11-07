@@ -3,10 +3,6 @@
 export const ROUTE_PATHS: Record<string, string> = {
   home: "/",
   devices: "/devices",
+  deviceDetail: "/devices/:entityId", // feature 122; build concrete URLs with PathUtils.deviceDetailPath
   telemetry: "/telemetry",
 };
-
-// Feature 121: detail page of one entity (route registered by feature 122).
-export function devicePath(entityId: string): string {
-  return `/devices/${encodeURIComponent(entityId)}`;
-}
