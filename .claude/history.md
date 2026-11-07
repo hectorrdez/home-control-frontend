@@ -26,3 +26,5 @@ id|slug|state|role|commit|commit_url
 121|devices-list-page|ENDED|frontend|30a28fe|https://github.com/hectorrdez/home-control-frontend/commit/30a28fe
 122|device-detail-page|ENDED|frontend|06fab67|https://github.com/hectorrdez/home-control-frontend/commit/06fab67
 123|devices-group-by-device|ENDED|frontend|aacbc56|https://github.com/hectorrdez/home-control-frontend/commit/aacbc56
+124|telemetry-chart-device-name|ENDED|frontend|73a5237|https://github.com/hectorrdez/home-control-frontend/commit/73a5237
+125|telemetry-fixed-panels-toggle|ENDED|frontend|556a59f|https://github.com/hectorrdez/home-control-frontend/commit/556a59f
