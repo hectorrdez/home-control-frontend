@@ -1,12 +1,13 @@
 import PathUtils from "@utils/PathUtils";
 import StringUtils from "@utils/StringUtils";
-import { Activity, Box, type LucideIcon } from "lucide-react";
+import { Activity, Box, List, type LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 type NavItem = { label: string; name: string; icon: LucideIcon };
 
 const items: Array<NavItem> = [
   { label: "Home 3D", name: "home", icon: Box },
+  { label: "Devices", name: "devices", icon: List },
   { label: "Telemetry", name: "telemetry", icon: Activity },
 ];
 
@@ -20,7 +21,7 @@ export function TopNav() {
         <NavLink
           key={item.name}
           to={PathUtils.getRoutePath(item.name)}
-          end
+          end={item.name !== "devices"}
           className={({ isActive }) =>
             StringUtils.JoinClassName(
               "flex min-h-9 items-center rounded-lg px-space-md py-space-xs font-sans text-body-md transition-colors",
@@ -47,7 +48,7 @@ export function BottomRail() {
         <NavLink
           key={item.name}
           to={PathUtils.getRoutePath(item.name)}
-          end
+          end={item.name !== "devices"}
           className={({ isActive }) =>
             StringUtils.JoinClassName(
               "flex min-h-11 flex-1 flex-col items-center justify-center gap-space-xs py-space-xs font-mono text-label-caps uppercase",

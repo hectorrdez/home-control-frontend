@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
@@ -94,8 +95,10 @@ function renderPanel(setup: Setup = {}, extra?: ReactNode) {
       <ToastProvider>
         <EntitiesProvider>
           <AliasesProvider>
-            {extra}
-            <DevicePanel />
+            <MemoryRouter>
+              {extra}
+              <DevicePanel />
+            </MemoryRouter>
           </AliasesProvider>
         </EntitiesProvider>
       </ToastProvider>
@@ -106,6 +109,11 @@ function renderPanel(setup: Setup = {}, extra?: ReactNode) {
 
 describe("DevicePanel", () => {
   afterEach(cleanup);
+
+  it("links to the full device list with the All devices link (feature 121)", async () => {
+    renderPanel();
+    expect((await screen.findByRole("link", { name: "All devices" })).getAttribute("href")).toBe("/devices");
+  });
 
   it("shows the loading skeleton while the devices load", () => {
     renderPanel({ areas: "pending" });

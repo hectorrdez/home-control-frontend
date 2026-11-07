@@ -15,6 +15,7 @@ import {
 } from "@/state/selectors";
 import { useHaStatus } from "@/api/useHaStatus";
 import Button from "@components/controls/Button";
+import ButtonLink from "@components/controls/ButtonLink";
 import FilterPill from "@components/controls/FilterPill";
 import StatusChip from "@components/controls/StatusChip";
 import DeviceModule from "@components/cards/DeviceModule";
@@ -104,6 +105,10 @@ export default function DevicePanel() {
               {`ATTENTION // ${summary.unavailable > 0 ? `${summary.unavailable} UNAVAILABLE` : "HA OFFLINE"}`}
             </StatusChip>
           )}
+          {/* Feature 121: deferred link to the full device list. */}
+          <ButtonLink to="devices">
+            All devices
+          </ButtonLink>
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
           <span className="font-label-caps text-label-caps uppercase text-on-surface">

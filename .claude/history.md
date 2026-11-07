@@ -22,6 +22,6 @@ id|slug|state|role|commit|commit_url
 117|device-action-feedback|ENDED|frontend|45b2ba4|https://github.com/hectorrdez/home-control-frontend/commit/45b2ba4
 118|telemetry-chart-filters|ENDED|frontend|af3ce3b|https://github.com/hectorrdez/home-control-frontend/commit/af3ce3b
 119|home-no-page-scroll|ENDED|frontend|672767d|https://github.com/hectorrdez/home-control-frontend/commit/672767d
-120|home-interactive-sidebar|ENDED|frontend||
-121|devices-list-page|PENDING|frontend||
+120|home-interactive-sidebar|ENDED|frontend|835679b|https://github.com/hectorrdez/home-control-frontend/commit/835679b
+121|devices-list-page|ENDED|frontend||
 122|device-detail-page|PENDING|frontend||

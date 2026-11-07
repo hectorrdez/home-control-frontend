@@ -6,6 +6,30 @@ import { BottomRail, TopNav } from "./Navigation";
 afterEach(cleanup);
 
 describe("TopNav", () => {
+  it("lists Devices between Home 3D and Telemetry (feature 121)", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <TopNav />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const labels = within(nav).getAllByRole("link").map((link) => link.textContent);
+    expect(labels).toEqual(["Home 3D", "Devices", "Telemetry"]);
+    expect(within(nav).getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
+  });
+
+  it("keeps Devices active on a device detail path", () => {
+    render(
+      <MemoryRouter initialEntries={["/devices/light.living_room_ceiling"]}>
+        <TopNav />
+      </MemoryRouter>,
+    );
+    const devices = screen.getByRole("link", { name: "Devices" });
+    expect(devices.getAttribute("aria-current")).toBe("page");
+    expect(devices.className).toContain("bg-primary-container");
+    expect(screen.getByRole("link", { name: "Home 3D" }).getAttribute("aria-current")).toBeNull();
+  });
+
   it("links to the home and telemetry routes and marks the active one", () => {
     render(
       <MemoryRouter initialEntries={["/telemetry"]}>
@@ -33,6 +57,17 @@ describe("TopNav", () => {
 });
 
 describe("BottomRail", () => {
+  it("includes the Devices destination and keeps it active on a detail path", () => {
+    render(
+      <MemoryRouter initialEntries={["/devices/lock.front_door"]}>
+        <BottomRail />
+      </MemoryRouter>,
+    );
+    const rail = screen.getByRole("navigation", { name: "Bottom navigation" });
+    expect(within(rail).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home 3D", "Devices", "Telemetry"]);
+    expect(within(rail).getByRole("link", { name: "Devices" }).className).toContain("text-primary-container");
+  });
+
   it("renders the same destinations for small screens", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>

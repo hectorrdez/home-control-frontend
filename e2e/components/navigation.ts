@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-export type Destination = "Home 3D" | "Telemetry";
+export type Destination = "Home 3D" | "Devices" | "Telemetry";
 
 // Top nav on desktop, bottom rail on handheld. Only the visible one is used.
 export class Navigation {
