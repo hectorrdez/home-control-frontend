@@ -29,6 +29,6 @@ id|slug|state|role|commit|commit_url
 124|telemetry-chart-device-name|ENDED|frontend|73a5237|https://github.com/hectorrdez/home-control-frontend/commit/73a5237
 125|telemetry-fixed-panels-toggle|ENDED|frontend|556a59f|https://github.com/hectorrdez/home-control-frontend/commit/556a59f
 126|devices-live-connection|ENDED|frontend|43c6dbb|https://github.com/hectorrdez/home-control-frontend/commit/43c6dbb
-127|cover-calibration-wizard|ENDED|frontend
+127|cover-calibration-wizard|ENDED|frontend|2d338ab|https://github.com/hectorrdez/home-control-frontend/commit/2d338ab
 128|alert-rules-editor|PENDING|frontend
 129|alert-engine|PENDING|frontend
