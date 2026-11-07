@@ -13,6 +13,7 @@ import {
   UNASSIGNED_ZONE,
   facetCounts,
   filterRows,
+  normalize,
   type ChartFilters as Filters,
   type ChartRow,
 } from "@/features/telemetry/widgetFilters";
@@ -34,13 +35,28 @@ const TEXT: Record<ConnectionState, string> = {
   closed: "text-error",
 };
 
+// Feature 125: a fixed telemetry panel (KPI, gauge, history) the page can show or hide.
+export interface FixedPanel {
+  id: string;
+  label: string;
+  visible: boolean;
+}
+
 interface TelemetryChartsGridProps {
   sensors: Entity[];
   areaName: (areaId: string | null) => string;
   connection: ConnectionState;
+  fixedPanels?: FixedPanel[];
+  onFixedPanelChange?: (id: string, visible: boolean) => void;
 }
 
-export default function TelemetryChartsGrid({ sensors, areaName, connection }: TelemetryChartsGridProps) {
+export default function TelemetryChartsGrid({
+  sensors,
+  areaName,
+  connection,
+  fixedPanels = [],
+  onFixedPanelChange,
+}: TelemetryChartsGridProps) {
   const numeric = useMemo(() => numericSensors(sensors), [sensors]);
   const [saved, setSaved] = useState(loadWidgets);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -85,6 +101,8 @@ export default function TelemetryChartsGrid({ sensors, areaName, connection }: T
     setSaved(widgets.map((w) => (ids.has(w.entityId) ? { ...w, visible: on } : w)));
   };
   const visible = widgets.filter((w) => w.visible && byId.has(w.entityId));
+  // Feature 125: the search query filters the fixed panels too; ALL/NONE stay chart-only.
+  const fixedShown = fixedPanels.filter((p) => normalize(p.label).includes(normalize(filters.query)));
 
   if (numeric.length === 0) {
     return <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">NO NUMERIC SENSORS</p>;
@@ -135,6 +153,26 @@ export default function TelemetryChartsGrid({ sensors, areaName, connection }: T
                 </li>
               ))}
             </ul>
+          )}
+          {fixedShown.length > 0 && (
+            <div className="flex flex-col gap-space-xs">
+              <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">FIXED PANELS</p>
+              <ul aria-label="Fixed panel toggles" className="flex flex-col gap-space-xs">
+                {fixedShown.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                  >
+                    <span className="min-w-0 truncate font-sans text-body-md text-on-surface">{p.label}</span>
+                    <Switch
+                      aria-label={`Show ${p.label}`}
+                      checked={p.visible}
+                      onCheckedChange={(on) => onFixedPanelChange?.(p.id, on)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </SideDrawer>

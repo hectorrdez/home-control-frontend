@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Activity, Network, Thermometer, Wind, Zap } from "lucide-react";
 import SideDrawer from "@components/panels/SideDrawer";
@@ -13,7 +13,7 @@ import StatusChip from "@components/controls/StatusChip";
 import KpiCard from "@components/cards/KpiCard";
 import RingGauge from "@components/cards/RingGauge";
 import EventFeed from "@components/cards/EventFeed";
-import TelemetryChartsGrid from "@components/cards/TelemetryChartsGrid";
+import TelemetryChartsGrid, { type FixedPanel } from "@components/cards/TelemetryChartsGrid";
 import ClimateHistoryCard from "@components/cards/ClimateHistoryCard";
 import PowerHistoryBars from "@components/cards/PowerHistoryBars";
 import {
@@ -22,10 +22,15 @@ import {
   climateStats,
   energyToday,
   nodeHealth,
+  numericState,
   ringGauges,
   sensorCount,
   solarPower,
 } from "@/features/telemetry/telemetry";
+import { GAUGE_LIMIT } from "@/features/telemetry/constants";
+import { housePowerSensor } from "@/features/telemetry/history";
+import { gaugePanelId, historyPanelId, kpiPanelId } from "@/features/telemetry/panelVisibility";
+import { usePanelVisibility } from "@/features/telemetry/usePanelVisibility";
 
 const LABEL: Record<ConnectionState, string> = {
   open: "LIVE",
@@ -75,6 +80,17 @@ export default function TelemetryPage() {
   const names = useEntityName();
   const [feedOpen, setFeedOpen] = useState(false);
   const closeFeed = useCallback(() => setFeedOpen(false), []);
+  const entities: Entity[] = useMemo(() => allEntities(state), [state]);
+  // Feature 125: phone battery gauges start hidden; all gauges (uncapped) so a battery seen once stays tracked.
+  const allGauges = useMemo(
+    () => ringGauges(entities, Number.MAX_SAFE_INTEGER, names.displayName),
+    [entities, names.displayName],
+  );
+  const batteryGaugeIds = useMemo(
+    () => allGauges.filter((g) => g.deviceClass === "battery").map((g) => g.id),
+    [allGauges],
+  );
+  const panels = usePanelVisibility(batteryGaugeIds);
 
   if (state.status === "error") {
     return (
@@ -102,7 +118,6 @@ export default function TelemetryPage() {
     );
   }
 
-  const entities: Entity[] = allEntities(state);
   const sensors = sensorCount(entities);
   const areaName = (areaId: string | null): string => {
     const id = areaId ?? UNASSIGNED;
@@ -115,7 +130,24 @@ export default function TelemetryPage() {
   const load = houseLoad(entities);
   const energy = energyToday(entities);
   const solar = solarPower(entities);
-  const gauges = ringGauges(entities, undefined, names.displayName);
+  const shown = (id: string) => !panels.isPanelHidden(id);
+  const gauges = allGauges.filter((g) => shown(gaugePanelId(g.id))).slice(0, GAUGE_LIMIT);
+  const hasClimateHistory = entities.some(
+    (e) =>
+      e.domain === "sensor" &&
+      (e.attributes.device_class === "temperature" || e.attributes.device_class === "humidity") &&
+      numericState(e) !== null,
+  );
+  const hasPowerHistory = housePowerSensor(entities) !== null;
+  const fixedPanels: FixedPanel[] = [
+    ...(climate ? [{ id: kpiPanelId("climate"), label: "Climate mean" }] : []),
+    ...(air ? [{ id: kpiPanelId("air"), label: "Air quality" }] : []),
+    ...(load ? [{ id: kpiPanelId("power"), label: "Power" }] : []),
+    ...(nodes ? [{ id: kpiPanelId("nodes"), label: "Nodes" }] : []),
+    ...allGauges.map((g) => ({ id: gaugePanelId(g.id), label: g.label })),
+    ...(hasClimateHistory ? [{ id: historyPanelId("climate"), label: "Climate history" }] : []),
+    ...(hasPowerHistory ? [{ id: historyPanelId("power"), label: "Power history" }] : []),
+  ].map((p) => ({ ...p, visible: shown(p.id) }));
 
   if (sensors === 0) {
     return (
@@ -152,7 +184,7 @@ export default function TelemetryPage() {
       <StatusStrip text={`SENSORS ${sensors} • ${nodes ? `${nodes.online}/${nodes.total}` : "0/0"} ONLINE`} />
 
       <section aria-label="Key metrics" className="col-span-12 grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4">
-        {climate && (
+        {climate && shown(kpiPanelId("climate")) && (
           <KpiCard
             title="Climate mean"
             icon={Thermometer}
@@ -165,7 +197,7 @@ export default function TelemetryPage() {
             }
           />
         )}
-        {air && (
+        {air && shown(kpiPanelId("air")) && (
           <KpiCard
             title="Air quality"
             icon={Wind}
@@ -179,7 +211,7 @@ export default function TelemetryPage() {
             footer={air.co2 !== null && air.pm25 !== null ? `PM2.5 ${air.pm25} µg/m³` : undefined}
           />
         )}
-        {load && (
+        {load && shown(kpiPanelId("power")) && (
           <KpiCard
             title="Power"
             icon={Zap}
@@ -193,7 +225,7 @@ export default function TelemetryPage() {
               .join(" • ") || undefined}
           />
         )}
-        {nodes && (
+        {nodes && shown(kpiPanelId("nodes")) && (
           <KpiCard
             title="Nodes"
             icon={Network}
@@ -213,9 +245,15 @@ export default function TelemetryPage() {
       )}
 
       <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm">
-        <ClimateHistoryCard entities={entities} areaName={areaName} />
-        <PowerHistoryBars entities={entities} />
-        <TelemetryChartsGrid sensors={entities} areaName={areaName} connection={connection} />
+        {shown(historyPanelId("climate")) && <ClimateHistoryCard entities={entities} areaName={areaName} />}
+        {shown(historyPanelId("power")) && <PowerHistoryBars entities={entities} />}
+        <TelemetryChartsGrid
+          sensors={entities}
+          areaName={areaName}
+          connection={connection}
+          fixedPanels={fixedPanels}
+          onFixedPanelChange={panels.setPanelVisible}
+        />
       </section>
 
       <SideDrawer side="right" title="Live event feed" open={feedOpen} onClose={closeFeed}>

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
@@ -198,5 +198,75 @@ describe("TelemetryPage", () => {
     await screen.findByRole("region", { name: "Key metrics" });
     h.emitConnection("closed");
     expect(screen.getByRole("status", { name: "Live connection" }).textContent).toContain("OFFLINE");
+  });
+});
+
+describe("TelemetryPage fixed panels (feature 125)", () => {
+  const battery = ent("sensor.phone_battery_level", "82", sensorAttrs("battery", "%"), { area: "kitchen" });
+  const withBattery = () => areasOf([...fullHouse, battery]);
+
+  const openCharts = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: "CHARTS" }));
+  };
+  const fixedSwitch = (name: string | RegExp) =>
+    within(screen.getByRole("list", { name: "Fixed panel toggles" })).getByRole("switch", { name });
+
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+    document.querySelectorAll('[data-slot="status-strip"]').forEach((n) => n.remove());
+  });
+
+  it("hides the phone battery gauge by default and keeps the other gauges", async () => {
+    renderPage({ areas: withBattery() });
+    const levels = await screen.findByRole("region", { name: "Levels" });
+    const gauges = within(levels).getAllByRole("img");
+    expect(gauges).toHaveLength(1);
+    expect(gauges[0].getAttribute("aria-label")).toMatch(/^Average humidity:/);
+  });
+
+  it("shows a battery gauge again when its fixed panel switch is turned on, and keeps it after a reload", async () => {
+    const first = renderPage({ areas: withBattery() });
+    await screen.findByRole("region", { name: "Levels" });
+    await openCharts();
+    fireEvent.click(fixedSwitch(/battery/i));
+    expect(within(screen.getByRole("region", { name: "Levels" })).getAllByRole("img")).toHaveLength(2);
+    first.unmount();
+
+    renderPage({ areas: withBattery() });
+    await screen.findByRole("region", { name: "Levels" });
+    expect(within(screen.getByRole("region", { name: "Levels" })).getAllByRole("img")).toHaveLength(2);
+  });
+
+  it("hides and restores a KPI card from the CHARTS panel", async () => {
+    renderPage();
+    await screen.findByRole("region", { name: "Key metrics" });
+    expect(screen.getByRole("region", { name: "Nodes" })).toBeTruthy();
+
+    await openCharts();
+    fireEvent.click(fixedSwitch("Show Nodes"));
+    expect(screen.queryByRole("region", { name: "Nodes" })).toBeNull();
+
+    fireEvent.click(fixedSwitch("Show Nodes"));
+    expect(screen.getByRole("region", { name: "Nodes" })).toBeTruthy();
+  });
+
+  it("omits the Levels section when every gauge is hidden", async () => {
+    renderPage();
+    await screen.findByRole("region", { name: "Levels" });
+    await openCharts();
+    fireEvent.click(fixedSwitch("Show Average humidity"));
+    expect(screen.queryByRole("region", { name: "Levels" })).toBeNull();
+  });
+
+  it("lists only fixed panels that exist and filters them with the search box", async () => {
+    renderPage({ areas: areasOf([ent("sensor.kitchen_co2", "650", sensorAttrs("carbon_dioxide", "ppm"))]) });
+    await screen.findByRole("region", { name: "Key metrics" });
+    await openCharts();
+    expect(screen.queryByRole("switch", { name: "Show Climate mean" })).toBeNull();
+    expect(fixedSwitch("Show Air quality")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "zzz" } });
+    expect(screen.queryByRole("list", { name: "Fixed panel toggles" })).toBeNull();
   });
 });

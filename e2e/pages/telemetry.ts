@@ -46,6 +46,11 @@ export class TelemetryPage {
       .getByRole("button", { name: new RegExp(`^${escaped}( \\d+)?$`) });
   }
 
+  // Feature 125: "Fixed panels" group in the CHARTS panel (KPI, gauge and history panels).
+  fixedPanelToggle(label: string) {
+    return this.page.getByRole("list", { name: "Fixed panel toggles" }).getByRole("switch", { name: `Show ${label}`, exact: true });
+  }
+
   chartToggles() {
     return this.page.getByRole("list", { name: "Chart toggles" }).getByRole("switch");
   }

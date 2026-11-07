@@ -110,6 +110,7 @@ export interface GaugeReading {
   label: string;
   value: number;
   hue: Hue;
+  deviceClass: string; // feature 125: "battery" gauges are hidden by default
 }
 
 export function gaugeHue(value: number): Hue {
@@ -130,11 +131,11 @@ export function ringGauges(entities: Entity[], limit: number = GAUGE_LIMIT, labe
       humidity.push(value);
       continue;
     }
-    gauges.push({ id: entity.entityId, label: labelOf(entity), value, hue: gaugeHue(value) });
+    gauges.push({ id: entity.entityId, label: labelOf(entity), value, hue: gaugeHue(value), deviceClass: deviceClass(entity) });
   }
   if (humidity.length > 0) {
     const avg = humidity.reduce((sum, v) => sum + v, 0) / humidity.length;
-    gauges.push({ id: "avg:humidity", label: "Average humidity", value: avg, hue: gaugeHue(avg) });
+    gauges.push({ id: "avg:humidity", label: "Average humidity", value: avg, hue: gaugeHue(avg), deviceClass: "humidity" });
   }
   return gauges.sort((a, b) => a.value - b.value).slice(0, limit);
 }

@@ -13,6 +13,10 @@ test.describe("telemetry view", () => {
     await expect(telemetry.kpi("Air quality")).toContainText("GOOD");
     await expect(telemetry.kpi("Power")).toContainText("1.24");
     await expect(telemetry.kpi("Nodes")).toContainText("26/26");
+    // Feature 125: battery gauges start hidden; turn this one on from the CHARTS panel first.
+    await telemetry.openChartsPanel();
+    await telemetry.fixedPanelToggle("HVAC filter life").click();
+    await page.keyboard.press("Escape");
     await expect(telemetry.gauge("HVAC filter life")).toBeVisible();
     await expect(page.getByRole("region", { name: "Climate history" })).toBeVisible();
   });
