@@ -24,4 +24,4 @@ id|slug|state|role|commit|commit_url
 119|home-no-page-scroll|ENDED|frontend|672767d|https://github.com/hectorrdez/home-control-frontend/commit/672767d
 120|home-interactive-sidebar|ENDED|frontend|835679b|https://github.com/hectorrdez/home-control-frontend/commit/835679b
 121|devices-list-page|ENDED|frontend|30a28fe|https://github.com/hectorrdez/home-control-frontend/commit/30a28fe
-122|device-detail-page|ENDED|frontend||
+122|device-detail-page|ENDED|frontend|06fab67|https://github.com/hectorrdez/home-control-frontend/commit/06fab67
