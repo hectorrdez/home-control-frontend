@@ -19,3 +19,4 @@
 - 114 editor search must use displayName (feature 115)
 - 116/117 device cards: 116 is visual only; 117 fixes the on-off-on flicker (actionConfirmed with the old-state HTTP response must keep the optimistic value + a settling marker until the matching stream event or ~5 s timeout) and adds Spinner loader in controls (extends 104). 117 depends on 116 styles; run 116 first.
 - 118 telemetry-chart-filters owns search/filter in the CHARTS side panel; 114 must not reimplement it. Filters are never persisted (reset on load).
+- Backlog order (2026-11-07): 126 devices-live-connection, then backend 010 -> 011 (cover calibration/percent) and frontend 127, then backend 012 -> frontend 128 -> 129 (alerts). get-current.cjs returns 114 first by row order: skip it, 114 is older backlog and is not part of this batch. 124/125 ENDED + pushed to dev and main. Known flaky e2e: home-no-scroll.spec (fails before and after 124/125; investigate layout).
