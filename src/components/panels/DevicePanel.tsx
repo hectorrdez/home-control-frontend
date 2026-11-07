@@ -1,4 +1,5 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { useEntities } from "@/state/EntitiesProvider";
 import {
   DOMAIN_GROUPS,
@@ -54,6 +55,7 @@ function drawLabel(sensor: { state: string; attributes: Record<string, unknown> 
 export default function DevicePanel() {
   const { state, reload, selectedArea, setSelectedArea, selectedGroup, setSelectedGroup } = useEntities();
   const ha = useHaStatus();
+  const [filtersShown, setFiltersShown] = useState(true);
 
   if (state.status === "error") {
     return (
@@ -92,6 +94,15 @@ export default function DevicePanel() {
   );
   const draws = plugDrawBySwitch(allEntities(state));
 
+  // Hiding the filters also clears them, so the list shows every device again.
+  const toggleFilters = () => {
+    if (filtersShown) {
+      setSelectedGroup("all");
+      setSelectedArea(null);
+    }
+    setFiltersShown(!filtersShown);
+  };
+
   return (
     <section aria-label="Device panel" className="col-span-12 flex min-h-0 flex-col gap-space-md xl:col-span-4">
       <div className="flex flex-col gap-space-xs rounded-xl bg-surface-container-low p-space-md">
@@ -105,10 +116,18 @@ export default function DevicePanel() {
               {`ATTENTION // ${summary.unavailable > 0 ? `${summary.unavailable} UNAVAILABLE` : "HA OFFLINE"}`}
             </StatusChip>
           )}
-          {/* Feature 121: deferred link to the full device list. */}
-          <ButtonLink to="devices">
-            All devices
-          </ButtonLink>
+          <div className="flex items-center gap-space-xs">
+            <FilterPill
+              aria-label="Toggle filters"
+              selected={filtersShown}
+              icon={<SlidersHorizontal aria-hidden="true" className="size-4" />}
+              onClick={toggleFilters}
+            />
+            {/* Feature 121: deferred link to the full device list. */}
+            <ButtonLink to="devices">
+              All devices
+            </ButtonLink>
+          </div>
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
           <span className="font-label-caps text-label-caps uppercase text-on-surface">
@@ -122,23 +141,25 @@ export default function DevicePanel() {
         </div>
       </div>
 
-      <div role="group" aria-label="Device filters" className="flex gap-space-xs overflow-x-auto pb-space-xs">
-        <FilterPill selected={selectedGroup === "all"} count={counts.all} onClick={() => setSelectedGroup("all")}>
-          ALL
-        </FilterPill>
-        {DOMAIN_GROUPS.filter((g) => counts[g] > 0).map((g) => (
-          <FilterPill
-            key={g}
-            selected={selectedGroup === g}
-            count={counts[g]}
-            onClick={() => setSelectedGroup(g as DomainFilter)}
-          >
-            {GROUP_LABEL[g]}
+      {filtersShown && (
+        <div role="group" aria-label="Device filters" className="flex gap-space-xs overflow-x-auto pb-space-xs">
+          <FilterPill selected={selectedGroup === "all"} count={counts.all} onClick={() => setSelectedGroup("all")}>
+            ALL
           </FilterPill>
-        ))}
-      </div>
+          {DOMAIN_GROUPS.filter((g) => counts[g] > 0).map((g) => (
+            <FilterPill
+              key={g}
+              selected={selectedGroup === g}
+              count={counts[g]}
+              onClick={() => setSelectedGroup(g as DomainFilter)}
+            >
+              {GROUP_LABEL[g]}
+            </FilterPill>
+          ))}
+        </div>
+      )}
 
-      {rooms.length > 0 && (
+      {filtersShown && rooms.length > 0 && (
         <div role="group" aria-label="Rooms" className="flex gap-space-xs overflow-x-auto pb-space-xs">
           <FilterPill selected={selectedArea === null} onClick={() => setSelectedArea(null)}>
             ALL ROOMS

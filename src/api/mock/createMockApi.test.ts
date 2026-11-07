@@ -305,6 +305,7 @@ describe("mock API domain actions", () => {
     expect((await applied(api,cover.entityId, { action: "open_cover" })).attributes.current_position).toBe(100);
     const half = await applied(api,cover.entityId, { action: "set_cover_position", params: { position: 0 } });
     expect(half.state).toBe("closed");
+    expect((await applied(api, cover.entityId, { action: "stop_cover" })).state).toBe("closed");
     await expect(api.runAction(cover.entityId, { action: "set_cover_position", params: {} })).rejects.toMatchObject({ message: "invalid_action" });
     await expect(api.runAction(cover.entityId, { action: "toggle" })).rejects.toMatchObject({ message: "invalid_action" });
   });

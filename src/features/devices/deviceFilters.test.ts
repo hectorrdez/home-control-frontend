@@ -130,7 +130,6 @@ describe("buildDeviceRows", () => {
       entity({ entityId: "sensor.hub_battery", deviceName: "Hub", attributes: { device_class: "battery" } }),
       entity({ entityId: "sensor.hub_humidity", deviceName: "Hub", attributes: { device_class: "humidity" } }),
       entity({ entityId: "sensor.hub_temperature", deviceName: "Hub", attributes: { device_class: "temperature" } }),
-      entity({ entityId: "event.hub_press", domain: "event", deviceName: "Hub", attributes: {} }),
       entity({ entityId: "binary_sensor.hub_door", deviceName: "Hub", attributes: {} }),
       entity({ entityId: "switch.hub_relay", deviceName: "Hub", attributes: {} }),
     ]);
@@ -141,8 +140,21 @@ describe("buildDeviceRows", () => {
       "sensor.hub_temperature",
       "sensor.hub_humidity",
       "sensor.hub_battery",
-      "event.hub_press",
     ]);
+  });
+
+  it("skips entities that are neither controls nor sensors (tts, event, zone, person, ...)", () => {
+    const listed = rows([
+      entity({ entityId: "tts.google_translate_en_com", attributes: {} }),
+      entity({ entityId: "event.hub_press", attributes: {} }),
+      entity({ entityId: "zone.home", attributes: {} }),
+      entity({ entityId: "person.hector", attributes: {} }),
+      entity({ entityId: "sun.sun", attributes: {} }),
+      entity({ entityId: "media_player.kitchen_speaker", attributes: {} }),
+      entity({ entityId: "light.kitchen", attributes: {} }),
+    ]);
+    expect(listed.map((r) => r.key)).toEqual(["light.kitchen", "media_player.kitchen_speaker"]);
+    expect(deviceFacets(listed).domains.map((d) => d.id).sort()).toEqual(["light", "media_player"]);
   });
 
   it("breaks ties by entity id", () => {

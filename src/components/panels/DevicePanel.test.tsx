@@ -181,6 +181,29 @@ describe("DevicePanel", () => {
     expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").length).toBeGreaterThan(2);
   });
 
+  it("hides the group and room rows with the filter toggle and clears the selection when hiding", async () => {
+    renderPanel();
+    await screen.findByRole("list", { name: "Devices" });
+    const toggle = screen.getByRole("button", { name: "Toggle filters" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^LIGHTS/ }));
+    fireEvent.click(screen.getByRole("button", { name: /KITCHEN/ }));
+    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").every((li) => li.textContent?.includes("KITCHEN"))).toBe(true);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("group", { name: "Device filters" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Rooms" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^LIGHTS/ })).toBeNull();
+    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").length).toBeGreaterThan(2);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /^ALL\d*$/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /^ALL ROOMS/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shows an empty-zone message when the selected room has no devices in the filter", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Devices" });

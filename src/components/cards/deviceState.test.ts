@@ -46,6 +46,16 @@ describe("describeState", () => {
     expect(describeState(make("sensor", "Unknown"))).toEqual({ text: "UNKNOWN", on: false, unavailable: true });
   });
 
+  it("shows an assumed-state cover reporting unknown as UNKNOWN, available and not lit", () => {
+    expect(describeState(make("cover", "unknown", { supported_features: 11 }))).toEqual({ text: "UNKNOWN", on: false, unavailable: false });
+    expect(describeState(make("cover", "unavailable"))).toEqual({ text: "UNAVAILABLE", on: false, unavailable: true });
+  });
+
+  it("shows scenes and scripts as READY even when their state is unknown", () => {
+    expect(describeState(make("scene", "unknown"))).toEqual({ text: "READY", on: false, unavailable: false });
+    expect(describeState(make("script", "unknown"))).toEqual({ text: "READY", on: false, unavailable: false });
+  });
+
   it("shows power domains as ON/OFF", () => {
     expect(describeState(make("light", "on"))).toEqual({ text: "ON", on: true, unavailable: false });
     expect(describeState(make("switch", "off"))).toEqual({ text: "OFF", on: false, unavailable: false });

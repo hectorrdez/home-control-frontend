@@ -1,6 +1,6 @@
 import type { Entity } from "@/api/types";
 import { UNASSIGNED, type EntitiesState } from "@/state/entities";
-import { isInteractive } from "@/state/selectors";
+import { INTERACTIVE_DOMAINS, isInteractive } from "@/state/selectors";
 import { normalize } from "@/features/telemetry/widgetFilters";
 import { cleanName, displayName } from "@/features/names/displayName";
 
@@ -78,14 +78,17 @@ interface Group {
   device: boolean;
 }
 
+// The /devices list holds only what can be controlled or read: no tts, conversation, event, zone, sun, ...
+const LISTED_DOMAINS = new Set([...INTERACTIVE_DOMAINS, "sensor", "binary_sensor", "media_player"]);
+
 // Rows in the page order: areas in state.areas order (Unassigned last), then label (localeCompare).
-// Rows include unavailable and unknown entities. Standalone labels come from `label`, device labels from the device name.
+// Rows include unavailable and unknown entities; entities outside LISTED_DOMAINS are skipped. Standalone labels come from `label`, device labels from the device name.
 export function buildDeviceRows(state: EntitiesState, label: (entity: Entity) => string): DeviceRow[] {
   const groups = new Map<string, Group>();
   state.areas.forEach((area, index) => {
     for (const id of area.entityIds) {
       const entity = state.entities[id];
-      if (!entity) continue;
+      if (!entity || !LISTED_DOMAINS.has(entity.domain)) continue;
       const slug = slugOf(entity);
       const key = slug ? `${area.areaId}~${slug}` : entity.entityId;
       let group = groups.get(key);

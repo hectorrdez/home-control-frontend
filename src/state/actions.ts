@@ -10,6 +10,7 @@ export type Intent =
   | { kind: "cover_position"; position: number } // cover slider
   | { kind: "cover_open" } // cover FULL preset
   | { kind: "cover_close" } // cover SHUT preset
+  | { kind: "cover_stop" } // cover STOP (assumed-state covers, no position)
   | { kind: "lock"; locked: boolean } // lock / unlock (confirmed in the UI)
   | { kind: "activate" }; // scene / script
 
@@ -31,6 +32,8 @@ export function intentAction(intent: Intent): EntityAction {
       return { action: "open_cover" };
     case "cover_close":
       return { action: "close_cover" };
+    case "cover_stop":
+      return { action: "stop_cover" };
     case "lock":
       return { action: intent.locked ? "lock" : "unlock" };
     case "activate":
@@ -73,6 +76,7 @@ export function applyIntent(entity: Entity, intent: Intent): Entity {
     case "lock":
       next.state = intent.locked ? "locked" : "unlocked";
       break;
+    case "cover_stop": // the position is unknown until the cover reports it: state stays as it is
     case "activate":
       break;
   }

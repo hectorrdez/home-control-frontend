@@ -180,13 +180,24 @@ describe("DeviceControls: cover", () => {
     expect(send).toHaveBeenLastCalledWith({ kind: "cover_open" });
   });
 
-  it("derives the position from the open or closed state when no position is reported", () => {
-    const { unmount } = renderControls(cover({}, "open"));
-    expect(screen.getByText("100% OPEN")).toBeTruthy();
-    unmount();
+  it("shows SHUT, STOP and OPEN without a slider when the cover reports no position (assumed state)", () => {
+    const { send } = renderControls(cover({ supported_features: 11 }, "unknown"));
+    expect(screen.queryByRole("slider")).toBeNull();
+    expect(screen.queryByText(/% OPEN/)).toBeNull();
 
-    renderControls(cover({}, "closed"));
-    expect(screen.getByText("0% OPEN")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "SHUT" }));
+    expect(send).toHaveBeenLastCalledWith({ kind: "cover_close" });
+    fireEvent.click(screen.getByRole("button", { name: "STOP" }));
+    expect(send).toHaveBeenLastCalledWith({ kind: "cover_stop" });
+    fireEvent.click(screen.getByRole("button", { name: "OPEN" }));
+    expect(send).toHaveBeenLastCalledWith({ kind: "cover_open" });
+  });
+
+  it("disables the assumed-state buttons while disabled", () => {
+    renderControls(cover({}, "unknown"), { disabled: true });
+    for (const name of ["SHUT", "STOP", "OPEN"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it("disables the presets while disabled", () => {

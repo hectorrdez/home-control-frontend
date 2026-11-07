@@ -1,5 +1,6 @@
 import type { Entity } from "@/api/types";
 import type { LucideIcon } from "lucide-react";
+import { UNKNOWN_STATE_DOMAINS } from "@/state/selectors";
 import { Blinds, Cpu, Fan, Gauge, Lightbulb, Lock, Plug, Radar, ScrollText, Sparkles, Thermometer } from "lucide-react";
 
 export type Hue = "primary" | "secondary" | "tertiary";
@@ -46,7 +47,9 @@ export function describeState(entity: Entity): StateView {
   const deviceClass = typeof attrs.device_class === "string" ? attrs.device_class : "";
   const view = (text: string, on: boolean): StateView => ({ text, on, unavailable: false });
 
-  if (raw === "unavailable" || raw === "unknown") return { text: raw.toUpperCase(), on: false, unavailable: true };
+  // Same rule as isUnavailable (state/selectors.ts): unknown is a real state for cover, scene and script.
+  const unavailable = raw === "unavailable" || (raw === "unknown" && !UNKNOWN_STATE_DOMAINS.has(entity.domain));
+  if (unavailable) return { text: raw.toUpperCase(), on: false, unavailable: true };
 
   switch (entity.domain) {
     case "light":

@@ -173,13 +173,29 @@ function ClimateControls({ entity, disabled, send }: ControlProps) {
   );
 }
 
+// Covers that report no current_position are assumed-state: no slider, only SHUT / STOP / OPEN.
 function CoverControls({ entity, hue, disabled, send }: ControlProps) {
-  const position = num(entity.attributes.current_position) ?? (entity.state === "open" ? 100 : 0);
+  const reported = num(entity.attributes.current_position);
+  if (reported === null) {
+    return (
+      <div className="flex gap-space-sm">
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_close" })}>
+          SHUT
+        </Button>
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_stop" })}>
+          STOP
+        </Button>
+        <Button variant="secondary" className="flex-1" disabled={disabled} busy={disabled} onClick={() => send({ kind: "cover_open" })}>
+          OPEN
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-space-sm">
       <Slider
-        label={`${position}% OPEN`}
-        value={position}
+        label={`${reported}% OPEN`}
+        value={reported}
         min={0}
         max={100}
         unit="%"

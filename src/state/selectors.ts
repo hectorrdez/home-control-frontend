@@ -41,8 +41,12 @@ export function domainGroupOf(entity: Entity, plugSensors: Set<string>): DomainG
   return "other";
 }
 
+// Domains whose state may legitimately be "unknown" (assumed-state covers, scenes and scripts never report a state).
+export const UNKNOWN_STATE_DOMAINS = new Set(["cover", "scene", "script"]);
+
 export function isUnavailable(entity: Entity): boolean {
-  return entity.state === "unavailable" || entity.state === "unknown";
+  if (entity.state === "unavailable") return true;
+  return entity.state === "unknown" && !UNKNOWN_STATE_DOMAINS.has(entity.domain);
 }
 
 // Domains with a control in DeviceControls.tsx: keep the two in sync.

@@ -73,6 +73,12 @@ describe("applyIntent (expected state shown before the server answers)", () => {
     expect(climate.attributes).toEqual({});
   });
 
+  it("maps cover STOP to stop_cover and keeps the cover state, since the position is unknown", () => {
+    expect(intentAction({ kind: "cover_stop" })).toEqual({ action: "stop_cover" });
+    const cover = entity({ entityId: "cover.a", domain: "cover", state: "unknown", attributes: {} });
+    expect(applyIntent(cover, { kind: "cover_stop" })).toEqual(cover);
+  });
+
   it("turns a light off at 0% brightness and closes a cover at position 0 by slider", () => {
     const light = entity({ entityId: "light.a", domain: "light", state: "on", attributes: { brightness: 200 } });
     const dark = applyIntent(light, { kind: "brightness", pct: 0 });

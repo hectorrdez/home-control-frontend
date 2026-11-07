@@ -116,6 +116,8 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         } else if (action.action === "set_cover_position" && typeof params.position === "number") {
           attrs.current_position = params.position;
           next.state = params.position > 0 ? "open" : "closed";
+        } else if (action.action === "stop_cover") {
+          // Stop leaves the cover where it is; the mock cover reports a position, so nothing changes.
         } else fail();
         break;
       }

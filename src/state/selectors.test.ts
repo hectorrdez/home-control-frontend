@@ -9,6 +9,7 @@ import {
   groupCounts,
   houseLoad,
   isInteractive,
+  isUnavailable,
   plugPowerSensorIds,
   summarize,
 } from "./selectors";
@@ -134,6 +135,17 @@ describe("summary", () => {
     // light x4, switch, climate, cover, lock
     expect(summary.actuators).toBe(8);
     expect(summary.unavailable).toBe(0);
+  });
+
+  it("treats unknown as unavailable except for cover, scene and script, which may legitimately report it", () => {
+    const withState = (domain: string, state: string) => isUnavailable(synthetic(domain, state));
+    expect(withState("light", "unknown")).toBe(true);
+    expect(withState("sensor", "unknown")).toBe(true);
+    expect(withState("cover", "unknown")).toBe(false);
+    expect(withState("scene", "unknown")).toBe(false);
+    expect(withState("script", "unknown")).toBe(false);
+    expect(withState("cover", "unavailable")).toBe(true);
+    expect(withState("scene", "unavailable")).toBe(true);
   });
 
   it("counts unavailable and unknown states", () => {
