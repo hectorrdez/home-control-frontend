@@ -108,3 +108,23 @@ test.describe("telemetry live charts", () => {
     await expect(page.getByRole("region", { name: "Living room temperature", exact: true })).toHaveCount(0);
   });
 });
+// Feature 147: a room's zone color is the same in its live chart, its CHARTS zone filter and the CLIMATE HISTORY legend.
+test.describe("telemetry zone colors", () => {
+  test("two rooms show different zone colors, and each room keeps its color in every place it appears", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await telemetry.open();
+
+    const livingToken = await telemetry.zoneDot(telemetry.chartCard("Living room temperature")).getAttribute("data-zone-token");
+    const kitchenToken = await telemetry.zoneDot(telemetry.chartCard("Kitchen humidity")).getAttribute("data-zone-token");
+    expect(livingToken).not.toBeNull();
+    expect(kitchenToken).not.toBeNull();
+    expect(kitchenToken).not.toBe(livingToken);
+
+    await telemetry.openChartsPanel();
+    await expect(telemetry.zoneDot(telemetry.chartFilter("Zones", "KITCHEN"))).toHaveAttribute("data-zone-token", kitchenToken as string);
+    await expect(telemetry.zoneDot(telemetry.chartFilter("Zones", "LIVING ROOM"))).toHaveAttribute("data-zone-token", livingToken as string);
+
+    await expect(telemetry.zoneDot(telemetry.chartLegend().filter({ hasText: "Kitchen" }))).toHaveAttribute("data-zone-token", kitchenToken as string);
+    await expect(telemetry.zoneDot(telemetry.chartLegend().filter({ hasText: "Living room" }))).toHaveAttribute("data-zone-token", livingToken as string);
+  });
+});

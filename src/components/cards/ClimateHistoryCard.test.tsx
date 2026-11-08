@@ -6,6 +6,7 @@ import type { HomeApi } from "@/api/HomeApi";
 import type { Entity, HistorySeries } from "@/api/types";
 import { ApiError } from "@/api/types";
 import { zoneColorToken } from "@/features/zones/zoneColors";
+import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
 import ClimateHistoryCard from "./ClimateHistoryCard";
 
 // Feature 131: per-room lines in ALL ROOMS, legend, zone colors. Feature 144: temperature and humidity charts.
@@ -511,6 +512,28 @@ describe("ClimateHistoryCard split charts (feature 144)", () => {
       expect(container.querySelectorAll(".recharts-reference-line")).toHaveLength(2);
       act(() => leave[i]());
       expect(container.querySelectorAll(".recharts-reference-line")).toHaveLength(0);
+    }
+  });
+});
+
+describe("ClimateHistoryCard zone colors (feature 147)", () => {
+  it("colors both charts with the assigned room token when one room is selected", async () => {
+    document.documentElement.style.setProperty("--color-zone-coral", "coral-test-color");
+    try {
+      const { container } = render(
+        <ApiProvider api={readyApi()}>
+          <ZoneColorsProvider areaIds={["kitchen", "bedroom"]}>
+            <ClimateHistoryCard entities={house()} areaName={(id) => id === "kitchen" ? "Kitchen" : "Bedroom"} />
+          </ZoneColorsProvider>
+        </ApiProvider>,
+      );
+      await screen.findByRole("img", { name: /All rooms humidity/ });
+      fireEvent.click(screen.getByRole("button", { name: "Bedroom" }));
+      await screen.findByRole("img", { name: /Bedroom humidity, 24H:/ });
+      expect(container.querySelector('.recharts-area-curve')?.getAttribute("stroke")).toBe("coral-test-color");
+      expect(container.querySelector('.recharts-line-curve')?.getAttribute("stroke")).toBe("coral-test-color");
+    } finally {
+      document.documentElement.style.removeProperty("--color-zone-coral");
     }
   });
 });

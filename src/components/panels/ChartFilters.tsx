@@ -1,5 +1,6 @@
 import FilterPill from "@components/controls/FilterPill";
 import Button from "@components/controls/Button";
+import { ZoneDot } from "@/features/zones/ZoneDot";
 import {
   EMPTY_FILTERS,
   isFiltered,
@@ -57,6 +58,7 @@ export default function ChartFilters({ filters, onChange, facets, shown, total }
               aria-label={`${label} ${zone.count}`}
               onClick={() => onChange({ ...filters, zones: toggleIn(filters.zones, zone.id) })}
             >
+              <ZoneDot areaId={zone.id} />
               {label}
             </FilterPill>
           );

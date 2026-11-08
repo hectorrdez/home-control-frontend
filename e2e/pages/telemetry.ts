@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { Header } from "../components/header";
 import { Navigation } from "../components/navigation";
 
@@ -198,6 +198,11 @@ export class TelemetryPage {
 
   climateTitle() {
     return this.page.getByRole("heading", { name: "CLIMATE HISTORY", exact: true });
+  }
+
+  // Feature 147: the zone dot of a chart card, legend entry or zone pill (decorative; data-zone-token carries the zone color).
+  zoneDot(scope: Locator) {
+    return scope.getByTestId("zone-dot");
   }
 
   historyNotAvailable() {

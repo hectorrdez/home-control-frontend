@@ -27,3 +27,10 @@ function djb2(text: string): number {
 export function zoneColorToken(areaId: string): ZoneToken {
   return ZONE_TOKENS[djb2(areaId) % ZONE_TOKENS.length];
 }
+
+// Feature 147: unique color per area. Sorted ids -> ZONE_TOKENS[index % 8]: up to 8 areas are all different,
+// the same set gives the same result whatever the input order, and a 9th area wraps around.
+export function assignZoneTokens(areaIds: readonly string[]): Map<string, ZoneToken> {
+  const sorted = [...new Set(areaIds)].sort((a, b) => a.localeCompare(b));
+  return new Map(sorted.map((id, index) => [id, ZONE_TOKENS[index % ZONE_TOKENS.length]]));
+}

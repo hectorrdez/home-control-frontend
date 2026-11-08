@@ -1,11 +1,11 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { Fragment, useMemo, useState, type KeyboardEvent } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Entity } from "@/api/types";
 import FilterPill from "@components/controls/FilterPill";
 import ClimateTooltip from "./ClimateTooltip";
 import HistoryBody from "./HistoryBody";
 import { ZoneDot } from "@/features/zones/ZoneDot";
-import { zoneColorToken } from "@/features/zones/zoneColors";
+import { useZoneTokenResolver, zoneStroke } from "@/features/zones/ZoneColorsContext";
 import { cssToken } from "@/features/telemetry/chartTokens";
 import {
   RANGES,
@@ -51,6 +51,7 @@ interface ClimateView {
   temp: HistoryPoint[];
   hum: HistoryPoint[];
   solo: string | null; // the room whose zone color colors a single temperature area
+  humSolo: string | null; // the room whose zone color colors a single humidity series (feature 147)
 }
 
 interface ClimateHistoryCardProps {
@@ -73,6 +74,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
   );
   const { state, retry } = useHistory(ids, hours);
   const roomLabel = room === ALL ? "All rooms" : areaName(room);
+  const zoneOf = useZoneTokenResolver();
 
   const view = useMemo<ClimateView | null>(() => {
     if (state.status !== "ready") return null;
@@ -81,7 +83,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
     // One room: the first temperature and first humidity series (feature 112 behavior).
     const firstOf = (id: string, deviceClass: string) => seriesOf(sensorsIn(entities, id, deviceClass).slice(0, 1))[0] ?? [];
     if (room !== ALL) {
-      return { lines: [], humLines: [], temp: firstOf(room, "temperature"), hum: firstOf(room, "humidity"), solo: room };
+      return { lines: [], humLines: [], temp: firstOf(room, "temperature"), hum: firstOf(room, "humidity"), solo: room, humSolo: room };
     }
     // ALL ROOMS: each chart decides its lines from its own metric's data (feature 144 review).
     // 2+ rooms with that metric: one line per room, and the total mean averages those room lines (rooms weigh equally).
@@ -98,7 +100,8 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
         : humRooms.length === 1
           ? firstOf(humRooms[0].room, "humidity")
           : meanAcrossSeries(seriesOf(sensorsIn(entities, null, "humidity")));
-    return { lines, humLines, temp, hum, solo };
+    const humSolo = humRooms.length === 1 ? humRooms[0].room : null;
+    return { lines, humLines, temp, hum, solo, humSolo };
   }, [state, room, rooms, humRoomIds, entities]);
 
   const rows = useMemo<RoomClimateRow[]>(
@@ -121,9 +124,13 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
   const multiHum = humLines.length > 0;
   const multi = multiTemp || multiHum;
   const legendRooms = [...new Set([...lines, ...humLines].map((l) => l.room))];
-  const roomColor = (id: string) => cssToken(zoneColorToken(id), "currentColor");
-  const tempColor = view?.solo ? roomColor(view.solo) : cssToken("tertiary", "currentColor");
-  const humColor = cssToken("primary-container", "currentColor");
+  // Feature 147: the room's assigned zone color (the same one as its pill, its legend dot and the CHARTS panel).
+  const roomColor = (id: string) => zoneStroke(zoneOf(id));
+  const soloRoom = view?.solo ?? null;
+  const humSolo = view?.humSolo ?? null;
+  const tempColor = soloRoom ? roomColor(soloRoom) : cssToken("tertiary", "currentColor");
+  // Feature 147: a single humidity series takes its room's zone token, like the temperature one.
+  const humColor = humSolo ? roomColor(humSolo) : cssToken("primary-container", "currentColor");
   const meanColor = cssToken("on-surface", "currentColor");
   const summary = climateSummary(rows);
 
@@ -143,16 +150,29 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
 
   const active = cursor === null ? undefined : rows[Math.min(cursor, rows.length - 1)];
   // Each metric reads its room lines when it has them, otherwise its single series (no room lines in one chart is not the other's problem).
-  const readout = active
-    ? `${clock(active.t)} ${[
+  // Feature 147: each readout part of a room carries its zone dot; the aria-valuetext string keeps the same text.
+  const sep = multi ? " • " : " ";
+  const parts: { room: string | null; text: string }[] = active
+    ? [
         ...(multiTemp
-          ? [...lines.map(({ room: id }) => `${areaName(id).toUpperCase()} ${fmt(active.rooms[id] ?? null)} °C`), `MEAN ${fmt(active.temp)} °C`]
-          : [`${fmt(active.temp)} °C`]),
+          ? [
+              ...lines.map(({ room: id }) => ({ room: id, text: `${areaName(id).toUpperCase()} ${fmt(active.rooms[id] ?? null)} °C` })),
+              { room: null, text: `MEAN ${fmt(active.temp)} °C` },
+            ]
+          : [{ room: null, text: `${fmt(active.temp)} °C` }]),
         ...(multiHum
-          ? [...humLines.map(({ room: id }) => `${areaName(id).toUpperCase()} ${fmt(active.humRooms[id] ?? null, 0)} %`), `MEAN ${fmt(active.hum, 0)} %`]
-          : [`${fmt(active.hum, 0)} %`]),
-      ].join(multi ? " • " : " ")}`
+          ? [
+              ...humLines.map(({ room: id }) => ({ room: id, text: `${areaName(id).toUpperCase()} ${fmt(active.humRooms[id] ?? null, 0)} %` })),
+              { room: null, text: `MEAN ${fmt(active.hum, 0)} %` },
+            ]
+          : [{ room: null, text: `${fmt(active.hum, 0)} %` }]),
+      ]
+    : [];
+  const readout = active
+    ? `${clock(active.t)} ${parts.map((p) => p.text).join(sep)}`
     : "FOCUS THE CURSOR AND USE ARROW KEYS TO READ VALUES";
+  // Feature 147: with one room the visible readout names it (zone dot + name); aria-valuetext keeps the 144 text.
+  const readoutRoom = !multi ? soloRoom : null;
 
   // Shared by both charts: same X axis, same Y-axis width so the plot areas line up.
   const xAxis = (labels: boolean) => (
@@ -199,6 +219,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
                       row={on ? rows.find((r) => r.t === label) : undefined}
                       metric="temp"
                       lines={lines}
+                      solo={soloRoom}
                       areaName={areaName}
                     />
                   )}
@@ -267,6 +288,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
                       row={on ? rows.find((r) => r.t === label) : undefined}
                       metric="hum"
                       lines={humLines}
+                      solo={humSolo}
                       areaName={areaName}
                     />
                   )}
@@ -329,7 +351,29 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
           onBlur={clearCursor}
           className="rounded focus-visible:outline-2 focus-visible:outline-primary-container"
         >
-          <p className="font-mono text-label-caps uppercase text-on-surface">{readout}</p>
+          <p className="font-mono text-label-caps uppercase text-on-surface">
+            {active ? (
+              <>
+                {clock(active.t)}
+                {readoutRoom && (
+                  <>
+                    {" "}
+                    <ZoneDot areaId={readoutRoom} className="mx-space-xs align-middle" />
+                    {`${areaName(readoutRoom).toUpperCase()} `}
+                  </>
+                )}
+                {parts.map((part, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && sep}
+                    {part.room && <ZoneDot areaId={part.room} className="mx-space-xs align-middle" />}
+                    {part.text}
+                  </Fragment>
+                ))}
+              </>
+            ) : (
+              readout
+            )}
+          </p>
         </div>
         <p className="font-mono text-label-caps uppercase text-on-surface-variant">{summary}</p>
         <table className="sr-only">

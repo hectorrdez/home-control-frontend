@@ -36,6 +36,7 @@ import {
 } from "@/features/telemetry/widgetFilters";
 import Button from "@components/controls/Button";
 import SensorChartCard from "./SensorChartCard";
+import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
 import ChartEditBar from "./ChartEditBar";
 
 const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
@@ -89,6 +90,7 @@ export default function TelemetryChartsGrid({
   const [saved, setSaved] = useState(loadWidgets);
   const [panelOpen, setPanelOpen] = useState(false);
   const names = useEntityName();
+  const zoneOf = useZoneTokenResolver();
   const closePanel = useCallback(() => setPanelOpen(false), []);
   const widgets = useMemo(() => reconcileWidgets(saved, numeric), [saved, numeric]);
   const buffers = useLiveBuffers(numeric);
@@ -327,6 +329,7 @@ export default function TelemetryChartsGrid({
                   <SensorChartCard
                     entity={entity}
                     areaName={areaName(entity.area)}
+                    zoneToken={zoneOf(entity.area)}
                     widget={w}
                     points={buffers[w.entityId] ?? []}
                     connection={connection}

@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useApi } from "@/api/ApiContext";
 import type { ConnectionState, Entity } from "@/api/types";
-import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, type EntitiesState } from "./entities";
+import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, UNASSIGNED, type EntitiesState } from "./entities";
 import type { FeedEvent } from "./feed";
 import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
+import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -151,7 +152,14 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert],
   );
 
-  return <EntitiesContext.Provider value={value}>{children}</EntitiesContext.Provider>;
+  // Feature 147: zone colors come from the same areas list (every HA area, the unassigned group excluded).
+  const zoneAreaIds = useMemo(() => state.areas.map((a) => a.areaId).filter((id) => id !== UNASSIGNED), [state.areas]);
+
+  return (
+    <EntitiesContext.Provider value={value}>
+      <ZoneColorsProvider areaIds={zoneAreaIds}>{children}</ZoneColorsProvider>
+    </EntitiesContext.Provider>
+  );
 }
 
 export function useEntities(): EntitiesContextValue {

@@ -5,6 +5,8 @@ import type { Entity } from "@/api/types";
 import { roomGlow, roomLabel, roomStatus, type RoomGlow } from "./glow";
 import { DEFAULT_PLAN, bindRooms } from "./plan";
 import { HouseScene, type ViewPreset } from "./HouseScene";
+import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
+import { zoneColorToken } from "@/features/zones/zoneColors";
 
 // The 3D stage of `/` (106). Lazy chunk: only loaded by HomePage, never by /telemetry.
 const VIEWS: Array<{ preset: ViewPreset; label: string }> = [
@@ -18,35 +20,51 @@ const buttonClass =
 
 export default function HouseStage() {
   const { state, selectedArea, setSelectedArea } = useEntities();
+  const zoneOf = useZoneTokenResolver();
   const hostRef = useRef<HTMLDivElement>(null);
   const labelEls = useRef(new Map<string, HTMLElement>());
   const sceneRef = useRef<HouseScene | null>(null);
   const onSelectRef = useRef(setSelectedArea);
   const [unavailable, setUnavailable] = useState(false);
+  // Latest scene inputs, so a rebuilt scene (new zone assignment) gets the current rooms, glows and selection.
+  const latest = useRef<{
+    rooms: Parameters<HouseScene["setRooms"]>[0];
+    glows: Parameters<HouseScene["setRooms"]>[1];
+    selected: string | null;
+  }>({ rooms: [], glows: {}, selected: null });
 
   useEffect(() => {
     onSelectRef.current = setSelectedArea;
   }, [setSelectedArea]);
 
-  // Mount the scene once. WebGL missing (or context lost) -> the fallback panel; the room chips keep working.
+  // Mount the scene. Feature 147: the room colors are baked at build time, so the scene is rebuilt when the zone
+  // assignment changes (area list loaded or changed; rare). WebGL missing (or context lost) -> the fallback panel; the room chips keep working.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     let scene: HouseScene;
     try {
-      scene = new HouseScene(host, {
-        onSelect: (areaId) => onSelectRef.current(areaId),
-        onContextLost: () => {
-          sceneRef.current?.dispose();
-          sceneRef.current = null;
-          setUnavailable(true);
+      scene = new HouseScene(
+        host,
+        {
+          onSelect: (areaId) => onSelectRef.current(areaId),
+          onContextLost: () => {
+            sceneRef.current?.dispose();
+            sceneRef.current = null;
+            setUnavailable(true);
+          },
         },
-      });
+        undefined,
+        (areaId) => zoneOf(areaId) ?? zoneColorToken(areaId),
+      );
     } catch {
       setUnavailable(true);
       return;
     }
     sceneRef.current = scene;
+    scene.setRooms(latest.current.rooms, latest.current.glows);
+    scene.setSelected(latest.current.selected);
+    scene.setLabelElements(labelEls.current);
     const observer = new ResizeObserver(() => scene.resize());
     observer.observe(host);
     return () => {
@@ -54,7 +72,7 @@ export default function HouseStage() {
       scene.dispose();
       sceneRef.current = null;
     };
-  }, []);
+  }, [zoneOf]);
 
   const rooms = useMemo(() => bindRooms(DEFAULT_PLAN, state.areas.map((a) => a.areaId)), [state.areas]);
 
@@ -74,12 +92,17 @@ export default function HouseStage() {
 
   const areaName = (areaId: string, fallback: string) => state.areas.find((a) => a.areaId === areaId)?.name ?? fallback;
 
+  const sceneRooms = useMemo(() => rooms.map((r) => ({ id: r.id, areaId: r.areaId, present: r.present })), [rooms]);
+
+  // Keeps `latest` current. If a scene is rebuilt in the same commit as a rooms/selection change, the rooms/selection
+  // effects below run after the mount effect and apply the new values to the new scene.
   useEffect(() => {
-    sceneRef.current?.setRooms(
-      rooms.map((r) => ({ id: r.id, areaId: r.areaId, present: r.present })),
-      glows,
-    );
-  }, [rooms, glows]);
+    latest.current = { rooms: sceneRooms, glows, selected: selectedArea };
+  }, [sceneRooms, glows, selectedArea]);
+
+  useEffect(() => {
+    sceneRef.current?.setRooms(sceneRooms, glows);
+  }, [sceneRooms, glows]);
 
   useEffect(() => {
     sceneRef.current?.setSelected(selectedArea);
