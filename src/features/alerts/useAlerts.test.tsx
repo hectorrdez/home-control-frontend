@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
 import { createMockApi } from "@/api/mock/createMockApi";
-import type { AlertRule, AlertRuleInput, Entity } from "@/api/types";
+import { ApiError, type AlertRule, type AlertRuleInput, type Entity } from "@/api/types";
 import { AliasesProvider } from "@/state/AliasesProvider";
 import { AlertRulesProvider, useAlertRules } from "@/state/AlertRulesProvider";
 import { EntitiesProvider, useEntities } from "@/state/EntitiesProvider";
@@ -35,6 +35,8 @@ function Probe() {
 
 async function mount(rules: AlertRuleInput[], initialPath = "/telemetry") {
   const api = createMockApi({ actionDelayMs: 0, streamDelayMs: 0 });
+  // Feature 139: a backend without /api/alerts (404) keeps the local engine these tests cover.
+  api.listAlerts = () => Promise.reject(new ApiError("not_found", "alerts_not_found", 404));
   for (const rule of rules) await api.createAlertRule(rule);
   let listener: ((entity: Entity) => void) | null = null;
   const subscribe = api.subscribe.bind(api);

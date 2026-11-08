@@ -3,7 +3,7 @@ import { ApiError, SettingConflictError, type AlertRule, type Alias, type Calibr
 import { backoffDelay } from "./backoff";
 import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 import { getClientId, getClientName } from "./clientIdentity";
-import type { ServerEvent } from "./types";
+import type { ServerAlert, ServerEvent } from "./types";
 
 export interface LiveApiOptions {
   baseUrl: string; // "" = same origin (Vite dev proxy forwards /api)
@@ -199,6 +199,23 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
     },
 
     // Feature 128: backend 012 (alert rules, served from memory). Writes answer with `data: [rule]`.
+    // Feature 139 (backend 020): server-side alerts.
+    async listAlerts(status, limit) {
+      const params = new URLSearchParams({ status });
+      if (limit !== undefined) params.set("limit", String(limit));
+      return request<ServerAlert[]>(`/api/alerts?${params.toString()}`);
+    },
+
+    async ackAlert(id: string): Promise<ServerAlert> {
+      const [alert] = await request<ServerAlert[]>(`/api/alerts/${encodeURIComponent(id)}/ack`, { method: "POST" });
+      if (!alert) throw new ApiError("server", "Empty ack response");
+      return alert;
+    },
+
+    async ackAllAlerts(): Promise<ServerAlert[]> {
+      return request<ServerAlert[]>("/api/alerts/ack-all", { method: "POST" });
+    },
+
     async listAlertRules(): Promise<AlertRule[]> {
       return request<AlertRule[]>("/api/alert-rules");
     },

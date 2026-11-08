@@ -6,7 +6,7 @@ import AlertBanner, { AlertSoundControl } from "./AlertBanner";
 const alert = (id: string, text: string): HighAlert => ({ id, entityId: "lock.front_door", name: "Front door", areaName: null, text });
 
 function value(overrides: Partial<AlertCenterValue> = {}): AlertCenterValue {
-  return { queue: [], soundEnabled: true, enableSound: vi.fn(), dismiss: vi.fn(), ...overrides };
+  return { queue: [], soundEnabled: true, enableSound: vi.fn(), dismiss: vi.fn(), dismissAll: vi.fn(), ...overrides };
 }
 
 afterEach(() => cleanup());
