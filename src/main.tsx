@@ -15,11 +15,13 @@ import { CalibrationsProvider } from "./state/CalibrationsProvider";
 import { AlertRulesProvider } from "./state/AlertRulesProvider";
 import { AlertsProvider } from "./state/AlertsProvider";
 import { ToastProvider } from "./components/feedback/Toast";
+import { SyncedSettingsProvider } from "./features/settings/SyncedSettingsProvider";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ApiProvider>
+      <SyncedSettingsProvider>
       <ToastProvider>
         <EntitiesProvider>
           <AliasesProvider>
@@ -35,6 +37,7 @@ createRoot(document.getElementById("root")!).render(
           </AliasesProvider>
         </EntitiesProvider>
       </ToastProvider>
+      </SyncedSettingsProvider>
     </ApiProvider>
   </StrictMode>,
 );

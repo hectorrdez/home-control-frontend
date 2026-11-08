@@ -7,7 +7,7 @@ import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
 import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
-import { publishServerEvent } from "@/api/serverEvents";
+import { publishServerEvent, publishStreamState } from "@/api/serverEvents";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -66,6 +66,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       (entity) => dispatch({ type: "entityUpdated", entity }),
       (next) => {
         setConnection(next);
+        publishStreamState(next);
         if (isStreamRecovery(previous, next)) refreshAreas();
         previous = next;
       },
