@@ -15,6 +15,8 @@ export const SCENARIOS = [
   "cover-calibration", // feature 127: adds a cover without current_position (calibrate, then set a percentage)
   "alerts", // feature 129: seeded MEDIUM/HIGH/LOW rules and three timed changes (1.5 s, 4 s, 6 s)
   "remote-change", // feature 132: 1 s after subscribe another device changes the first alias
+  "no-settings", // feature 133: settings list and get reject not_found (backend without 017)
+  "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

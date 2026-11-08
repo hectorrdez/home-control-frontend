@@ -1,5 +1,5 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import { ApiError, SettingConflictError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type Setting } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 import { getClientId, getClientName } from "./clientIdentity";
@@ -39,7 +39,12 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
   const openSource: EventSourceFactory = eventSourceFactory ?? ((url) => new EventSource(url));
   const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // `onError` lets one call map a failure to a richer error (feature 133: 409 carries the parsed body).
+  async function request<T>(
+    path: string,
+    init: RequestInit = {},
+    onError?: (status: number, body: Envelope<unknown> | undefined) => ApiError | undefined,
+  ): Promise<T> {
     let res: Response;
     try {
       res = await doFetch(`${baseUrl}${path}`, {
@@ -60,6 +65,8 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     const body = (await res.json().catch(() => undefined)) as Envelope<T> | undefined;
     if (!res.ok) {
+      const mapped = onError?.(res.status, body as Envelope<unknown> | undefined);
+      if (mapped) throw mapped;
       const code = errorCode(body);
       throw new ApiError(kindFor(res.status, code), code ?? `HTTP ${res.status}`, res.status);
     }
@@ -211,6 +218,41 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteAlertRule(id): Promise<void> {
       await request<unknown[]>(`/api/alert-rules/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+
+    // Feature 133: backend 017 shared settings. Writes answer with the stored setting in data[0].
+    async getSettings(): Promise<Setting[]> {
+      return request<Setting[]>("/api/settings");
+    },
+
+    async getSetting(key): Promise<Setting | null> {
+      try {
+        const [setting] = await request<Setting[]>(`/api/settings/${encodeURIComponent(key)}`);
+        return setting ?? null;
+      } catch (err) {
+        // A missing key is a normal answer, not an error. Any other 404 (no settings endpoint) still rejects.
+        if (err instanceof ApiError && err.kind === "not_found" && err.message === "setting_not_found") return null;
+        throw err;
+      }
+    },
+
+    async putSetting(key, value, baseVersion): Promise<Setting> {
+      const body = baseVersion === undefined ? { value } : { value, baseVersion };
+      const [stored] = await request<Setting[]>(
+        `/api/settings/${encodeURIComponent(key)}`,
+        { method: "PUT", body: JSON.stringify(body) },
+        (status, envelope) => {
+          if (status !== 409 || errorCode(envelope) !== "version_conflict") return undefined;
+          const current = Array.isArray(envelope?.data) ? ((envelope.data[0] ?? null) as Setting | null) : null;
+          return new SettingConflictError(current);
+        },
+      );
+      if (!stored) throw new ApiError("server", "Empty setting response");
+      return stored;
+    },
+
+    async deleteSetting(key): Promise<void> {
+      await request<unknown[]>(`/api/settings/${encodeURIComponent(key)}`, { method: "DELETE" });
     },
 
     async setCoverPercent(entityId, percent): Promise<Entity> {

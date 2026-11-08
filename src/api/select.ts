@@ -39,11 +39,15 @@ function createLazyMockApi(search: string): HomeApi {
     createAlertRule: async (rule) => (await load()).createAlertRule(rule),
     updateAlertRule: async (id, rule) => (await load()).updateAlertRule(id, rule),
     deleteAlertRule: async (id) => (await load()).deleteAlertRule(id),
-    subscribe(onEntity, onConnection) {
+    getSettings: async () => (await load()).getSettings(),
+    getSetting: async (key) => (await load()).getSetting(key),
+    putSetting: async (key, value, baseVersion) => (await load()).putSetting(key, value, baseVersion),
+    deleteSetting: async (key) => (await load()).deleteSetting(key),
+    subscribe(onEntity, onConnection, onServerEvent) {
       let stop: (() => void) | undefined;
       let closed = false;
       void load().then((impl) => {
-        if (!closed) stop = impl.subscribe(onEntity, onConnection);
+        if (!closed) stop = impl.subscribe(onEntity, onConnection, onServerEvent);
       });
       return () => {
         closed = true;

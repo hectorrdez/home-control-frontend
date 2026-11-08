@@ -1,7 +1,10 @@
 import type { EntityFilter, HomeApi } from "../HomeApi";
 import { getClientId } from "../clientIdentity";
+import { deriveWidgets, type Widget } from "../../features/telemetry/widgets";
 import {
   ApiError,
+  SettingConflictError,
+  type Setting,
   type Alias,
   type AlertRule,
   type AlertRuleInput,
@@ -366,7 +369,73 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     return { id, entityId: rule.entityId, trigger: { ...rule.trigger }, level: rule.level, ...(rule.message === undefined ? {} : { message: rule.message }) };
   }
 
+  // Feature 133: shared settings (backend 017), same rules as the server. Mock only, in memory per page load.
+  const SETTING_CAP = 200;
+  const SETTING_MAX_BYTES = 65536;
+  const SETTING_KEY = /^[a-z0-9]+(\.[a-z0-9_-]+){1,4}$/;
+  const settings = new Map<string, Setting>();
+
+  function settingKeyOk(key: string): void {
+    if (key.length > 80 || !SETTING_KEY.test(key)) throw new ApiError("server", "invalid_setting_key", 400);
+  }
+
+  // Stores one value like backend 017: a new key starts at version 1, a real change bumps it, the same JSON keeps it.
+  function storeSetting(key: string, value: unknown, by: string | null): Setting {
+    const existing = settings.get(key);
+    if (existing && JSON.stringify(existing.value) === JSON.stringify(value)) return existing;
+    const stored: Setting = {
+      key,
+      value: clone(value),
+      version: (existing?.version ?? 0) + 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: by,
+    };
+    settings.set(key, stored);
+    emitServer({ type: "resource_changed", resource: "settings", keys: [key], by });
+    return stored;
+  }
+
+  // Seeded "remote-settings" layout: the default telemetry widgets with the first one hidden.
+  function remoteWidgetLayout(): Widget[] {
+    return deriveWidgets([...entities.values()]).map((w, i) => (i === 0 ? { ...w, visible: false } : w));
+  }
+
   return {
+    async getSettings(): Promise<Setting[]> {
+      if (scenario === "no-settings") throw new ApiError("not_found", "not_found", 404);
+      return read(() => [...settings.values()].sort((a, b) => a.key.localeCompare(b.key)).map(clone));
+    },
+
+    async getSetting(key: string): Promise<Setting | null> {
+      if (scenario === "no-settings") throw new ApiError("not_found", "not_found", 404);
+      settingKeyOk(key);
+      return read(() => {
+        const found = settings.get(key);
+        return found ? clone(found) : null;
+      });
+    },
+
+    async putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting> {
+      settingKeyOk(key);
+      if (value === undefined || (baseVersion !== undefined && (!Number.isInteger(baseVersion) || baseVersion < 1))) {
+        throw new ApiError("server", "invalid_setting", 400);
+      }
+      if (new TextEncoder().encode(JSON.stringify(value)).length > SETTING_MAX_BYTES) {
+        throw new ApiError("server", "setting_too_large", 413);
+      }
+      const existing = settings.get(key);
+      if (baseVersion !== undefined && existing?.version !== baseVersion) {
+        throw new SettingConflictError(existing ? clone(existing) : null);
+      }
+      if (!existing && settings.size >= SETTING_CAP) throw new ApiError("server", "too_many_settings", 400);
+      return clone(storeSetting(key, value, getClientId()));
+    },
+
+    async deleteSetting(key: string): Promise<void> {
+      settingKeyOk(key);
+      if (settings.delete(key)) changed("settings", [key]);
+    },
+
     async getAliases(): Promise<Alias[]> {
       if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");
       if (scenario === "empty") return [];
@@ -550,6 +619,10 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
           saveAliases();
           emitServer({ type: "resource_changed", resource: "aliases", keys: [firstId], by: "other-device" });
         }, 1000));
+      }
+      // Feature 133 "remote-settings": another device hides the first telemetry widget; 135 must pick it up.
+      if (scenario === "remote-settings") {
+        timeouts.push(setTimeout(() => storeSetting("telemetry.widgets", remoteWidgetLayout(), "other-device"), 1000));
       }
       if (scenario === "stream-drop") {
         timeouts.push(setTimeout(() => onConnection("reconnecting"), 3000));

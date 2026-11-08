@@ -11,6 +11,7 @@ import type {
   AlertRule,
   AlertRuleInput,
   ServerEvent,
+  Setting,
 } from "./types";
 
 export interface EntityFilter {
@@ -45,4 +46,10 @@ export interface HomeApi {
   createAlertRule(rule: AlertRuleInput): Promise<AlertRule>;
   updateAlertRule(id: string, rule: AlertRuleInput): Promise<AlertRule>;
   deleteAlertRule(id: string): Promise<void>;
+  // Feature 133 (backend 017). getSettings rejects with kind "not_found" when the backend has no settings endpoint.
+  // getSetting resolves null for a missing key. putSetting rejects with SettingConflictError on 409 version_conflict.
+  getSettings(): Promise<Setting[]>;
+  getSetting(key: string): Promise<Setting | null>;
+  putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting>;
+  deleteSetting(key: string): Promise<void>;
 }

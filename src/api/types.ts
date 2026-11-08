@@ -58,6 +58,26 @@ export class ApiError extends Error {
   }
 }
 
+// Feature 133 (backend 017): shared app setting. `value` is opaque to the server; callers validate it.
+export interface Setting<T = unknown> {
+  key: string;
+  value: T;
+  version: number;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+// 409 version_conflict on PUT /api/settings/:key. `current` is the stored setting (null when the key is missing).
+export class SettingConflictError extends ApiError {
+  readonly current: Setting | null;
+
+  constructor(current: Setting | null) {
+    super("server", "version_conflict", 409);
+    this.name = "SettingConflictError";
+    this.current = current;
+  }
+}
+
 // Feature 127 (backend 010): cover travel-time calibration. position stays null until a percent move has ended.
 export interface CoverCalibration {
   entityId: string;
