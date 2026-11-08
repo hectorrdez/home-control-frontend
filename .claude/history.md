@@ -42,8 +42,8 @@ id|slug|state|role|commit|commit_url
 137|chart-filters-synced|ENDED|frontend|87dd2d3|https://github.com/hectorrdez/home-control-frontend/commit/87dd2d3
 138|resources-live-refetch|ENDED|frontend|716ac6b|https://github.com/hectorrdez/home-control-frontend/commit/716ac6b
 139|server-alerts|ENDED|frontend|b318fd2|https://github.com/hectorrdez/home-control-frontend/commit/b318fd2
-140|events-feed-from-server|PENDING|frontend
-141|event-history-page|PENDING|frontend
+140|events-feed-from-server|ENDED|frontend|e4dacc2|https://github.com/hectorrdez/home-control-frontend/commit/e4dacc2
+141|event-history-page|ENDED|frontend|a28ed17|https://github.com/hectorrdez/home-control-frontend/commit/a28ed17
 142|actuator-presets-ui|ENDED|frontend|62fb98b|https://github.com/hectorrdez/home-control-frontend/commit/62fb98b
 143|home-preset-modes|ENDED|frontend|0561272|https://github.com/hectorrdez/home-control-frontend/commit/0561272
 144|climate-history-split-charts|ENDED|frontend|97cadec|https://github.com/hectorrdez/home-control-frontend/commit/97cadec
