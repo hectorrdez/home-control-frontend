@@ -39,7 +39,7 @@ id|slug|state|role|commit|commit_url
 134|synced-setting-store|ENDED|frontend|80e90883bba7116cf78e634ea4bde68bd67d7e45|https://github.com/hectorrdez/home-control-frontend/commit/80e90883bba7116cf78e634ea4bde68bd67d7e45
 135|widgets-synced|ENDED|frontend|7850e75|https://github.com/hectorrdez/home-control-frontend/commit/7850e75
 136|panels-synced|ENDED|frontend|e05ae53|https://github.com/hectorrdez/home-control-frontend/commit/e05ae53
-137|chart-filters-synced|ENDED|frontend
+137|chart-filters-synced|ENDED|frontend|87dd2d3|https://github.com/hectorrdez/home-control-frontend/commit/87dd2d3
 138|resources-live-refetch|PENDING|frontend
 139|server-alerts|PENDING|frontend
 140|events-feed-from-server|PENDING|frontend
