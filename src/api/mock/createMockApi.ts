@@ -129,7 +129,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   function buildSeedEvents(value: number): LoggedEvent[] {
     const next = createPrng(hashSeed(`events:${value}`));
     const pick = <T,>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
-    const ids = [...entities.keys()].sort();
+    const ids = [...entities.keys()].sort((a, b) => a.localeCompare(b));
     const clients = ["Kitchen tablet", "Hall phone", "Wall panel"];
     const start = Date.parse("2026-11-01T00:00:00.000Z");
     const rows: LoggedEvent[] = [];
