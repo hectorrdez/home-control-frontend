@@ -1,4 +1,4 @@
-import type { AlertLevel, Entity } from "@/api/types";
+import type { AlertLevel, Entity, LoggedEvent } from "@/api/types";
 import { isUnavailable } from "./availability";
 
 // Feature 111: session-only event feed (HA logbook endpoint does not exist). Newest first, in memory.
@@ -19,7 +19,13 @@ export interface FeedEvent {
   at: string;
   deviceKey?: string; // feature 126: set on availability events only (see deviceKeyOf)
   alert?: Exclude<AlertLevel, "off">; // feature 129: an alert raised by a rule (own style in the feed)
+  serverId?: string; // feature 140: id of the server event-log row this entry came from
 }
+
+// Feature 140: how many server rows seed the feed, and the window in which a local state entry and a server row
+// describe the same change (the local one is then dropped).
+export const SERVER_SEED_LIMIT = 50;
+export const SERVER_DUPLICATE_MS = 5000;
 
 // The value a feed tracks per entity, or null when the domain is not in the feed.
 export function feedValue(entity: Entity): string | null {
@@ -100,4 +106,83 @@ export function recordChange(feed: FeedEvent[], before: Entity | undefined, afte
     area: after.area,
     at: after.lastChanged,
   });
+}
+
+// Feature 140: maps one event-log row (backend 018) to a feed entry. Unknown types return null (ignored).
+// `lookup` gives the entity for a name and device (feed rows keep the name, the label is resolved at render time).
+export function fromLoggedEvent(
+  event: LoggedEvent,
+  lookup: (entityId: string) => Entity | undefined = () => undefined,
+): FeedEvent | null {
+  const entity = event.entityId ? lookup(event.entityId) : undefined;
+  const base: FeedEvent = {
+    key: `srv:${event.id}`,
+    serverId: event.id,
+    entityId: event.entityId ?? "",
+    name: entity?.name ?? event.entityId ?? "SYSTEM",
+    deviceName: entity?.deviceName ?? null,
+    value: "",
+    area: entity?.area ?? null,
+    at: event.ts,
+  };
+  const by = event.clientName ? ` by ${event.clientName}` : "";
+  const payload = event.payload ?? {};
+  switch (event.type) {
+    case "action": {
+      const action = String(payload.action ?? "action").replace(/_/g, " ");
+      return { ...base, value: `${action}${payload.ok === false ? " FAILED" : ""}${by}` };
+    }
+    case "availability":
+      return { ...base, value: payload.available === false ? "OFFLINE" : "ONLINE" };
+    case "config_changed":
+      return { ...base, entityId: "", name: "SYSTEM", value: `${String(payload.resource ?? "config")} changed${by}` };
+    case "alert": {
+      const level = event.level === "high" || event.level === "medium" ? event.level : "low";
+      return { ...base, value: String(payload.text ?? ""), alert: level };
+    }
+    case "alert_acked":
+      return { ...base, value: `ALERT ACKNOWLEDGED${by}` };
+    case "ha_link":
+      return {
+        ...base,
+        entityId: "",
+        name: "SYSTEM",
+        value: payload.connected === true ? "HOME ASSISTANT LINK RESTORED" : "HOME ASSISTANT LINK LOST",
+      };
+    default:
+      return null;
+  }
+}
+
+// Local entries that describe the same change as a server row (same entity, within 5 s): an availability row
+// matches the same transition, an action row matches a plain state change, an alert row matches a local alert.
+function duplicatesServer(local: FeedEvent, server: FeedEvent[]): boolean {
+  const time = Date.parse(local.at);
+  return server.some((row) => {
+    if (!row.serverId || row.entityId !== local.entityId) return false;
+    if (Math.abs(time - Date.parse(row.at)) >= SERVER_DUPLICATE_MS) return false;
+    // Server alerts mode (139): the alert shows once, from the event log; a local alert entry (the local engine, or
+    // the entry the alert hook logs for a server alert) is dropped when the server row matches (same entity, or same level and text when there is no entity).
+    if (row.alert) return local.alert !== undefined && (local.entityId !== "" || (local.alert === row.alert && local.value === row.value));
+    if (!local.entityId) return false;
+    if (row.value === "OFFLINE") return local.value === "disconnected";
+    if (row.value === "ONLINE") return local.value === "reconnected";
+    if (row.value.startsWith("ALERT ")) return false;
+    return !local.alert && local.value !== "disconnected" && local.value !== "reconnected";
+  });
+}
+
+// Feature 140: one feed from server rows (deduped by server id) and local state entries (111). A local entry that
+// duplicates a server row is dropped; the rest merge by time and keep the newest FEED_LIMIT.
+export function mergeFeeds(current: FeedEvent[], incoming: FeedEvent[] = []): FeedEvent[] {
+  const seen = new Set<string>();
+  const server: FeedEvent[] = [];
+  for (const row of [...incoming, ...current.filter((e) => e.serverId)]) {
+    if (seen.has(row.key)) continue;
+    seen.add(row.key);
+    server.push(row);
+  }
+  const local = current.filter((e) => !e.serverId && !seen.has(e.key) && !(server.length > 0 && duplicatesServer(e, server)));
+  const merged = [...server, ...local].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return merged.slice(0, FEED_LIMIT);
 }

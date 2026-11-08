@@ -20,6 +20,8 @@ export const SCENARIOS = [
   "alerts-local", // feature 139: backend without /api/alerts (404); the 129 local engine raises the alerts
   "remote-ack", // feature 139: the same timeline; another device acks each HIGH alert 2 s after it fires
   "cover-presets", // feature 142: calibrated cover at a known position (SHUT) for saved positions
+  "no-events", // feature 140: GET /api/events rejects not_found (backend without 018)
+  "ha-link-drop", // feature 140: ha_link false at 1 s, true at 3 s (header chip and feed)
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

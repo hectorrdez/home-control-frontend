@@ -10,12 +10,23 @@ import type {
   CoverCalibration,
   AlertRule,
   AlertRuleInput,
+  LoggedEvent,
   ServerEvent,
   Setting,
   ServerAlert,
   Preset,
   PresetInput,
 } from "./types";
+
+// Feature 140 (backend 018): GET /api/events query. Every field optional; `from`/`to` ISO dates or instants.
+export interface EventsQuery {
+  types?: string[];
+  entityId?: string;
+  from?: string;
+  to?: string;
+  before?: string;
+  limit?: number;
+}
 
 export interface EntityFilter {
   domain?: string;
@@ -66,4 +77,6 @@ export interface HomeApi {
   listAlerts(status: "open" | "all", limit?: number): Promise<ServerAlert[]>;
   ackAlert(id: string): Promise<ServerAlert>;
   ackAllAlerts(): Promise<ServerAlert[]>;
+  // Feature 140 (backend 018). Rejects with kind "not_found" when the backend has no events endpoint.
+  listEvents(query?: EventsQuery): Promise<LoggedEvent[]>;
 }

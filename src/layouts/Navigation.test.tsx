@@ -14,7 +14,7 @@ describe("TopNav", () => {
     );
     const nav = screen.getByRole("navigation", { name: "Main" });
     const labels = within(nav).getAllByRole("link").map((link) => link.textContent);
-    expect(labels).toEqual(["Home 3D", "Devices", "Telemetry"]);
+    expect(labels).toEqual(["Home 3D", "Devices", "Telemetry", "History"]);
     expect(within(nav).getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
   });
 
@@ -64,7 +64,7 @@ describe("BottomRail", () => {
       </MemoryRouter>,
     );
     const rail = screen.getByRole("navigation", { name: "Bottom navigation" });
-    expect(within(rail).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home 3D", "Devices", "Telemetry"]);
+    expect(within(rail).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home 3D", "Devices", "Telemetry", "History"]);
     expect(within(rail).getByRole("link", { name: "Devices" }).className).toContain("text-primary-container");
   });
 

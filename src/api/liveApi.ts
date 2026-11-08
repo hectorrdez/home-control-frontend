@@ -1,5 +1,5 @@
-import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, SettingConflictError, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type Setting } from "./types";
+import type { EntityFilter, EventsQuery, HomeApi } from "./HomeApi";
+import { ApiError, SettingConflictError, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type LoggedEvent, type Setting } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 import { getClientId, getClientName } from "./clientIdentity";
@@ -85,6 +85,19 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
   };
 
   return {
+    async listEvents(query: EventsQuery = {}): Promise<LoggedEvent[]> {
+      // Feature 140 (backend 018): newest first. 404 -> not_found (backend without the event log).
+      const params = new URLSearchParams();
+      if (query.types?.length) params.set("types", query.types.join(","));
+      if (query.entityId) params.set("entityId", query.entityId);
+      if (query.from) params.set("from", query.from);
+      if (query.to) params.set("to", query.to);
+      if (query.before) params.set("before", query.before);
+      if (query.limit !== undefined) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      return request<LoggedEvent[]>(`/api/events${qs ? `?${qs}` : ""}`);
+    },
+
     async getStatus(): Promise<HaStatus> {
       const [status] = await request<HaStatus[]>("/api/ha/status");
       if (!status) throw new ApiError("server", "Empty status response");

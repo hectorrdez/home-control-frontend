@@ -1,5 +1,5 @@
-import type { Area, Entity } from "@/api/types";
-import { prependEvent, recordChange, type FeedEvent } from "./feed";
+import type { Area, Entity, LoggedEvent } from "@/api/types";
+import { fromLoggedEvent, mergeFeeds, prependEvent, recordChange, type FeedEvent } from "./feed";
 
 // Single entity store (feature 103). Entities keyed by entityId; areas keep order and membership.
 // 104 adds optimistic actions (pending map with a rollback baseline); 105 merges stream events.
@@ -47,7 +47,10 @@ export type EntitiesAction =
   | { type: "actionFailed"; entityId: string; requestId: number }
   | { type: "settleTimedOut"; entityId: string; requestId: number }
   | { type: "entityUpdated"; entity: Entity }
-  | { type: "alertLogged"; event: FeedEvent };
+  | { type: "alertLogged"; event: FeedEvent }
+  // Feature 140: server event log (GET /api/events seed) and live `event` frames.
+  | { type: "serverFeedLoaded"; events: LoggedEvent[] }
+  | { type: "serverEventLogged"; event: LoggedEvent };
 
 export const initialEntitiesState: EntitiesState = {
   status: "loading",
@@ -199,12 +202,20 @@ export function entitiesReducer(state: EntitiesState, action: EntitiesAction): E
       return { ...state, pending: rest };
     }
     case "alertLogged":
-      return { ...state, feed: prependEvent(state.feed, action.event) };
+      return { ...state, feed: mergeFeeds(prependEvent(state.feed, action.event)) };
+    case "serverFeedLoaded": {
+      const rows = action.events.flatMap((e) => fromLoggedEvent(e, (id) => state.entities[id]) ?? []);
+      return { ...state, feed: mergeFeeds(state.feed, rows) };
+    }
+    case "serverEventLogged": {
+      const row = fromLoggedEvent(action.event, (id) => state.entities[id]);
+      return row ? { ...state, feed: mergeFeeds(state.feed, [row]) } : state;
+    }
     case "entityUpdated": {
       const next = applyEvent(state, action.entity);
       if (next === state) return state;
-      const feed = recordChange(state.feed, state.entities[action.entity.entityId], next.entities[action.entity.entityId]);
-      return feed === state.feed ? next : { ...next, feed };
+      const recorded = recordChange(state.feed, state.entities[action.entity.entityId], next.entities[action.entity.entityId]);
+      return recorded === state.feed ? next : { ...next, feed: mergeFeeds(recorded) };
     }
   }
 }

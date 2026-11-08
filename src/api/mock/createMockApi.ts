@@ -1,5 +1,5 @@
-import type { EntityFilter, HomeApi } from "../HomeApi";
-import { getClientId } from "../clientIdentity";
+import type { EntityFilter, EventsQuery, HomeApi } from "../HomeApi";
+import { getClientId, getClientName } from "../clientIdentity";
 import { deriveWidgets, type Widget } from "../../features/telemetry/widgets";
 import {
   ApiError,
@@ -20,6 +20,7 @@ import {
   type HaStatus,
   type HistorySeries,
   type ServerAlert,
+  type LoggedEvent,
   type ServerEvent,
   type ServerResource,
 } from "../types";
@@ -100,9 +101,101 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     for (const listener of serverListeners) listener(event);
   }
   function changed(resource: ServerResource, keys: string[]) {
+    recordEvent({ type: "config_changed", source: "api", payload: { resource, keys } });
     emitServer({ type: "resource_changed", resource, keys, by: getClientId() });
   }
   const rng = createPrng(hashSeed(`stream:${seed}`));
+
+  // Feature 140: in-memory event log shaped like backend 018 (newest first). Kept in localStorage so a reload
+  // still shows it; the live `event` frame mirrors every row.
+  const EVENT_LOG_KEY = "hc.mock.events.v1";
+  const EVENT_LOG_CAP = 500;
+  const EVENT_TYPE_RE = /^[a-z_]+$/;
+  const SEED_EVENT_COUNT = 130;
+  const storedLog = readStoredEventLog();
+  const eventLog: LoggedEvent[] = storedLog ?? buildSeedEvents(seed);
+  let eventSeq = eventLog.reduce((max, e) => Math.max(max, Number(e.id)), 0);
+  function readStoredEventLog(): LoggedEvent[] | null {
+    try {
+      const raw = globalThis.localStorage?.getItem(EVENT_LOG_KEY);
+      if (raw === null || raw === undefined) return null;
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as LoggedEvent[]).slice(0, EVENT_LOG_CAP) : [];
+    } catch {
+      return [];
+    }
+  }
+  // Feature 141: a deterministic history for the first visit (>= 120 rows, every type), newest first.
+  function buildSeedEvents(value: number): LoggedEvent[] {
+    const next = createPrng(hashSeed(`events:${value}`));
+    const pick = <T,>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
+    const ids = [...entities.keys()].sort();
+    const clients = ["Kitchen tablet", "Hall phone", "Wall panel"];
+    const start = Date.parse("2026-11-01T00:00:00.000Z");
+    const rows: LoggedEvent[] = [];
+    for (let i = 0; i < SEED_EVENT_COUNT; i++) {
+      const roll = next();
+      const entityId = ids.length ? pick(ids) : null;
+      const clientName = pick(clients);
+      const alertId = `seed-${i + 1}`;
+      let row: Pick<LoggedEvent, "type" | "source" | "entityId" | "level" | "clientName" | "payload">;
+      if (roll < 0.5) {
+        row = { type: "action", source: "api", entityId, level: null, clientName, payload: { action: pick(["turn_on", "turn_off", "toggle"]), ok: next() > 0.1 } };
+      } else if (roll < 0.65) {
+        row = { type: "availability", source: "ha", entityId, level: null, clientName: null, payload: { available: next() > 0.3 } };
+      } else if (roll < 0.75) {
+        row = { type: "config_changed", source: "api", entityId: null, level: null, clientName, payload: { resource: pick(["aliases", "settings", "alert_rules"]), keys: [] } };
+      } else if (roll < 0.85) {
+        row = { type: "alert", source: "engine", entityId, level: pick(["low", "medium", "high"]), clientName: null, payload: { alertId, ruleId: null, text: "Motion detected", trigger: { type: "connects" }, clientId: null } };
+      } else if (roll < 0.92) {
+        row = { type: "alert_acked", source: "api", entityId, level: null, clientName, payload: { alertId } };
+      } else {
+        row = { type: "ha_link", source: "ha", entityId: null, level: null, clientName: null, payload: { connected: next() > 0.2 } };
+      }
+      rows.push({ id: String(i + 1), ts: new Date(start + i * 6 * 60_000).toISOString(), clientId: null, ...row });
+    }
+    return rows.reverse();
+  }
+  type MockEventInput = Pick<LoggedEvent, "type" | "source" | "payload"> &
+    Partial<Pick<LoggedEvent, "entityId" | "level" | "clientId" | "clientName">>;
+  function persistEventLog(): void {
+    try {
+      globalThis.localStorage?.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog));
+    } catch {
+      // Storage can be blocked; the log then lives for this page only.
+    }
+  }
+  if (!storedLog) persistEventLog();
+  function recordEvent(input: MockEventInput): void {
+    eventSeq += 1;
+    const event: LoggedEvent = {
+      entityId: null,
+      level: null,
+      clientId: getClientId(),
+      clientName: getClientName(),
+      ...input,
+      id: String(eventSeq),
+      ts: new Date().toISOString(),
+    };
+    eventLog.unshift(event);
+    eventLog.length = Math.min(eventLog.length, EVENT_LOG_CAP);
+    try {
+      globalThis.localStorage?.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog));
+    } catch {
+      // Storage can be blocked; the log then lives for this page only.
+    }
+    emitServer({ type: "event", event: clone(event) });
+  }
+  // Mirrors the backend 018 query validation (invalid_query 400).
+  function eventsQueryOk(q: EventsQuery): boolean {
+    if (q.types && (q.types.length > 10 || q.types.some((t) => !EVENT_TYPE_RE.test(t)))) return false;
+    if (q.entityId !== undefined && !ENTITY_ID.test(q.entityId)) return false;
+    if ((q.from !== undefined && Number.isNaN(Date.parse(q.from))) || (q.to !== undefined && Number.isNaN(Date.parse(q.to)))) return false;
+    if (q.from !== undefined && q.to !== undefined && Date.parse(q.from) > Date.parse(q.to)) return false;
+    if (q.before !== undefined && !/^\d+$/.test(q.before)) return false;
+    if (q.limit !== undefined && !(Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 500)) return false;
+    return true;
+  }
 
   // Reads share the scenario switch: error rejects, slow delays, everything else is normal.
   async function read<T>(produce: () => T | Promise<T>): Promise<T> {
@@ -477,6 +570,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       updatedBy: by,
     };
     settings.set(key, stored);
+    recordEvent({ type: "config_changed", source: "api", clientId: by, payload: { resource: "settings", keys: [key] } });
     emitServer({ type: "resource_changed", resource: "settings", keys: [key], by });
     return stored;
   }
@@ -487,6 +581,27 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   }
 
   return {
+    async listEvents(query: EventsQuery = {}): Promise<LoggedEvent[]> {
+      if (scenario === "no-events") throw new ApiError("not_found", "not_found", 404);
+      if (!eventsQueryOk(query)) throw new ApiError("server", "invalid_query", 400);
+      return read(() => {
+        const fromMs = query.from !== undefined ? Date.parse(query.from) : null;
+        const toMs = query.to !== undefined ? Date.parse(query.to) : null;
+        const types = query.types ?? [];
+        return eventLog
+          .filter(
+            (e) =>
+              (types.length === 0 || types.includes(e.type)) &&
+              (query.entityId === undefined || e.entityId === query.entityId) &&
+              (fromMs === null || Date.parse(e.ts) >= fromMs) &&
+              (toMs === null || Date.parse(e.ts) <= toMs) &&
+              (query.before === undefined || Number(e.id) < Number(query.before)),
+          )
+          .slice(0, query.limit ?? 100)
+          .map(clone);
+      });
+    },
+
     async getSettings(): Promise<Setting[]> {
       if (scenario === "no-settings") throw new ApiError("not_found", "not_found", 404);
       return read(() => [...settings.values()].sort((a, b) => a.key.localeCompare(b.key)).map(clone));
@@ -729,13 +844,17 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     },
 
     async runAction(entityId: string, action: EntityAction): Promise<Entity> {
-      if (scenario === "action-error") throw new ApiError("server", "Mock scenario: action-error", 500);
+      if (scenario === "action-error") {
+        recordEvent({ type: "action", source: "api", entityId, payload: { action: action.action, ok: false, error: "action-error" } });
+        throw new ApiError("server", "Mock scenario: action-error", 500);
+      }
       if (action.action === "stop_cover") cancelMove(entityId);
       const current = entities.get(entityId);
       if (!current) throw new ApiError("not_found", "entity_not_found", 404);
       await delay(actionDelayMs);
       const updated = applyAction(current, action);
       entities.set(entityId, updated);
+      recordEvent({ type: "action", source: "api", entityId, payload: { action: action.action, ok: true } });
       // Like Home Assistant (117): the answer still shows the state before the change; the new state
       // reaches the stream a little later, so the optimistic value has to bridge the gap.
       setTimeout(() => {
@@ -787,6 +906,16 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
               timeouts.push(setTimeout(() => ackServerAlert(alert, "other-device"), REMOTE_ACK_MS));
             }
           }, change.ms));
+        }
+      }
+
+      // Feature 140 "ha-link-drop": the backend lost Home Assistant at 1 s and got it back at 3 s (019 ha_link frame + row).
+      if (scenario === "ha-link-drop") {
+        for (const [ms, connected] of [[1000, false], [3000, true]] as const) {
+          timeouts.push(setTimeout(() => {
+            emitServer({ type: "ha_link", connected, at: new Date().toISOString() });
+            recordEvent({ type: "ha_link", source: "ha", payload: { connected } });
+          }, ms));
         }
       }
 
