@@ -34,6 +34,11 @@ function entity(
   };
 }
 
+// Feature 142 scenario "cover-presets": the same cover, already calibrated and at a known position (SHUT, 0 %).
+export function createKnownCoverEntities(): Entity[] {
+  return [entity("cover.salon_blind", "closed", { estimated_position: 0 }, "living_room", "Salon blind")];
+}
+
 // Feature 127 scenario "cover-calibration": a cover with open/close only (no current_position), like Persiana Salon.
 export function createUncalibratedCoverEntities(): Entity[] {
   return [entity("cover.salon_blind", "closed", { estimated_position: null }, "living_room", "Salon blind")];

@@ -18,9 +18,10 @@ const LEG_COPY: Record<Leg, { step: number; verb: string; doing: string; past: s
 interface CalibrationWizardProps {
   entity: Entity;
   onClose: () => void;
+  onSaved?: () => void; // feature 142: the summary was saved (the panel offers SAVE A POSITION)
 }
 
-export default function CalibrationWizard({ entity, onClose }: CalibrationWizardProps) {
+export default function CalibrationWizard({ entity, onClose, onSaved }: CalibrationWizardProps) {
   const { sendIntent } = useEntities();
   const { save } = useCalibrations();
   const [wizard, dispatch] = useReducer(wizardReducer, initialWizard);
@@ -62,7 +63,10 @@ export default function CalibrationWizard({ entity, onClose }: CalibrationWizard
     if (wizard.closeMs === undefined || wizard.openMs === undefined) return;
     setSaving(true);
     setSaveError(null);
-    save(entity.entityId, { openMs: wizard.openMs, closeMs: wizard.closeMs }).then(onClose, () => {
+    save(entity.entityId, { openMs: wizard.openMs, closeMs: wizard.closeMs }).then(() => {
+      onSaved?.();
+      onClose();
+    }, () => {
       setSaving(false);
       setSaveError("Could not save the calibration. Try again.");
     });

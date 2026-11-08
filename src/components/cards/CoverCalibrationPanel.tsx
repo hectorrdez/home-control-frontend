@@ -10,18 +10,23 @@ import CalibrationWizard from "./CalibrationWizard";
 interface CoverCalibrationPanelProps {
   entity: Entity;
   disabled: boolean;
+  onSavePosition?: () => void; // feature 142: SAVE A POSITION shortcut after a saved calibration
 }
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
-export default function CoverCalibrationPanel({ entity, disabled }: CoverCalibrationPanelProps) {
+export default function CoverCalibrationPanel({ entity, disabled, onSavePosition }: CoverCalibrationPanelProps) {
   const { status, calibrations, remove } = useCalibrations();
   const toast = useToast();
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const reportsPosition = typeof entity.attributes.current_position === "number";
   if (status !== "ready" || reportsPosition) return null;
 
-  if (wizardOpen) return <CalibrationWizard entity={entity} onClose={() => setWizardOpen(false)} />;
+  if (wizardOpen)
+    return (
+      <CalibrationWizard entity={entity} onClose={() => setWizardOpen(false)} onSaved={() => setJustSaved(true)} />
+    );
 
   const calibration = calibrations[entity.entityId];
   const onDelete = () => {
@@ -45,6 +50,11 @@ export default function CoverCalibrationPanel({ entity, disabled }: CoverCalibra
           </Button>
         )}
       </div>
+      {justSaved && onSavePosition && (
+        <Button variant="secondary" disabled={disabled} onClick={onSavePosition}>
+          SAVE A POSITION
+        </Button>
+      )}
     </section>
   );
 }

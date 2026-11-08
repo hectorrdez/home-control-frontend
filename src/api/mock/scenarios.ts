@@ -17,6 +17,7 @@ export const SCENARIOS = [
   "remote-change", // feature 132: 1 s after subscribe another device changes the first alias
   "no-settings", // feature 133: settings list and get reject not_found (backend without 017)
   "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
+  "cover-presets", // feature 142: calibrated cover at a known position (SHUT) for saved positions
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

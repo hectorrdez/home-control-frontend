@@ -1,5 +1,5 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, SettingConflictError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type Setting } from "./types";
+import { ApiError, SettingConflictError, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type Setting } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 import { getClientId, getClientName } from "./clientIdentity";
@@ -196,6 +196,34 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteCalibration(entityId): Promise<CoverCalibration[]> {
       return request<CoverCalibration[]>(`/api/calibrations/${encodeURIComponent(entityId)}`, { method: "DELETE" });
+    },
+
+    // Feature 142: backend 021 (presets, served from memory). Writes answer with `data: [preset]`.
+    async getPresets(entityId?: string): Promise<Preset[]> {
+      const query = entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
+      return request<Preset[]>(`/api/presets${query}`);
+    },
+
+    async createPreset(input: PresetInput): Promise<Preset> {
+      const [stored] = await request<Preset[]>("/api/presets", { method: "POST", body: JSON.stringify(input) });
+      return stored;
+    },
+
+    async updatePreset(id, input): Promise<Preset> {
+      const [stored] = await request<Preset[]>(`/api/presets/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      return stored;
+    },
+
+    async deletePreset(id): Promise<void> {
+      await request<unknown[]>(`/api/presets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+
+    async applyPreset(id): Promise<Entity> {
+      const [entity] = await request<Entity[]>(`/api/presets/${encodeURIComponent(id)}/apply`, { method: "POST" });
+      return entity;
     },
 
     // Feature 128: backend 012 (alert rules, served from memory). Writes answer with `data: [rule]`.

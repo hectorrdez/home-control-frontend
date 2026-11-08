@@ -16,7 +16,7 @@ export function parseStateChanged(data: unknown): Entity | null {
   }
 }
 
-const RESOURCES: readonly ServerResource[] = ["aliases", "calibrations", "alert_rules", "settings"];
+const RESOURCES: readonly ServerResource[] = ["aliases", "calibrations", "alert_rules", "settings", "presets"];
 const ALERT_LEVELS = ["low", "medium", "high"];
 
 type Json = Record<string, unknown>;
