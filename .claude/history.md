@@ -48,5 +48,5 @@ id|slug|state|role|commit|commit_url
 143|home-preset-modes|PENDING|frontend
 144|climate-history-split-charts|ENDED|frontend|97cadec|https://github.com/hectorrdez/home-control-frontend/commit/97cadec
 145|alert-system-notifications|PENDING|frontend
-146|chart-width-modes|PENDING|frontend
+146|chart-width-modes|ENDED|frontend|f7a0893|https://github.com/hectorrdez/home-control-frontend/commit/f7a0893
 147|zone-colors-in-charts|PENDING|frontend
