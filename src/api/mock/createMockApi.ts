@@ -17,6 +17,7 @@ import {
   type EntityAction,
   type HaStatus,
   type HistorySeries,
+  type ServerAlert,
   type ServerEvent,
   type ServerResource,
 } from "../types";
@@ -51,11 +52,15 @@ const ALERT_RULES: AlertRule[] = [
   { id: "seed-high", entityId: "lock.front_door", trigger: { type: "state_becomes", value: "unlocked" }, level: "high", message: "Front door unlocked" },
   { id: "seed-low", entityId: "light.office_desk", trigger: { type: "state_becomes", value: "off" }, level: "low" },
 ];
-const ALERT_TIMELINE: Array<{ ms: number; entityId: string; state: string }> = [
-  { ms: 1500, entityId: "sensor.office_desk_power", state: "unavailable" },
-  { ms: 4000, entityId: "lock.front_door", state: "unlocked" },
-  { ms: 6000, entityId: "light.office_desk", state: "off" },
+// Feature 139: the same timeline also fires the server alert (backend 020) for the matching seeded rule.
+const ALERT_TIMELINE: Array<{ ms: number; entityId: string; state: string; ruleId: string; level: "low" | "medium" | "high"; text: string }> = [
+  { ms: 1500, entityId: "sensor.office_desk_power", state: "unavailable", ruleId: "seed-medium", level: "medium", text: "DISCONNECTS" },
+  { ms: 4000, entityId: "lock.front_door", state: "unlocked", ruleId: "seed-high", level: "high", text: "Front door unlocked" },
+  { ms: 6000, entityId: "light.office_desk", state: "off", ruleId: "seed-low", level: "low", text: "BECOMES OFF" },
 ];
+// Feature 139 "remote-ack": another device acks a HIGH alert this long after it fired.
+const REMOTE_ACK_MS = 2000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -335,7 +340,36 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const ALERT_LEVELS: readonly string[] = ["off", "low", "medium", "high"];
   const alertRules = new Map<string, AlertRule>();
   let alertSeq = 0;
-  if (scenario === "alerts") for (const rule of ALERT_RULES) alertRules.set(rule.id, rule);
+  const seedsRules = scenario === "alerts" || scenario === "alerts-local" || scenario === "remote-ack";
+  if (seedsRules) for (const rule of ALERT_RULES) alertRules.set(rule.id, rule);
+
+  // Feature 139: server-side alerts (backend 020). The mock fires them itself; the panel does not evaluate rules then.
+  const serverAlerts: ServerAlert[] = [];
+  let serverAlertSeq = 0;
+  function emitAlert(step: { ruleId: string; entityId: string; level: "low" | "medium" | "high"; text: string }): ServerAlert {
+    const alert: ServerAlert = {
+      id: `alert-${++serverAlertSeq}`,
+      ruleId: step.ruleId,
+      entityId: step.entityId,
+      level: step.level,
+      text: step.text,
+      firedAt: new Date().toISOString(),
+      ackedAt: null,
+      ackedBy: null,
+      clientId: null,
+    };
+    serverAlerts.push(alert);
+    emitServer({ type: "alert", alert: clone(alert) });
+    return alert;
+  }
+  function ackServerAlert(alert: ServerAlert, by: string | null): ServerAlert {
+    if (alert.ackedAt !== null) return alert;
+    alert.ackedAt = new Date().toISOString();
+    alert.ackedBy = by;
+    emitServer({ type: "alert_acked", id: alert.id, ackedAt: alert.ackedAt, ackedBy: by });
+    return alert;
+  }
+  const isOpenAlert = (alert: ServerAlert) => alert.ackedAt === null && Date.now() - Date.parse(alert.firedAt) < DAY_MS;
 
   function validTrigger({ type, value }: { type?: unknown; value?: unknown }): boolean {
     if (type === "connects" || type === "disconnects" || type === "interacted") return true;
@@ -515,6 +549,28 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       return clone(entities.get(entityId) as Entity);
     },
 
+    // Feature 139 (backend 020). alerts-local has no alerts endpoint: 404 -> the panel falls back to the 129 engine.
+    async listAlerts(status: "open" | "all", limit = 50): Promise<ServerAlert[]> {
+      if (scenario === "alerts-local") throw new ApiError("not_found", "alerts_not_found", 404);
+      return read(() =>
+        [...serverAlerts]
+          .reverse()
+          .filter((alert) => status === "all" || isOpenAlert(alert))
+          .slice(0, limit)
+          .map(clone),
+      );
+    },
+
+    async ackAlert(id: string): Promise<ServerAlert> {
+      const alert = serverAlerts.find((candidate) => candidate.id === id);
+      if (!alert) throw new ApiError("server", "alert_not_found", 404);
+      return clone(ackServerAlert(alert, getClientId()));
+    },
+
+    async ackAllAlerts(): Promise<ServerAlert[]> {
+      return serverAlerts.filter(isOpenAlert).map((alert) => clone(ackServerAlert(alert, getClientId())));
+    },
+
     async listAlertRules(): Promise<AlertRule[]> {
       return read(() =>
         [...alertRules.values()]
@@ -631,9 +687,16 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
       // Feature 126 "device-flap": both members of the Desk plug device lose their link, then recover. Emitted in
       // one tick, like a device dropping off the network, so the feed dedupes them into one event.
-      if (scenario === "alerts") {
+      if (scenario === "alerts" || scenario === "alerts-local" || scenario === "remote-ack") {
         for (const change of ALERT_TIMELINE) {
-          timeouts.push(setTimeout(() => setEntityState(change.entityId, change.state), change.ms));
+          timeouts.push(setTimeout(() => {
+            setEntityState(change.entityId, change.state);
+            if (scenario === "alerts-local") return;
+            const alert = emitAlert(change);
+            if (scenario === "remote-ack" && alert.level === "high") {
+              timeouts.push(setTimeout(() => ackServerAlert(alert, "other-device"), REMOTE_ACK_MS));
+            }
+          }, change.ms));
         }
       }
 

@@ -3,7 +3,7 @@ import type { AlertCenterValue } from "@/features/alerts/useAlerts";
 
 // Feature 129: HIGH alert banner. role=alertdialog, focus on DISMISS, stays until dismissed.
 // Its entrance animation is motion-safe only; the sound is not tied to motion.
-export default function AlertBanner({ queue, soundEnabled, dismiss }: AlertCenterValue) {
+export default function AlertBanner({ queue, soundEnabled, dismiss, dismissAll }: AlertCenterValue) {
   const dismissRef = useRef<HTMLButtonElement>(null);
   const current = queue[0];
   const currentId = current?.id;
@@ -27,16 +27,28 @@ export default function AlertBanner({ queue, soundEnabled, dismiss }: AlertCente
       <p id="high-alert-text" className="font-mono text-label-caps uppercase">
         {`${current.areaName ?? "NO AREA"} · ${current.text}`}
       </p>
+      {current.since !== undefined && <p className="font-mono text-label-caps uppercase">{`SINCE ${current.since}`}</p>}
       {queue.length > 1 && <p className="font-mono text-label-caps uppercase">{`+${queue.length - 1} MORE QUEUED`}</p>}
       {!soundEnabled && <p className="font-mono text-label-caps uppercase">SOUND BLOCKED: ENABLE ALERT SOUND TO HEAR IT</p>}
-      <button
-        ref={dismissRef}
-        type="button"
-        onClick={dismiss}
-        className="min-h-11 self-start rounded border border-on-error-container px-space-md font-mono text-label-caps uppercase focus-visible:outline-2 focus-visible:outline-on-error-container"
-      >
-        DISMISS
-      </button>
+      <div className="flex flex-wrap gap-space-sm">
+        <button
+          ref={dismissRef}
+          type="button"
+          onClick={dismiss}
+          className="min-h-11 rounded border border-on-error-container px-space-md font-mono text-label-caps uppercase focus-visible:outline-2 focus-visible:outline-on-error-container"
+        >
+          DISMISS
+        </button>
+        {queue.length > 1 && (
+          <button
+            type="button"
+            onClick={dismissAll}
+            className="min-h-11 rounded border border-on-error-container px-space-md font-mono text-label-caps uppercase focus-visible:outline-2 focus-visible:outline-on-error-container"
+          >
+            DISMISS ALL
+          </button>
+        )}
+      </div>
     </div>
   );
 }

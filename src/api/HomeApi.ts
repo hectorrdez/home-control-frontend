@@ -12,6 +12,7 @@ import type {
   AlertRuleInput,
   ServerEvent,
   Setting,
+  ServerAlert,
 } from "./types";
 
 export interface EntityFilter {
@@ -52,4 +53,8 @@ export interface HomeApi {
   getSetting(key: string): Promise<Setting | null>;
   putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting>;
   deleteSetting(key: string): Promise<void>;
+  // Feature 139 (backend 020). listAlerts rejects with kind "not_found" when the backend has no alerts endpoint (local fallback).
+  listAlerts(status: "open" | "all", limit?: number): Promise<ServerAlert[]>;
+  ackAlert(id: string): Promise<ServerAlert>;
+  ackAllAlerts(): Promise<ServerAlert[]>;
 }

@@ -26,3 +26,30 @@ describe("mock alerts scenario (feature 129)", () => {
     ]);
   });
 });
+
+describe("mock server alerts (feature 139)", () => {
+  it("fires an alert frame per timeline step and lists it as open", async () => {
+    vi.useFakeTimers();
+    const api = createMockApi({ scenario: "alerts" });
+    const frames: string[] = [];
+    api.subscribe(() => undefined, () => undefined, (event) => {
+      if (event.type === "alert") frames.push(event.alert.level);
+    });
+    vi.advanceTimersByTime(7000);
+    expect(frames).toEqual(["medium", "high", "low"]);
+    const open = await api.listAlerts("open");
+    expect(open.map((alert) => alert.level)).toEqual(["low", "high", "medium"]);
+  });
+
+  it("acks idempotently and reports alerts-local as not_found", async () => {
+    vi.useFakeTimers();
+    const api = createMockApi({ scenario: "alerts" });
+    api.subscribe(() => undefined, () => undefined);
+    vi.advanceTimersByTime(1600);
+    const [alert] = await api.listAlerts("open");
+    const acked = await api.ackAlert(alert.id);
+    expect(acked.ackedAt).not.toBeNull();
+    expect(await api.listAlerts("open")).toEqual([]);
+    await expect(createMockApi({ scenario: "alerts-local" }).listAlerts("open")).rejects.toMatchObject({ kind: "not_found" });
+  });
+});
