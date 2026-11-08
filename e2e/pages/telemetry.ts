@@ -116,8 +116,20 @@ export class TelemetryPage {
       .getByRole("button", { name: kind, exact: true });
   }
 
-  wideToggle(label: string) {
-    return this.page.getByRole("button", { name: `Wide ${label}`, exact: true });
+  // Feature 146: FULL / HALF / THIRD width pills of one chart's edit bar.
+  widthOption(label: string, size: "FULL" | "HALF" | "THIRD") {
+    return this.page
+      .getByRole("group", { name: `Width for ${label}`, exact: true })
+      .getByRole("button", { name: size, exact: true });
+  }
+
+  // The "Live charts" list and the grid slot (listitem) that holds one chart card.
+  liveChartsList() {
+    return this.page.getByRole("list", { name: "Live charts", exact: true });
+  }
+
+  chartSlot(sensorName: string) {
+    return this.liveChartsList().getByRole("listitem").filter({ has: this.chartCard(sensorName) });
   }
 
   // Saved chart layout (localStorage, feature 113/114). Read/replace the widget list for seeding edge cases.

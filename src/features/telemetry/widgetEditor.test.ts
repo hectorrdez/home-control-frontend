@@ -6,9 +6,11 @@ import {
   canMove,
   moveWidget,
   resetWidgets,
+  SIZES,
+  SIZE_LABEL,
   setKind,
+  setSize,
   setVisible,
-  setWide,
   validKinds,
 } from "./widgetEditor";
 
@@ -103,7 +105,7 @@ describe("canMove", () => {
   });
 });
 
-describe("setVisible / setKind / setWide", () => {
+describe("setVisible / setKind / setSize", () => {
   it("setVisible changes only the target", () => {
     const result = setVisible(sample(), "a", false);
     expect(result.find((x) => x.id === "a")?.visible).toBe(false);
@@ -116,16 +118,16 @@ describe("setVisible / setKind / setWide", () => {
     expect(result.filter((x) => x.id !== "c")).toEqual(sample().filter((x) => x.id !== "c"));
   });
 
-  it("setWide changes only the target", () => {
-    const result = setWide(sample(), "d", true);
-    expect(result.find((x) => x.id === "d")?.wide).toBe(true);
+  it("setSize changes only the target", () => {
+    const result = setSize(sample(), "d", "full");
+    expect(result.find((x) => x.id === "d")?.size).toBe("full");
     expect(result.filter((x) => x.id !== "d")).toEqual(sample().filter((x) => x.id !== "d"));
   });
 
   it.each([
     ["setVisible", (ws: Widget[]) => setVisible(ws, "a", false)],
     ["setKind", (ws: Widget[]) => setKind(ws, "a", "bar")],
-    ["setWide", (ws: Widget[]) => setWide(ws, "a", true)],
+    ["setSize", (ws: Widget[]) => setSize(ws, "a", "half")],
   ])("%s renumbers non-sequential orders 0..n-1 in sorted order", (_name, run) => {
     const widgets = [w("a", 10), w("b", 5, false), w("c", 30), w("d", 20)];
     const result = run(widgets);
@@ -134,12 +136,17 @@ describe("setVisible / setKind / setWide", () => {
     expect(widgets.map((x) => x.order)).toEqual([10, 5, 30, 20]);
   });
 
-  it("setVisible, setKind and setWide apply the patch to the renumbered target", () => {
+  it("setVisible, setKind and setSize apply the patch to the renumbered target", () => {
     const widgets = [w("a", 10), w("b", 5), w("c", 30), w("d", 20)];
     const hidden = setVisible(widgets, "c", false).find((x) => x.id === "c");
     expect(hidden).toMatchObject({ visible: false, order: 3 });
     expect(setKind(widgets, "d", "area").find((x) => x.id === "d")).toMatchObject({ kind: "area", order: 2 });
-    expect(setWide(widgets, "b", true).find((x) => x.id === "b")).toMatchObject({ wide: true, order: 0 });
+    expect(setSize(widgets, "b", "half").find((x) => x.id === "b")).toMatchObject({ size: "half", order: 0 });
+  });
+
+  it("exposes the three width modes in FULL, HALF, THIRD order", () => {
+    expect(SIZES).toEqual(["full", "half", "third"]);
+    expect(SIZES.map((s) => SIZE_LABEL[s])).toEqual(["FULL", "HALF", "THIRD"]);
   });
 
   it("does not mutate the input and returns a new array", () => {
@@ -153,16 +160,23 @@ describe("setVisible / setKind / setWide", () => {
     const widgets = sample();
     expect(setVisible(widgets, "missing", false)).toBe(widgets);
     expect(setKind(widgets, "missing", "bar")).toBe(widgets);
-    expect(setWide(widgets, "missing", true)).toBe(widgets);
+    expect(setSize(widgets, "missing", "full")).toBe(widgets);
   });
 });
 
 describe("resetWidgets", () => {
-  it("equals deriveWidgets: all visible, default kinds, not wide, default order", () => {
+  it("equals deriveWidgets: all visible, default kinds, no size (= third), default order", () => {
     const sensors = [power, energy, humidity, temp];
     const result = resetWidgets(sensors);
     expect(result).toEqual(deriveWidgets(sensors));
     expect(result.every((x) => x.visible)).toBe(true);
-    expect(result.every((x) => x.wide === undefined)).toBe(true);
+    expect(result.every((x) => x.size === undefined)).toBe(true);
+  });
+
+  it("clears a chosen size", () => {
+    const sensors = [humidity];
+    const changed = setSize(deriveWidgets(sensors), "widget.sensor.kitchen_humidity", "full");
+    expect(resetWidgets(sensors)[0].size).toBeUndefined();
+    expect(changed[0].size).toBe("full");
   });
 });

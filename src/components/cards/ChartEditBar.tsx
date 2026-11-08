@@ -1,20 +1,21 @@
-import { ArrowDown, ArrowUp, EyeOff, Maximize2 } from "lucide-react";
+import { ArrowDown, ArrowUp, EyeOff } from "lucide-react";
 import Button from "@components/controls/Button";
 import FilterPill from "@components/controls/FilterPill";
-import { KIND_LABEL } from "@/features/telemetry/widgetEditor";
-import type { WidgetKind } from "@/features/telemetry/widgets";
+import { KIND_LABEL, SIZE_LABEL, SIZES } from "@/features/telemetry/widgetEditor";
+import type { WidgetKind, WidgetSize } from "@/features/telemetry/widgets";
 
 // Feature 114: edit controls shown under a chart card while the telemetry grid is in edit mode.
+// Feature 146: the WIDE toggle is replaced by a FULL / HALF / THIRD width selector.
 interface ChartEditBarProps {
   label: string;
   kind: WidgetKind;
   kinds: WidgetKind[];
-  wide: boolean;
+  size: WidgetSize;
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
   onKind: (kind: WidgetKind) => void;
-  onWide: (wide: boolean) => void;
+  onSize: (size: WidgetSize) => void;
   onHide: () => void;
 }
 
@@ -22,12 +23,12 @@ export default function ChartEditBar({
   label,
   kind,
   kinds,
-  wide,
+  size,
   canUp,
   canDown,
   onMove,
   onKind,
-  onWide,
+  onSize,
   onHide,
 }: ChartEditBarProps) {
   return (
@@ -45,10 +46,13 @@ export default function ChartEditBar({
           </FilterPill>
         ))}
       </div>
-      <FilterPill selected={wide} aria-label={`Wide ${label}`} onClick={() => onWide(!wide)}>
-        <Maximize2 size={16} aria-hidden="true" />
-        WIDE
-      </FilterPill>
+      <div role="group" aria-label={`Width for ${label}`} className="flex flex-wrap gap-space-xs">
+        {SIZES.map((s) => (
+          <FilterPill key={s} selected={size === s} onClick={() => onSize(s)}>
+            {SIZE_LABEL[s]}
+          </FilterPill>
+        ))}
+      </div>
       <Button variant="secondary" aria-label={`Hide ${label}`} onClick={onHide}>
         <EyeOff size={16} aria-hidden="true" />
         HIDE

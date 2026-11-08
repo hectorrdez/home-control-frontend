@@ -7,14 +7,22 @@ import ChartFilters from "@components/panels/ChartFilters";
 import Switch from "@components/controls/Switch";
 import type { ConnectionState, Entity } from "@/api/types";
 import { useLiveBuffers } from "@/features/telemetry/useLiveBuffers";
-import { loadWidgets, numericSensors, reconcileWidgets, saveWidgets, type Widget } from "@/features/telemetry/widgets";
 import {
+  loadWidgets,
+  numericSensors,
+  reconcileWidgets,
+  saveWidgets,
+  type Widget,
+  type WidgetSize,
+} from "@/features/telemetry/widgets";
+import {
+  SIZE_LABEL,
   canMove,
   moveWidget,
   resetWidgets,
   setKind,
+  setSize,
   setVisible,
-  setWide,
   validKinds,
 } from "@/features/telemetry/widgetEditor";
 import {
@@ -31,6 +39,14 @@ import SensorChartCard from "./SensorChartCard";
 import ChartEditBar from "./ChartEditBar";
 
 const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
+
+// Feature 146: column span of a chart on the 6-column xl grid (2 md columns). Literal class strings so Tailwind generates them.
+// md is bounded with max-xl: Tailwind emits the xl media query before md, so an unbounded md:col-span-2 would override xl:col-span-6.
+function sizeClass(size: WidgetSize): string {
+  if (size === "full") return "md:max-xl:col-span-2 xl:col-span-6";
+  if (size === "half") return "xl:col-span-3";
+  return "xl:col-span-2";
+}
 
 // Feature 113: live chart grid for every visible numeric sensor. Renders inside the telemetry "Climate history" region.
 const PAGE_SIZE = 24;
@@ -296,16 +312,17 @@ export default function TelemetryChartsGrid({
         </>
       ) : (
         <>
-          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-3">
+          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:max-xl:grid-cols-2 xl:grid-cols-6">
             {visible.slice(0, limit).map((w) => {
               const entity = byId.get(w.entityId);
               if (!entity) return null;
+              const size = w.size ?? "third";
               return (
                 <div
                   key={w.id}
                   role="listitem"
                   data-widget-id={w.id}
-                  className={w.wide ? "md:col-span-2" : undefined}
+                  className={sizeClass(size)}
                 >
                   <SensorChartCard
                     entity={entity}
@@ -319,12 +336,15 @@ export default function TelemetryChartsGrid({
                       label={labelOf(entity)}
                       kind={w.kind}
                       kinds={validKinds(entity)}
-                      wide={w.wide === true}
+                      size={size}
                       canUp={canMove(widgets, w.id, -1)}
                       canDown={canMove(widgets, w.id, 1)}
                       onMove={(dir) => move(w, dir)}
                       onKind={(kind) => setSaved(setKind(widgets, w.id, kind))}
-                      onWide={(wide) => setSaved(setWide(widgets, w.id, wide))}
+                      onSize={(next) => {
+                        setSaved(setSize(widgets, w.id, next));
+                        setAnnouncement(`${labelOf(entity)} width ${SIZE_LABEL[next]}`);
+                      }}
                       onHide={() => hide(w)}
                     />
                   )}

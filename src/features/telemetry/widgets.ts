@@ -4,19 +4,25 @@ import type { Entity } from "@/api/types";
 
 export type WidgetKind = "line" | "area" | "bar" | "gauge";
 
+// Feature 146: width of a chart on the 6-column grid (xl). Absent on a Widget = "third".
+export type WidgetSize = "full" | "half" | "third";
+
 export interface Widget {
   id: string;
   entityId: string;
   kind: WidgetKind;
   visible: boolean;
   order: number;
-  // Feature 114: wide chart spans 2 grid columns from md. Absent = false (schema v1 compatible).
+  // Feature 146: replaces 114's `wide`. Absent = "third" (the default look).
+  size?: WidgetSize;
+  // Feature 114 legacy flag. Read only (migrated to `size` when parsed); never written again.
   wide?: boolean;
 }
 
 export const WIDGET_STORAGE_KEY = "hc.telemetry.widgets.v1";
 const SCHEMA_VERSION = 1;
 const KINDS: readonly WidgetKind[] = ["line", "area", "bar", "gauge"];
+export const WIDGET_SIZES: readonly WidgetSize[] = ["full", "half", "third"];
 const NUMERIC_CLASSES = new Set([
   "temperature",
   "humidity",
@@ -97,8 +103,17 @@ function isWidget(value: unknown): value is Widget {
     typeof w.visible === "boolean" &&
     typeof w.order === "number" &&
     (w.wide === undefined || typeof w.wide === "boolean") &&
+    (w.size === undefined || WIDGET_SIZES.includes(w.size as WidgetSize)) &&
     KINDS.includes(w.kind as WidgetKind)
   );
+}
+
+// Feature 146 migration: a saved `size` wins; else legacy `wide: true` -> "half" (2/3 is closest to 1/2), else "third".
+// The result always has a size and never carries `wide`.
+export function normalizeWidget(w: Widget): Widget {
+  const { wide, ...rest } = w;
+  const size: WidgetSize = rest.size ?? (wide === true ? "half" : "third");
+  return { ...rest, size };
 }
 
 // Corrupt JSON, unknown schema version or bad shape -> null (caller falls back to defaults).
@@ -108,7 +123,7 @@ export function parseWidgets(raw: string | null): Widget[] | null {
   try {
     const data = JSON.parse(raw) as { version?: unknown; widgets?: unknown };
     if (data.version !== SCHEMA_VERSION || !Array.isArray(data.widgets)) return null;
-    return data.widgets.every(isWidget) ? data.widgets : null;
+    return data.widgets.every(isWidget) ? data.widgets.map(normalizeWidget) : null;
   } catch {
     return null;
   }
@@ -124,7 +139,8 @@ export function loadWidgets(): Widget[] | null {
 
 export function saveWidgets(widgets: Widget[]): void {
   try {
-    window.localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, widgets }));
+    const stored = widgets.map(normalizeWidget);
+    window.localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, widgets: stored }));
   } catch {
     // Storage unavailable: the layout still works for this session.
   }
