@@ -36,7 +36,7 @@ id|slug|state|role|commit|commit_url
 131|history-all-rooms-lines|ENDED|frontend|67fd350|https://github.com/hectorrdez/home-control-frontend/commit/67fd350
 132|client-identity-server-events|ENDED|frontend|b53eb45|https://github.com/hectorrdez/home-control-frontend/commit/b53eb45
 133|settings-api-client|ENDED|frontend|8045c27|https://github.com/hectorrdez/home-control-frontend/commit/8045c27
-134|synced-setting-store|PENDING|frontend
+134|synced-setting-store|ENDED|frontend|80e90883bba7116cf78e634ea4bde68bd67d7e45|https://github.com/hectorrdez/home-control-frontend/commit/80e90883bba7116cf78e634ea4bde68bd67d7e45
 135|widgets-synced|PENDING|frontend
 136|panels-synced|PENDING|frontend
 137|chart-filters-synced|PENDING|frontend
