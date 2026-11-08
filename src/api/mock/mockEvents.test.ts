@@ -18,7 +18,7 @@ describe("mock event log (140)", () => {
     await first.runAction("light.office_desk", { action: "turn_off" });
     const second = createMockApi({ actionDelayMs: 0, streamDelayMs: 0 });
     expect(await second.listEvents({ types: ["action"], limit: 1 })).toHaveLength(1);
-    expect(await second.listEvents({ types: ["alert"] })).toEqual([]);
+    expect(await second.listEvents({ types: ["action"], limit: 1 })).toMatchObject([{ payload: { action: "turn_off" } }]);
   });
 
   it("validates the query like the backend (invalid_query) and rejects with not_found in no-events", async () => {

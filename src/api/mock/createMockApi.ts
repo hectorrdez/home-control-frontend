@@ -102,18 +102,61 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const EVENT_LOG_KEY = "hc.mock.events.v1";
   const EVENT_LOG_CAP = 500;
   const EVENT_TYPE_RE = /^[a-z_]+$/;
-  const eventLog: LoggedEvent[] = loadEventLog();
+  const SEED_EVENT_COUNT = 130;
+  const storedLog = readStoredEventLog();
+  const eventLog: LoggedEvent[] = storedLog ?? buildSeedEvents(seed);
   let eventSeq = eventLog.reduce((max, e) => Math.max(max, Number(e.id)), 0);
-  function loadEventLog(): LoggedEvent[] {
+  function readStoredEventLog(): LoggedEvent[] | null {
     try {
-      const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(EVENT_LOG_KEY) ?? "[]");
+      const raw = globalThis.localStorage?.getItem(EVENT_LOG_KEY);
+      if (raw === null || raw === undefined) return null;
+      const parsed: unknown = JSON.parse(raw);
       return Array.isArray(parsed) ? (parsed as LoggedEvent[]).slice(0, EVENT_LOG_CAP) : [];
     } catch {
       return [];
     }
   }
+  // Feature 141: a deterministic history for the first visit (>= 120 rows, every type), newest first.
+  function buildSeedEvents(value: number): LoggedEvent[] {
+    const next = createPrng(hashSeed(`events:${value}`));
+    const pick = <T,>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
+    const ids = [...entities.keys()].sort();
+    const clients = ["Kitchen tablet", "Hall phone", "Wall panel"];
+    const start = Date.parse("2026-11-01T00:00:00.000Z");
+    const rows: LoggedEvent[] = [];
+    for (let i = 0; i < SEED_EVENT_COUNT; i++) {
+      const roll = next();
+      const entityId = ids.length ? pick(ids) : null;
+      const clientName = pick(clients);
+      const alertId = `seed-${i + 1}`;
+      let row: Pick<LoggedEvent, "type" | "source" | "entityId" | "level" | "clientName" | "payload">;
+      if (roll < 0.5) {
+        row = { type: "action", source: "api", entityId, level: null, clientName, payload: { action: pick(["turn_on", "turn_off", "toggle"]), ok: next() > 0.1 } };
+      } else if (roll < 0.65) {
+        row = { type: "availability", source: "ha", entityId, level: null, clientName: null, payload: { available: next() > 0.3 } };
+      } else if (roll < 0.75) {
+        row = { type: "config_changed", source: "api", entityId: null, level: null, clientName, payload: { resource: pick(["aliases", "settings", "alert_rules"]), keys: [] } };
+      } else if (roll < 0.85) {
+        row = { type: "alert", source: "engine", entityId, level: pick(["low", "medium", "high"]), clientName: null, payload: { alertId, ruleId: null, text: "Motion detected", trigger: { type: "connects" }, clientId: null } };
+      } else if (roll < 0.92) {
+        row = { type: "alert_acked", source: "api", entityId, level: null, clientName, payload: { alertId } };
+      } else {
+        row = { type: "ha_link", source: "ha", entityId: null, level: null, clientName: null, payload: { connected: next() > 0.2 } };
+      }
+      rows.push({ id: String(i + 1), ts: new Date(start + i * 6 * 60_000).toISOString(), clientId: null, ...row });
+    }
+    return rows.reverse();
+  }
   type MockEventInput = Pick<LoggedEvent, "type" | "source" | "payload"> &
     Partial<Pick<LoggedEvent, "entityId" | "level" | "clientId" | "clientName">>;
+  function persistEventLog(): void {
+    try {
+      globalThis.localStorage?.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog));
+    } catch {
+      // Storage can be blocked; the log then lives for this page only.
+    }
+  }
+  if (!storedLog) persistEventLog();
   function recordEvent(input: MockEventInput): void {
     eventSeq += 1;
     const event: LoggedEvent = {
