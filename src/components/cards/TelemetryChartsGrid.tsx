@@ -27,14 +27,13 @@ import {
   validKinds,
 } from "@/features/telemetry/widgetEditor";
 import {
-  EMPTY_FILTERS,
   UNASSIGNED_ZONE,
   facetCounts,
   filterRows,
   normalize,
-  type ChartFilters as Filters,
   type ChartRow,
 } from "@/features/telemetry/widgetFilters";
+import { useChartFilters } from "@/features/telemetry/useChartFilters";
 import Button from "@components/controls/Button";
 import SensorChartCard from "./SensorChartCard";
 import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
@@ -98,8 +97,6 @@ export default function TelemetryChartsGrid({
   const widgets = useMemo(() => reconcileWidgets(saved, numeric), [saved, numeric]);
   const buffers = useLiveBuffers(numeric);
   const [limit, setLimit] = useState(PAGE_SIZE);
-  // Feature 118: session-only filter state (never persisted; resets on every load).
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
   // Feature 135: only user edits persist (never reconcile-only differences). ownJson remembers what this grid wrote.
   const ownJson = useRef<string | null>(null);
@@ -128,6 +125,9 @@ export default function TelemetryChartsGrid({
     [widgets, byId, names, areaName],
   );
   const facets = useMemo(() => facetCounts(rows), [rows]);
+  // Feature 137: filters are shared (telemetry.filters); stale zone ids are ignored against the zones on screen.
+  const zoneIds = useMemo(() => new Set(facets.zones.map((z) => z.id)), [facets]);
+  const { filters, change: setFilters, onSearchFocusChange } = useChartFilters(zoneIds);
   const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
   const toggle = (entityId: string, on: boolean) =>
     persist(widgets.map((w) => (w.entityId === entityId ? { ...w, visible: on } : w)));
@@ -264,7 +264,14 @@ export default function TelemetryChartsGrid({
       )}
       <SideDrawer side="left" title="Charts" open={panelOpen} onClose={closePanel}>
         <div className="flex flex-col gap-space-sm">
-          <ChartFilters filters={filters} onChange={setFilters} facets={facets} shown={filtered.length} total={rows.length} />
+          <ChartFilters
+            filters={filters}
+            onChange={setFilters}
+            facets={facets}
+            shown={filtered.length}
+            total={rows.length}
+            onSearchFocusChange={onSearchFocusChange}
+          />
           <div className="flex gap-space-xs">
             <Button variant="secondary" className="flex-1" onClick={() => setShown(true)}>
               ALL

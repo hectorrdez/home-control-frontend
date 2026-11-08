@@ -1,4 +1,5 @@
 import type { Entity } from "@/api/types";
+import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "@/features/settings/syncedSetting";
 import type { Widget } from "./widgets";
 
 // Feature 118: pure search/filter model for the CHARTS side panel. No React, no storage.
@@ -194,4 +195,63 @@ export function facetCounts(rows: ChartRow[]): FacetCounts {
     return count ? [{ id: c.id, label: c.label, count }] : [];
   });
   return { zones: zoneList, categories };
+}
+
+// Feature 137: the filters are a shared setting (telemetry.filters, 134). Stored value v1; the store debounces the PUT.
+export const FILTERS_QUERY_MAX = 100;
+export const FILTERS_ZONES_MAX = 50;
+const VISIBILITIES: readonly Visibility[] = ["all", "on", "off"];
+const CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
+
+export interface StoredFilters {
+  v: 1;
+  query: string;
+  zones: string[];
+  categories: ChartCategory[];
+  visibility: Visibility;
+}
+
+// Unknown categories are dropped; any other bad field makes the whole value invalid (null -> defaults).
+export function parseStoredFilters(raw: unknown): StoredFilters | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { v, query, zones, categories, visibility } = raw as Record<string, unknown>;
+  if (v !== 1 || typeof query !== "string" || query.length > FILTERS_QUERY_MAX) return null;
+  if (!Array.isArray(zones) || zones.length > FILTERS_ZONES_MAX || !zones.every((z) => typeof z === "string")) return null;
+  if (!Array.isArray(categories)) return null;
+  if (!VISIBILITIES.includes(visibility as Visibility)) return null;
+  return {
+    v: 1,
+    query,
+    zones,
+    categories: categories.filter((c): c is ChartCategory => typeof c === "string" && CATEGORY_IDS.has(c)),
+    visibility: visibility as Visibility,
+  };
+}
+
+export const filtersSetting = createSyncedSetting<StoredFilters>({
+  key: "telemetry.filters",
+  parse: parseStoredFilters,
+});
+registerSyncedSetting(filtersSetting as SyncedSetting<unknown>);
+
+export function toStoredFilters(f: ChartFilters): StoredFilters {
+  return {
+    v: 1,
+    query: f.query.slice(0, FILTERS_QUERY_MAX),
+    zones: f.zones.slice(0, FILTERS_ZONES_MAX),
+    categories: [...f.categories],
+    visibility: f.visibility,
+  };
+}
+
+export function fromStoredFilters(stored: StoredFilters | null): ChartFilters {
+  if (!stored) return EMPTY_FILTERS;
+  return { query: stored.query, zones: stored.zones, categories: stored.categories, visibility: stored.visibility };
+}
+
+// Zone ids no longer in the house (deleted in HA) are ignored when shown, so they never hide every chart.
+// Only the next user change rewrites the stored value.
+export function activeFilters(f: ChartFilters, zoneIds: ReadonlySet<string>): ChartFilters {
+  const zones = f.zones.filter((z) => zoneIds.has(z));
+  return zones.length === f.zones.length ? f : { ...f, zones };
 }

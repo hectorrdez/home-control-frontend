@@ -8,6 +8,7 @@ import { AliasesProvider } from "@/state/AliasesProvider";
 import { EntitiesProvider } from "@/state/EntitiesProvider";
 import { ToastProvider } from "@components/feedback/Toast";
 import { widgetsSetting, type StoredWidgets } from "@/features/telemetry/widgets";
+import { filtersSetting } from "@/features/telemetry/widgetFilters";
 
 const CACHE_KEY = "hc.setting.telemetry.widgets";
 import TelemetryChartsGrid from "./TelemetryChartsGrid";
@@ -80,6 +81,7 @@ describe("TelemetryChartsGrid", () => {
   beforeEach(() => {
     window.localStorage.clear();
     widgetsSetting.forget();
+    filtersSetting.forget();
   });
   afterEach(cleanup);
 
@@ -231,7 +233,8 @@ describe("TelemetryChartsGrid", () => {
       expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
     });
 
-    it("does not persist filters: a fresh mount starts unfiltered", () => {
+    // Feature 137: filters are the shared setting telemetry.filters, so a fresh mount restores them.
+    it("saves filters: a fresh mount restores them", () => {
       const first = renderMixed();
       openPanel();
       fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
@@ -239,7 +242,8 @@ describe("TelemetryChartsGrid", () => {
       first.unmount();
       renderMixed();
       openPanel();
-      expect(counter()).toBe("3 OF 3");
+      expect(counter()).toBe("1 OF 3");
+      expect(filtersSetting.get()?.query).toBe("kitchen");
     });
   });
 
