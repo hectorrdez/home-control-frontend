@@ -34,7 +34,7 @@ id|slug|state|role|commit|commit_url
 129|alert-engine|ENDED|frontend|df547f3|https://github.com/hectorrdez/home-control-frontend/commit/df547f3
 130|zone-color-palette|ENDED|frontend|4731f59|https://github.com/hectorrdez/home-control-frontend/commit/4731f59
 131|history-all-rooms-lines|ENDED|frontend|67fd350|https://github.com/hectorrdez/home-control-frontend/commit/67fd350
-132|client-identity-server-events|PENDING|frontend
+132|client-identity-server-events|ENDED|frontend|b53eb45|https://github.com/hectorrdez/home-control-frontend/commit/b53eb45
 133|settings-api-client|PENDING|frontend
 134|synced-setting-store|PENDING|frontend
 135|widgets-synced|PENDING|frontend
