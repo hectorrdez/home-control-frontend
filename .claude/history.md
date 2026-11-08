@@ -44,3 +44,9 @@ id|slug|state|role|commit|commit_url
 139|server-alerts|PENDING|frontend
 140|events-feed-from-server|PENDING|frontend
 141|event-history-page|PENDING|frontend
+142|actuator-presets-ui|PENDING|frontend
+143|home-preset-modes|PENDING|frontend
+144|climate-history-split-charts|ENDED|frontend|97cadec|https://github.com/hectorrdez/home-control-frontend/commit/97cadec
+145|alert-system-notifications|PENDING|frontend
+146|chart-width-modes|PENDING|frontend
+147|zone-colors-in-charts|PENDING|frontend
