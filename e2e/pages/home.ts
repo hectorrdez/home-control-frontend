@@ -15,6 +15,19 @@ export class HomePage {
     this.deck = new DeviceDeck(page);
   }
 
+  // Feature 143: a device card in the Home panel (by display name), and its MODES menu.
+  deviceCard(name: string) {
+    return this.page.getByRole("article", { name, exact: true });
+  }
+
+  modesButton(name: string) {
+    return this.deviceCard(name).getByRole("button", { name: "MODES", exact: true });
+  }
+
+  modesMenuItem(label: string) {
+    return this.page.getByRole("menuitem", { name: label, exact: true });
+  }
+
   // `query` selects a mock scenario, e.g. "?mock=empty".
   async open(query = "") {
     await this.page.goto(`/${query}`);
