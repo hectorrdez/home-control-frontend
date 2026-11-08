@@ -121,6 +121,7 @@ export default function PresetModesMenu({ presets, disabled, busy, onApply }: Pr
             id={menuId}
             role="menu"
             aria-label="Modes"
+            tabIndex={-1}
             onKeyDown={onMenuKey}
             style={{ position: "fixed", top: coords.top, left: coords.left }}
             className="z-50 flex min-w-48 flex-col gap-space-xs rounded-lg border border-primary-container/20 bg-surface-container-high p-space-xs"
