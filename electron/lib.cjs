@@ -125,8 +125,25 @@ function buildOfflinePage({ tokens, panelUrl }) {
 </html>`;
 }
 
+// Feature 145: the preload exposes one call (window.homeControl.showWindow) that sends this channel.
+// The preload cannot require this file (sandboxed preloads load only electron), so it repeats the string.
+const SHOW_WINDOW_CHANNEL = "hc:show-window";
+
+// Restores and raises the app window (hidden in the tray or minimised). Returns the handler for IPC and tray use.
+function createShowWindow(getWindow) {
+  return function showWindow() {
+    const win = getWindow();
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  };
+}
+
 module.exports = {
   DEFAULT_PANEL_URL,
+  SHOW_WINDOW_CHANNEL,
+  createShowWindow,
   DEV_PANEL_URL,
   MIN_WIDTH,
   MIN_HEIGHT,

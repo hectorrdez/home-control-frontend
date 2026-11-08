@@ -15,6 +15,7 @@ import PathUtils from "@utils/PathUtils";
 import { createAlarm, type Alarm } from "./alarm";
 import { entityChanges, evaluate, takeFirings, type AlertEvent } from "./engine";
 import { isSilentAtLoad, sinceLabel } from "./serverAlerts";
+import { closeAllSystemAlerts, closeSystemAlert, isPageHidden, notifySystemAlert } from "./systemNotify";
 
 // Feature 129: the alert monitor. Runs once (AlertsProvider) and reacts to every store change after the first load.
 // LOW: feed only. MEDIUM: clickable toast (opens the device). HIGH: queued banner, sound, Home 3D with the area selected.
@@ -101,6 +102,21 @@ export function useAlerts(): AlertCenterValue {
       alert: alert.level,
     });
     if (alert.level === "low") return;
+    const areaName = entity ? (areas.find((area) => area.areaId === entity.area)?.name ?? null) : null;
+    // Feature 145: OS notification when the page is hidden (live frames only; the helper checks level and preference).
+    notifySystemAlert(alert, {
+      deviceName: name,
+      areaName,
+      ctx: { fromList, hidden: isPageHidden() },
+      onClick: () => {
+        if (alert.level === "high") {
+          void go(ROUTE_PATHS.home);
+          if (entity) select(entity.area);
+        } else if (entity) {
+          void go(PathUtils.deviceDetailPath(deviceRowKeyIn(entity.area ?? UNASSIGNED, entity)));
+        }
+      },
+    });
     if (alert.level === "medium") {
       if (fromList) return; // old medium alerts stay in the feed
       if (!entity) {
@@ -112,7 +128,6 @@ export function useAlerts(): AlertCenterValue {
       return;
     }
     const silent = fromList && isSilentAtLoad(alert, Date.now());
-    const areaName = entity ? (areas.find((area) => area.areaId === entity.area)?.name ?? null) : null;
     setQueue((current) =>
       current.some((item) => item.id === alert.id)
         ? current
@@ -166,6 +181,7 @@ export function useAlerts(): AlertCenterValue {
         enterServer();
         onServerAlert(event.alert, false);
       } else if (event.type === "alert_acked") {
+        closeSystemAlert(event.id);
         setQueue((current) => current.filter((item) => item.id !== event.id));
       }
     });
@@ -249,6 +265,7 @@ export function useAlerts(): AlertCenterValue {
   const dismiss = useCallback(() => {
     const first = queue[0];
     if (!first) return;
+    closeSystemAlert(first.id);
     if (!isServer) {
       setQueue((current) => current.slice(1));
       return;
@@ -262,6 +279,7 @@ export function useAlerts(): AlertCenterValue {
 
   const dismissAll = useCallback(() => {
     const all = queue;
+    closeAllSystemAlerts();
     setQueue([]);
     if (!isServer) return;
     api.ackAllAlerts().catch(() => {

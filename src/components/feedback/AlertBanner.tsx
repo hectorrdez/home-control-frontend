@@ -1,5 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AlertCenterValue } from "@/features/alerts/useAlerts";
+import {
+  disableSystemNotify,
+  enableSystemNotify,
+  systemNotifyStatus,
+  type SystemNotifyStatus,
+} from "@/features/alerts/systemNotify";
 
 // Feature 129: HIGH alert banner. role=alertdialog, focus on DISMISS, stays until dismissed.
 // Its entrance animation is motion-safe only; the sound is not tied to motion.
@@ -63,6 +69,36 @@ export function AlertSoundControl({ soundEnabled, enableSound }: Pick<AlertCente
       className="min-h-11 rounded border border-outline-variant/40 px-space-sm font-mono text-label-caps uppercase text-on-surface-variant hover:text-primary-container focus-visible:outline-2 focus-visible:outline-primary-container"
     >
       ENABLE ALERT SOUND
+    </button>
+  );
+}
+
+// Feature 145: OS notifications for alerts while the panel is hidden. Asked only from this click, never on load.
+export function SystemNotifyControl() {
+  const [status, setStatus] = useState<SystemNotifyStatus>(() => systemNotifyStatus());
+  const chip = "font-mono text-label-caps uppercase text-on-surface-variant";
+  if (status === "unsupported") return <span className={chip}>NOT SUPPORTED</span>;
+  if (status === "blocked") return <span className={chip}>BLOCKED BY BROWSER</span>;
+  if (status === "on") {
+    return (
+      <button
+        type="button"
+        aria-pressed="true"
+        onClick={() => setStatus(disableSystemNotify())}
+        className="min-h-11 rounded border border-primary-container/40 px-space-sm font-mono text-label-caps uppercase text-primary-container hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container"
+      >
+        SYSTEM NOTIFICATIONS ON
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-pressed="false"
+      onClick={() => void enableSystemNotify().then(setStatus)}
+      className="min-h-11 rounded border border-outline-variant/40 px-space-sm font-mono text-label-caps uppercase text-on-surface-variant hover:text-primary-container focus-visible:outline-2 focus-visible:outline-primary-container"
+    >
+      ENABLE SYSTEM NOTIFICATIONS
     </button>
   );
 }

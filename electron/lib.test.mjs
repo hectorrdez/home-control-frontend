@@ -119,3 +119,28 @@ describe('buildOfflinePage', () => {
     expect(() => lib.buildOfflinePage({ tokens: {}, panelUrl: 'https://x' })).toThrow(/missing in src\/index.css/);
   });
 });
+
+describe('createShowWindow (feature 145)', () => {
+  it('restores a minimised window, then shows and focuses it', () => {
+    const calls = [];
+    const win = {
+      minimized: true,
+      isMinimized() { return this.minimized; },
+      restore() { calls.push('restore'); this.minimized = false; },
+      show() { calls.push('show'); },
+      focus() { calls.push('focus'); },
+    };
+    lib.createShowWindow(() => win)();
+    expect(calls).toEqual(['restore', 'show', 'focus']);
+  });
+
+  it('does nothing before the window exists', () => {
+    expect(() => lib.createShowWindow(() => null)()).not.toThrow();
+  });
+
+  it('the preload sends the same IPC channel that main listens on', () => {
+    const preload = fs.readFileSync(path.join(here, 'preload.cjs'), 'utf8');
+    expect(preload).toContain(`'${lib.SHOW_WINDOW_CHANNEL}'`);
+    expect(preload).toContain("contextBridge.exposeInMainWorld('homeControl'");
+  });
+});
