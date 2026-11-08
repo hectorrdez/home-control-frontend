@@ -1,4 +1,5 @@
 import type { EntityFilter, HomeApi } from "../HomeApi";
+import { getClientId } from "../clientIdentity";
 import {
   ApiError,
   type Alias,
@@ -13,6 +14,8 @@ import {
   type EntityAction,
   type HaStatus,
   type HistorySeries,
+  type ServerEvent,
+  type ServerResource,
 } from "../types";
 import {
   createFixtureEntities,
@@ -79,6 +82,14 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         ].map((e) => [e.entityId, e]),
   );
   const listeners = new Set<(e: Entity) => void>();
+  // Feature 132: non-entity frames. Own writes emit resource_changed with by = this panel client id.
+  const serverListeners = new Set<(e: ServerEvent) => void>();
+  function emitServer(event: ServerEvent) {
+    for (const listener of serverListeners) listener(event);
+  }
+  function changed(resource: ServerResource, keys: string[]) {
+    emitServer({ type: "resource_changed", resource, keys, by: getClientId() });
+  }
   const rng = createPrng(hashSeed(`stream:${seed}`));
 
   // Reads share the scenario switch: error rejects, slow delays, everything else is normal.
@@ -373,6 +384,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       aliasWriteGuard();
       aliases.set(entityId, trimmed);
       saveAliases();
+      changed("aliases", [entityId]);
       return aliasList();
     },
 
@@ -382,6 +394,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       aliasWriteGuard();
       aliases.delete(entityId);
       saveAliases();
+      changed("aliases", [entityId]);
       return aliasList();
     },
 
@@ -407,6 +420,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         position: null,
         calibratedAt: new Date().toISOString(),
       });
+      changed("calibrations", [entityId]);
       return calibrationList();
     },
 
@@ -415,6 +429,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       cancelMove(entityId);
       calibrations.delete(entityId);
+      changed("calibrations", [entityId]);
       return calibrationList();
     },
 
@@ -445,6 +460,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       const stored = storedRule(`rule-${++alertSeq}`, rule);
       alertRules.set(stored.id, stored);
+      changed("alert_rules", [stored.id]);
       return clone(stored);
     },
 
@@ -454,12 +470,14 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       const stored = storedRule(id, rule);
       alertRules.set(id, stored);
+      changed("alert_rules", [id]);
       return clone(stored);
     },
 
     async deleteAlertRule(id: string): Promise<void> {
       await delay(actionDelayMs);
       alertRules.delete(id);
+      changed("alert_rules", [id]);
     },
 
     async getStatus(): Promise<HaStatus> {
@@ -513,10 +531,26 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       return clone(current);
     },
 
-    subscribe(onEntity: (e: Entity) => void, onConnection: (s: ConnectionState) => void) {
+    subscribe(
+      onEntity: (e: Entity) => void,
+      onConnection: (s: ConnectionState) => void,
+      onServerEvent?: (e: ServerEvent) => void,
+    ) {
       listeners.add(onEntity);
+      if (onServerEvent) serverListeners.add(onServerEvent);
       const timeouts: ReturnType<typeof setTimeout>[] = [];
       onConnection("open");
+
+      // Feature 132 "remote-change": another device renames the first alias; the panel must refetch it.
+      if (scenario === "remote-change") {
+        timeouts.push(setTimeout(() => {
+          const firstId = [...entities.keys()].sort((a, b) => a.localeCompare(b))[0];
+          if (!firstId) return;
+          aliases.set(firstId, "Remote alias");
+          saveAliases();
+          emitServer({ type: "resource_changed", resource: "aliases", keys: [firstId], by: "other-device" });
+        }, 1000));
+      }
       if (scenario === "stream-drop") {
         timeouts.push(setTimeout(() => onConnection("reconnecting"), 3000));
         timeouts.push(setTimeout(() => onConnection("open"), 6000));
@@ -552,6 +586,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
       return () => {
         listeners.delete(onEntity);
+        if (onServerEvent) serverListeners.delete(onServerEvent);
         clearInterval(interval);
         for (const timer of timeouts) clearTimeout(timer);
       };

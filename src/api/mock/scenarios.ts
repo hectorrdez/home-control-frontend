@@ -14,6 +14,7 @@ export const SCENARIOS = [
   "device-flap", // feature 126: the Desk plug device goes unavailable at 1.5 s and back at 4 s (row + feed live)
   "cover-calibration", // feature 127: adds a cover without current_position (calibrate, then set a percentage)
   "alerts", // feature 129: seeded MEDIUM/HIGH/LOW rules and three timed changes (1.5 s, 4 s, 6 s)
+  "remote-change", // feature 132: 1 s after subscribe another device changes the first alias
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

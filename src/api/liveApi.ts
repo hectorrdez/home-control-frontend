@@ -1,7 +1,9 @@
 import type { EntityFilter, HomeApi } from "./HomeApi";
 import { ApiError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
 import { backoffDelay } from "./backoff";
-import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
+import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
+import { getClientId, getClientName } from "./clientIdentity";
+import type { ServerEvent } from "./types";
 
 export interface LiveApiOptions {
   baseUrl: string; // "" = same origin (Vite dev proxy forwards /api)
@@ -46,6 +48,9 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
           Accept: "application/json",
           ...(init.body ? { "Content-Type": "application/json" } : {}),
           Authorization: `Bearer ${token}`,
+          // Feature 132 (backend 016): writer identity, echoed as resource_changed.by.
+          "X-Client-Id": getClientId(),
+          "X-Client-Name": getClientName(),
           ...init.headers,
         },
       });
@@ -99,14 +104,14 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
     },
 
     // SSE on GET /api/stream. Reconnects with backoff (1 s .. 30 s, jitter); the server sends `ready` once the stream is up.
-    subscribe(onEntity, onConnection) {
+    subscribe(onEntity, onConnection, onServerEvent) {
       let source: EventSource | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let attempt = 0;
       let closed = false;
 
       const connect = () => {
-        const es = openSource(streamUrl(baseUrl, token));
+        const es = openSource(streamUrl(baseUrl, token, getClientId()));
         source = es;
         es.addEventListener("ready", () => {
           attempt = 0;
@@ -116,6 +121,13 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
           const entity = parseStateChanged((event as MessageEvent).data);
           if (entity) onEntity(entity);
         });
+        // Feature 132: resource_changed, event, ha_link, alert, alert_acked. Malformed or unknown frames are dropped.
+        for (const name of SERVER_EVENT_NAMES) {
+          es.addEventListener(name, (event) => {
+            const parsed: ServerEvent | null = parseServerEvent(name, (event as MessageEvent).data);
+            if (parsed && onServerEvent) onServerEvent(parsed);
+          });
+        }
         es.onerror = () => {
           if (closed) return;
           es.close();

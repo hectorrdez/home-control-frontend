@@ -7,6 +7,7 @@ import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
 import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
+import { publishServerEvent } from "@/api/serverEvents";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -68,6 +69,8 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         if (isStreamRecovery(previous, next)) refreshAreas();
         previous = next;
       },
+      // Feature 132: the single subscription also fans out resource_changed, event, ha_link, alert, alert_acked.
+      publishServerEvent,
     );
   }, [api, refreshAreas]);
 

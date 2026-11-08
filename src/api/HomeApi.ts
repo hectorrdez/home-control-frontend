@@ -10,6 +10,7 @@ import type {
   CoverCalibration,
   AlertRule,
   AlertRuleInput,
+  ServerEvent,
 } from "./types";
 
 export interface EntityFilter {
@@ -26,6 +27,8 @@ export interface HomeApi {
   subscribe(
     onEntity: (e: Entity) => void,
     onConnection: (s: ConnectionState) => void,
+    // Feature 132: non-entity frames (resource_changed, event, ha_link, alert, alert_acked). Optional.
+    onServerEvent?: (e: ServerEvent) => void,
   ): () => void;
   getHistory(entityIds: string[], hours: number): Promise<HistorySeries[]>;
   // Feature 115 (backend 008). getAliases rejects with kind "not_found" when the backend has no aliases endpoint.
