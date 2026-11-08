@@ -155,9 +155,10 @@ export class TelemetryPage {
     return items.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""));
   }
 
-  // Feature 112: the climate history chart (named "<room> climate, <range>: ...").
-  climateChart(room: string) {
-    return this.page.getByRole("img", { name: new RegExp(`^${room} climate,`) });
+  // Feature 112/144: the climate history charts (named "<room> temperature, <range>: ..." and "<room> humidity, ...").
+  climateChart(room: string, metric: "temperature" | "humidity" = "temperature") {
+    // The range label (e.g. "24H:") tells these apart from the live sensor charts, which share the "<name> temperature" shape.
+    return this.page.getByRole("img", { name: new RegExp(`^${room} ${metric}, (6H|24H|7D|30D):`) });
   }
 
   rangeTab(label: string) {
@@ -178,8 +179,9 @@ export class TelemetryPage {
   }
 
   // Drawn curves of the climate chart (SVG paths have no accessible name, so they carry a data-testid).
-  climateCurves(room: string, kind: "room-line" | "mean-line" | "humidity-line" | "temp-area") {
-    return this.climateChart(room).getByTestId(`climate-${kind}`);
+  climateCurves(room: string, kind: "room-line" | "mean-line" | "humidity-line" | "humidity-room-line" | "temp-area") {
+    const metric = kind.startsWith("humidity") ? "humidity" : "temperature";
+    return this.climateChart(room, metric).getByTestId(`climate-${kind}`);
   }
 
   climateTitle() {

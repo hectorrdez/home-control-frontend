@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { cloneElement, createElement, type ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
@@ -8,7 +8,7 @@ import { ApiError } from "@/api/types";
 import { zoneColorToken } from "@/features/zones/zoneColors";
 import ClimateHistoryCard from "./ClimateHistoryCard";
 
-// Feature 131: per-room lines in ALL ROOMS, legend, zone colors.
+// Feature 131: per-room lines in ALL ROOMS, legend, zone colors. Feature 144: temperature and humidity charts.
 describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
   // Stroke of every drawn line/area in DOM order (recharts renders them as paths).
   const strokes = (container: HTMLElement) =>
@@ -19,9 +19,9 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
     document.documentElement.style.removeProperty("--color-zone-blue");
   });
 
-  it("draws one line per room, the total mean and the humidity line, with a legend", async () => {
+  it("draws one temperature line per room plus the mean, with a legend", async () => {
     const { container } = renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
 
     const legend = screen.getByRole("list", { name: "Chart legend" });
     const items = within(legend).getAllByRole("listitem");
@@ -29,7 +29,7 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
     expect(within(legend).getByText("Kitchen")).toBeTruthy();
     expect(within(legend).getByText("Bedroom")).toBeTruthy();
     expect(within(legend).getByText("TOTAL MEAN")).toBeTruthy();
-    expect(strokes(container)).toHaveLength(4); // 2 rooms + total mean + humidity
+    expect(strokes(container)).toHaveLength(6); // temp: 2 rooms + mean; humidity: 2 rooms + mean (feature 144)
   });
 
   it("colors each room line with its zone token and keeps the mean on top", async () => {
@@ -38,7 +38,7 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
     document.documentElement.style.setProperty(`--color-${kitchen}`, "kitchen-test-color");
     document.documentElement.style.setProperty(`--color-${bedroom}`, "bedroom-test-color");
     const { container } = renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
 
     const drawn = strokes(container);
     expect(drawn).toContain("kitchen-test-color");
@@ -50,7 +50,7 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
 
   it("the room pills show the zone dot", async () => {
     const { container } = renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     const kitchenPill = screen.getByRole("button", { name: "Kitchen" });
     expect(kitchenPill.querySelector(`[data-zone-token="${zoneColorToken("kitchen")}"]`)).not.toBeNull();
     expect(container.querySelectorAll("[data-zone-token]").length).toBeGreaterThanOrEqual(2);
@@ -60,10 +60,10 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
     const kitchen = zoneColorToken("kitchen");
     document.documentElement.style.setProperty(`--color-${kitchen}`, "kitchen-test-color");
     const { container } = renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
 
     fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
-    await screen.findByRole("img", { name: /Kitchen climate, 24H:/ });
+    await screen.findByRole("img", { name: /Kitchen temperature, 24H:/ });
     expect(screen.queryByRole("list", { name: "Chart legend" })).toBeNull();
     expect(strokes(container)[0]).toBe("kitchen-test-color");
     expect(container.querySelectorAll(".recharts-line-curve")).toHaveLength(1); // humidity only
@@ -71,9 +71,9 @@ describe("ClimateHistoryCard ALL ROOMS (feature 131)", () => {
 
   it("the hidden data table has one column per room plus the total mean", async () => {
     renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     const headers = within(screen.getByRole("table")).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["Time", "Kitchen °C", "Bedroom °C", "Total mean °C", "Humidity %"]);
+    expect(headers).toEqual(["Time", "Kitchen °C", "Bedroom °C", "Total mean °C", "Kitchen humidity %", "Bedroom humidity %", "Total mean humidity %"]);
   });
 });
 
@@ -116,9 +116,9 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
   it("a single room uses its first temperature series, not the average of its sensors", async () => {
     const { entities, values } = multiSensorHouse();
     renderCard(entities, constantApi(values));
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
-    await screen.findByRole("img", { name: /Kitchen climate, 24H:/ });
+    await screen.findByRole("img", { name: /Kitchen temperature, 24H:/ });
     const cursor = screen.getByRole("slider", { name: /Chart cursor/ });
     fireEvent.keyDown(cursor, { key: "ArrowLeft" });
     expect(cursor.getAttribute("aria-valuetext")).toMatch(/20\.0 °C/);
@@ -133,14 +133,14 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
       sensor(`sensor.c_${n}`, "humidity", "other", "50"),
     ];
     const { container } = renderCard(entities, readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     const legend = screen.getByRole("list", { name: "Chart legend" });
     expect(within(legend).getAllByRole("listitem")).toHaveLength(3);
     expect(within(legend).queryByText("Other")).toBeNull();
     expect(container.querySelectorAll(".recharts-line-curve")).toHaveLength(4); // 2 rooms + mean + humidity
   });
 
-  it("ALL ROOMS humidity is the mean of every humidity sensor (sensor-weighted, unassigned included)", async () => {
+  it("ALL ROOMS humidity total is the mean of the room humidity lines (room-weighted, unassigned ignored)", async () => {
     const n = ++seq;
     const ids = { kt: `sensor.kt_${n}`, bt: `sensor.bt_${n}`, kh1: `sensor.kh1_${n}`, kh2: `sensor.kh2_${n}`, bh: `sensor.bh_${n}`, lh: `sensor.lh_${n}` };
     const entities = [
@@ -154,8 +154,32 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
     renderCard(entities, constantApi({ [ids.kt]: 20, [ids.bt]: 18, [ids.kh1]: 40, [ids.kh2]: 60, [ids.bh]: 10, [ids.lh]: 90 }));
     const cursor = await screen.findByRole("slider", { name: /Chart cursor/ });
     fireEvent.keyDown(cursor, { key: "ArrowLeft" });
-    // (40 + 60 + 10 + 90) / 4 = 50; a room-weighted mean would be 30.
-    expect(cursor.getAttribute("aria-valuetext")).toMatch(/MEAN 19\.0 °C 50 %$/);
+    // Room lines: kitchen (40 + 60) / 2 = 50, bedroom 10 -> total (50 + 10) / 2 = 30. A sensor-weighted mean would be 50 (40 + 60 + 10) / 3 = 36.7.
+    // The unassigned sensor (90) is in no room line and is ignored.
+    expect(cursor.getAttribute("aria-valuetext")).toMatch(/MEAN 19\.0 °C • .* • MEAN 30 %$/);
+  });
+
+  it("several rooms with humidity but temperature in one room: humidity keeps its room lines, temperature is one area", async () => {
+    const n = ++seq;
+    const ids = { kt: `sensor.mkt_${n}`, kh: `sensor.mkh_${n}`, bh1: `sensor.mbh1_${n}`, bh2: `sensor.mbh2_${n}` };
+    const entities = [
+      sensor(ids.kt, "temperature", "kitchen", "20"),
+      sensor(ids.kh, "humidity", "kitchen", "40"),
+      sensor(ids.bh1, "humidity", "bedroom", "60"),
+      sensor(ids.bh2, "humidity", "bedroom", "80"),
+    ];
+    const { container } = renderCard(entities, constantApi({ [ids.kt]: 20, [ids.kh]: 40, [ids.bh1]: 60, [ids.bh2]: 80 }));
+    await screen.findByRole("img", { name: /All rooms temperature/ });
+
+    expect(container.querySelectorAll('[data-testid="climate-temp-area"]').length).toBeGreaterThan(0); // area + its stroke path
+    expect(container.querySelectorAll('[data-testid="climate-room-line"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-testid="climate-humidity-room-line"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-testid="climate-humidity-line"]')).toHaveLength(1);
+
+    const cursor = screen.getByRole("slider", { name: /Chart cursor/ });
+    fireEvent.keyDown(cursor, { key: "ArrowLeft" });
+    // Bedroom (60 + 80) / 2 = 70, kitchen 40, total (40 + 70) / 2 = 55 (sensor-weighted would be 60).
+    expect(cursor.getAttribute("aria-valuetext")).toMatch(/20\.0 °C • KITCHEN 40 % • BEDROOM 70 % • MEAN 55 %$/);
   });
 
   it("with no room temperature history the humidity mean still shows", async () => {
@@ -164,10 +188,12 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
     const { container } = renderCard(entities, constantApi({ [`sensor.h1_${n}`]: 40, [`sensor.h2_${n}`]: 60 }));
     const cursor = await screen.findByRole("slider", { name: /Chart cursor/ });
     expect(screen.queryByText("NO HISTORY IN RANGE")).toBeNull();
-    expect(screen.queryByRole("list", { name: "Chart legend" })).toBeNull();
+    // Two rooms with humidity: one humidity line per room, the total mean, and the legend lists those rooms.
+    expect(within(screen.getByRole("list", { name: "Chart legend" })).getAllByRole("listitem")).toHaveLength(3);
+    expect(container.querySelectorAll('[data-testid="climate-humidity-room-line"]')).toHaveLength(2);
     expect(container.querySelectorAll('[data-testid="climate-humidity-line"]')).toHaveLength(1);
     fireEvent.keyDown(cursor, { key: "ArrowLeft" });
-    expect(cursor.getAttribute("aria-valuetext")).toMatch(/-- °C 50 %$/);
+    expect(cursor.getAttribute("aria-valuetext")).toMatch(/-- °C • KITCHEN 40 % • BEDROOM 60 % • MEAN 50 %$/);
   });
 
   it("thinning a dense room never erases a sparse room's points", async () => {
@@ -188,7 +214,7 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
       })),
     );
     renderCard(entities, api);
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     // Columns: Time, Kitchen, Bedroom, Total mean, Humidity. The mean sits beside every kept bedroom point.
     const cells = within(screen.getByRole("table"))
       .getAllByRole("row")
@@ -218,7 +244,7 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
       })),
     );
     renderCard(entities, api);
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     // Columns: Time, Kitchen, Bedroom, Total mean, Humidity.
     const cells = within(screen.getByRole("table"))
       .getAllByRole("row")
@@ -250,10 +276,10 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
       fireEvent.blur(cursor);
       return text;
     };
-    await screen.findByRole("img", { name: /All rooms climate, 24H:/ });
+    await screen.findByRole("img", { name: /All rooms temperature, 24H:/ });
     const all = await read();
     fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
-    await screen.findByRole("img", { name: /Kitchen climate, 24H:/ });
+    await screen.findByRole("img", { name: /Kitchen temperature, 24H:/ });
     const kitchen = await read();
     expect(all).toBe("20.0 °C 40 %"); // first series, not the 25 °C / 50 % sensor mean
     expect(kitchen).toBe(all);
@@ -280,10 +306,18 @@ describe("ClimateHistoryCard aggregation (feature 131)", () => {
 });
 
 // Recharts measures its container; jsdom has no layout, so the container hands the chart a fixed size and it renders its SVG.
+// jsdom has no chart layout; capture Recharts callbacks and exercise the shared cursor directly.
+const chartEvents = vi.hoisted(() => ({ move: [] as Array<(value: { activeTooltipIndex: number }) => void>, leave: [] as Array<() => void> }));
+
 vi.mock("recharts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("recharts")>();
   return {
     ...actual,
+    ComposedChart: ({ onMouseMove, onMouseLeave, ...props }: React.ComponentProps<typeof actual.ComposedChart>) => {
+      if (onMouseMove) chartEvents.move.push(onMouseMove as (value: { activeTooltipIndex: number }) => void);
+      if (onMouseLeave) chartEvents.leave.push(onMouseLeave as () => void);
+      return createElement(actual.ComposedChart, { ...props, onMouseMove, onMouseLeave });
+    },
     ResponsiveContainer: ({ children }: { children: ReactElement }) =>
       createElement("div", null, cloneElement(children as ReactElement<{ width?: number; height?: number }>, { width: 400, height: 220 })),
   };
@@ -341,6 +375,8 @@ const readyApi = (): HomeApi =>
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  chartEvents.move.length = 0;
+  chartEvents.leave.length = 0;
 });
 
 describe("ClimateHistoryCard", () => {
@@ -349,7 +385,7 @@ describe("ClimateHistoryCard", () => {
     expect(screen.getByRole("group", { name: "Rooms" })).toBeTruthy();
     expect(within(screen.getByRole("group", { name: "Range" })).getByRole("button", { name: "24H" }).getAttribute("aria-pressed")).toBe("true");
 
-    expect(await screen.findByRole("img", { name: /All rooms climate, 24H:/ })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /All rooms temperature, 24H:/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Kitchen" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Bedroom" })).toBeTruthy();
     expect(screen.getByText(/PEAK/)).toBeTruthy();
@@ -385,10 +421,10 @@ describe("ClimateHistoryCard", () => {
   it("fetches one room's sensors when a room is picked", async () => {
     const getHistory = vi.fn(readyApi().getHistory);
     renderCard(house(), apiWith(getHistory));
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
 
     fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
-    expect(await screen.findByRole("img", { name: /Kitchen climate, 24H:/ })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /Kitchen temperature, 24H:/ })).toBeTruthy();
     const ids = getHistory.mock.calls.at(-1)![0];
     expect(ids.every((id) => id.includes("kitchen"))).toBe(true);
     expect(ids).toHaveLength(2);
@@ -397,11 +433,11 @@ describe("ClimateHistoryCard", () => {
   it("requests the chosen range", async () => {
     const getHistory = vi.fn(readyApi().getHistory);
     renderCard(house(), apiWith(getHistory));
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
 
     fireEvent.click(screen.getByRole("button", { name: "7D" }));
     await waitFor(() => expect(getHistory).toHaveBeenLastCalledWith(expect.any(Array), 168));
-    expect(await screen.findByRole("img", { name: /7D:/ })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /temperature, 7D:/ })).toBeTruthy();
   });
 
   it("shows the error state with a retry that fetches again", async () => {
@@ -413,7 +449,7 @@ describe("ClimateHistoryCard", () => {
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "RETRY" }));
-    expect(await screen.findByRole("img", { name: /All rooms/ })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /All rooms temperature/ })).toBeTruthy();
   });
 
   it("says there is no history when the range has no points", async () => {
@@ -423,8 +459,58 @@ describe("ClimateHistoryCard", () => {
 
   it("renders the data table for screen readers", async () => {
     renderCard(house(), readyApi());
-    await screen.findByRole("img", { name: /All rooms/ });
+    await screen.findByRole("img", { name: /All rooms temperature/ });
     const rows = within(screen.getByRole("table")).getAllByRole("row");
     expect(rows).toHaveLength(4); // header + 3 timestamps
+  });
+});
+
+// Feature 144: two stacked charts (temperature, humidity) sharing one cursor.
+describe("ClimateHistoryCard split charts (feature 144)", () => {
+  it("renders a TEMPERATURE and a HUMIDITY chart with their own titles", async () => {
+    renderCard(house(), readyApi());
+    expect(await screen.findByRole("img", { name: /All rooms temperature/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /All rooms humidity/ })).toBeTruthy();
+    expect(screen.getByText("TEMPERATURE")).toBeTruthy();
+    expect(screen.getByText("HUMIDITY")).toBeTruthy();
+  });
+
+  it("draws one humidity line per room in ALL ROOMS plus the humidity mean", async () => {
+    const { container } = renderCard(house(), readyApi());
+    await screen.findByRole("img", { name: /All rooms humidity/ });
+    expect(container.querySelectorAll('[data-testid="climate-humidity-room-line"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-testid="climate-humidity-line"]')).toHaveLength(1);
+  });
+
+  it("a single room keeps the temperature area and draws no humidity room lines", async () => {
+    const { container } = renderCard(house(), readyApi());
+    await screen.findByRole("img", { name: /All rooms temperature/ });
+    fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
+    await screen.findByRole("img", { name: /Kitchen humidity, 24H:/ });
+    expect(container.querySelectorAll('[data-testid="climate-temp-area"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-testid="climate-humidity-room-line"]')).toHaveLength(0);
+  });
+
+  it("the keyboard cursor reads temperature rooms and then humidity rooms", async () => {
+    renderCard(house(), readyApi());
+    const cursor = await screen.findByRole("slider", { name: /Chart cursor/ });
+    fireEvent.keyDown(cursor, { key: "ArrowLeft" });
+    expect(cursor.getAttribute("aria-valuetext")).toMatch(/KITCHEN 21\.0 °C • BEDROOM 21\.0 °C • MEAN 21\.0 °C • KITCHEN 21 % • BEDROOM 21 % • MEAN 21 %$/);
+  });
+
+  it("hovering either chart updates both reference lines and clears them on leave", async () => {
+    const { container } = renderCard(house(), readyApi());
+    await screen.findAllByRole("img", { name: /All rooms (temperature|humidity)/ });
+    const cursor = screen.getByRole("slider", { name: /Chart cursor/ });
+    const move = chartEvents.move.slice(0, 2);
+    const leave = chartEvents.leave.slice(0, 2);
+    expect(move).toHaveLength(2);
+    for (let i = 0; i < 2; i++) {
+      act(() => move[i]({ activeTooltipIndex: 1 }));
+      expect(cursor.getAttribute("aria-valuetext")).toMatch(/KITCHEN .*°C/);
+      expect(container.querySelectorAll(".recharts-reference-line")).toHaveLength(2);
+      act(() => leave[i]());
+      expect(container.querySelectorAll(".recharts-reference-line")).toHaveLength(0);
+    }
   });
 });

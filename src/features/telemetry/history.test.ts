@@ -9,6 +9,7 @@ import {
   meanAcrossSeries,
   mergeClimate,
   mergeRoomClimate,
+  roomLines,
   summarize,
 } from "./history";
 
@@ -32,13 +33,37 @@ describe("mergeRoomClimate", () => {
       [{ t: at(8), v: 40 }],
     );
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({ t: at(8), temp: 20, hum: 40, rooms: { kitchen: 20 } });
+    expect(rows[0]).toEqual({ t: at(8), temp: 20, hum: 40, rooms: { kitchen: 20 }, humRooms: {} });
     // Total mean at 09:00 = (22 + 18) / 2, bedroom has no point at 08:00.
-    expect(rows[1]).toEqual({ t: at(9), temp: 20, hum: null, rooms: { kitchen: 22, bedroom: 18 } });
+    expect(rows[1]).toEqual({ t: at(9), temp: 20, hum: null, rooms: { kitchen: 22, bedroom: 18 }, humRooms: {} });
   });
 
   it("returns no rows when there is no data", () => {
     expect(mergeRoomClimate([], [], [])).toEqual([]);
+  });
+});
+
+// Feature 144: humidity room lines use the same merge; a room with no humidity points gets no line.
+describe("roomLines and humidity rooms (feature 144)", () => {
+  const at = (h: number) => `2026-11-06T0${h}:00:00.000Z`;
+
+  it("builds one line per room with data for a device class, skipping empty rooms", () => {
+    const series: Record<string, { t: string; v: number }[][]> = {
+      kitchen: [[{ t: at(8), v: 40 }], [{ t: at(8), v: 60 }]],
+      bedroom: [],
+    };
+    const lines = roomLines(["kitchen", "bedroom"], (room) => series[room]);
+    expect(lines).toEqual([{ room: "kitchen", points: [{ t: at(8), v: 50 }] }]);
+  });
+
+  it("merges humidity room values into humRooms beside the temperature rooms", () => {
+    const rows = mergeRoomClimate(
+      [{ room: "kitchen", points: [{ t: at(8), v: 20 }] }],
+      [{ t: at(8), v: 20 }],
+      [{ t: at(8), v: 45 }],
+      [{ room: "kitchen", points: [{ t: at(8), v: 48 }] }],
+    );
+    expect(rows).toEqual([{ t: at(8), temp: 20, hum: 45, rooms: { kitchen: 20 }, humRooms: { kitchen: 48 } }]);
   });
 });
 
