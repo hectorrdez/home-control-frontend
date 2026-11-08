@@ -48,6 +48,13 @@ test.describe("display names", () => {
     await expect(telemetry.chartCard("Salon temperatura")).toBeVisible();
   });
 
+  // Feature 138: another device renames a device (resource_changed aliases); the panel refetches it without a reload.
+  test("an alias renamed on another device shows within 3 s without reload", async ({ page }) => {
+    const home = new HomePage(page);
+    await home.open("?mock=remote-change");
+    await expect(new DeviceCard(page, "Remote alias").card()).toBeVisible({ timeout: 3000 });
+  });
+
   test("a failed save rolls back and shows a toast", async ({ page }) => {
     const home = new HomePage(page);
     await home.open("?mock=alias-error");

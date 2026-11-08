@@ -37,7 +37,7 @@ describe("mock server events (feature 132)", () => {
     expect(seen).toEqual([]);
     vi.advanceTimersByTime(1);
 
-    const first = (await api.getEntities()).map((e) => e.entityId).sort((a, b) => a.localeCompare(b))[0];
+    const first = "light.kitchen_ceiling";
     expect(seen).toEqual([{ type: "resource_changed", resource: "aliases", keys: [first], by: "other-device" }]);
     expect((await api.getAliases()).find((a) => a.entityId === first)?.alias).toBe("Remote alias");
     stop();

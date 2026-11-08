@@ -14,7 +14,7 @@ export const SCENARIOS = [
   "device-flap", // feature 126: the Desk plug device goes unavailable at 1.5 s and back at 4 s (row + feed live)
   "cover-calibration", // feature 127: adds a cover without current_position (calibrate, then set a percentage)
   "alerts", // feature 129: seeded MEDIUM/HIGH/LOW rules and three timed changes (1.5 s, 4 s, 6 s)
-  "remote-change", // feature 132: 1 s after subscribe another device changes the first alias
+  "remote-change", // feature 132: 1 s after subscribe another device changes the Kitchen ceiling alias (138)
   "no-settings", // feature 133: settings list and get reject not_found (backend without 017)
   "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
 ] as const;

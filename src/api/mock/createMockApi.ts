@@ -610,11 +610,12 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       const timeouts: ReturnType<typeof setTimeout>[] = [];
       onConnection("open");
 
-      // Feature 132 "remote-change": another device renames the first alias; the panel must refetch it.
+      // Feature 132 "remote-change": another device renames the Kitchen ceiling light (a home card); the panel must refetch it.
+      // Feature 138: the E2E asserts the new name on the home page without a reload.
       if (scenario === "remote-change") {
         timeouts.push(setTimeout(() => {
-          const firstId = [...entities.keys()].sort((a, b) => a.localeCompare(b))[0];
-          if (!firstId) return;
+          const firstId = "light.kitchen_ceiling";
+          if (!entities.has(firstId)) return;
           aliases.set(firstId, "Remote alias");
           saveAliases();
           emitServer({ type: "resource_changed", resource: "aliases", keys: [firstId], by: "other-device" });
