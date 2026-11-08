@@ -1,4 +1,5 @@
 import type { Entity } from "@/api/types";
+import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "@/features/settings/syncedSetting";
 
 // Feature 113: widget model for the live dashboard. Feature 114 (editor) edits the same model.
 
@@ -116,32 +117,47 @@ export function normalizeWidget(w: Widget): Widget {
   return { ...rest, size };
 }
 
-// Corrupt JSON, unknown schema version or bad shape -> null (caller falls back to defaults).
-// Storage access can throw (private mode, blocked site data), so every access is guarded.
+// Feature 135: the stored value is the v1 object { version: 1, widgets }. parse also takes the legacy localStorage
+// string (JSON). Corrupt JSON, unknown schema version or bad shape -> null (caller falls back to defaults).
+export interface StoredWidgets {
+  version: typeof SCHEMA_VERSION;
+  widgets: Widget[];
+}
+
+export function parseStoredWidgets(raw: unknown): StoredWidgets | null {
+  let data: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof data !== "object" || data === null) return null;
+  const { version, widgets } = data as { version?: unknown; widgets?: unknown };
+  if (version !== SCHEMA_VERSION || !Array.isArray(widgets) || !widgets.every(isWidget)) return null;
+  return { version: SCHEMA_VERSION, widgets: widgets.map(normalizeWidget) };
+}
+
 export function parseWidgets(raw: string | null): Widget[] | null {
   if (raw === null) return null;
-  try {
-    const data = JSON.parse(raw) as { version?: unknown; widgets?: unknown };
-    if (data.version !== SCHEMA_VERSION || !Array.isArray(data.widgets)) return null;
-    return data.widgets.every(isWidget) ? data.widgets.map(normalizeWidget) : null;
-  } catch {
-    return null;
-  }
+  return parseStoredWidgets(raw)?.widgets ?? null;
 }
+
+// Feature 135: the layout is shared across devices (backend setting telemetry.widgets, 134). WIDGET_STORAGE_KEY is
+// only the one-time import source.
+export const widgetsSetting = createSyncedSetting<StoredWidgets>({
+  key: "telemetry.widgets",
+  legacyKey: WIDGET_STORAGE_KEY,
+  parse: parseStoredWidgets,
+});
+registerSyncedSetting(widgetsSetting as SyncedSetting<unknown>);
 
 export function loadWidgets(): Widget[] | null {
-  try {
-    return parseWidgets(window.localStorage.getItem(WIDGET_STORAGE_KEY));
-  } catch {
-    return null;
-  }
+  return widgetsSetting.get()?.widgets ?? null;
 }
 
+// Only user edits call this (never on reconcile), so a device missing a sensor cannot erase another device's widgets.
 export function saveWidgets(widgets: Widget[]): void {
-  try {
-    const stored = widgets.map(normalizeWidget);
-    window.localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, widgets: stored }));
-  } catch {
-    // Storage unavailable: the layout still works for this session.
-  }
+  widgetsSetting.set({ version: SCHEMA_VERSION, widgets: widgets.map(normalizeWidget) });
 }

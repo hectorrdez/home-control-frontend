@@ -132,14 +132,33 @@ export class TelemetryPage {
     return this.liveChartsList().getByRole("listitem").filter({ has: this.chartCard(sensorName) });
   }
 
-  // Saved chart layout (localStorage, feature 113/114). Read/replace the widget list for seeding edge cases.
+  // Saved chart layout: the local cache of the shared setting telemetry.widgets (feature 113/114/135). Read/replace the
+  // widget list for seeding edge cases.
   async savedWidgets(): Promise<Array<Record<string, unknown>>> {
-    return this.page.evaluate(() => JSON.parse(window.localStorage.getItem("hc.telemetry.widgets.v1") ?? "{}").widgets ?? []);
+    return this.page.evaluate(
+      () => JSON.parse(window.localStorage.getItem("hc.setting.telemetry.widgets") ?? "{}").value?.widgets ?? [],
+    );
+  }
+
+  // Feature 135: a user edit is what persists the layout. RESET LAYOUT + CONFIRM saves the defaults in one step.
+  async resetToDefaults() {
+    await this.editButton().click();
+    await this.resetLayout().click();
+    await this.confirmReset().click();
+    await this.editButton().click();
+    // Wait for the server to acknowledge the save (cache pending=false), so a later seed is not overwritten by it.
+    await this.page.waitForFunction(
+      () => JSON.parse(window.localStorage.getItem("hc.setting.telemetry.widgets") ?? "{}").pending === false,
+    );
   }
 
   async setSavedWidgets(widgets: Array<Record<string, unknown>>) {
     await this.page.evaluate(
-      (list) => window.localStorage.setItem("hc.telemetry.widgets.v1", JSON.stringify({ version: 1, widgets: list })),
+      (list) =>
+        window.localStorage.setItem(
+          "hc.setting.telemetry.widgets",
+          JSON.stringify({ v: 1, value: { version: 1, widgets: list }, version: null, pending: false }),
+        ),
       widgets,
     );
   }

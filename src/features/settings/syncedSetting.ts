@@ -21,6 +21,8 @@ export interface SyncedSetting<T> {
   status(): SyncedStatus;
   start(api: HomeApi): Promise<void>;
   stop(): void;
+  // Drops the in-memory copy so the next get() re-reads the localStorage cache (tests and sign-out-like resets).
+  forget(): void;
 }
 
 interface CachedRecord {
@@ -356,6 +358,11 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
     await sync();
   }
 
+  function forget(): void {
+    loaded = false;
+    memory = null;
+  }
+
   return {
     get(): T | null {
       ensureLoaded();
@@ -388,5 +395,6 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
 
     start,
     stop,
+    forget,
   };
 }

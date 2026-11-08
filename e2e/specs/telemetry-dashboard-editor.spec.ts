@@ -98,8 +98,9 @@ test.describe("telemetry dashboard editor", () => {
   test("a saved legacy wide chart loads as HALF", async ({ page }) => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
-    // Wait for the charts to render, which is when the layout is first saved to localStorage.
     await expect(telemetry.chartCard(HUMIDITY)).toBeVisible();
+    // Feature 135: the layout is only saved on a user edit, so save the defaults first.
+    await telemetry.resetToDefaults();
     const widgets = (await telemetry.savedWidgets()).map((w) => {
       if (w.entityId !== "sensor.kitchen_humidity") return w;
       const legacy: Record<string, unknown> = { ...w, wide: true };
@@ -201,7 +202,7 @@ test.describe("telemetry dashboard editor", () => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
     // Humidity is a % sensor: LINE/AREA/GAUGE are offered, a saved BAR is not.
-    await expect.poll(async () => (await telemetry.savedWidgets()).length).toBeGreaterThan(0);
+    await telemetry.resetToDefaults();
     const widgets = await telemetry.savedWidgets();
     await telemetry.setSavedWidgets(
       widgets.map((w) => (w.entityId === "sensor.kitchen_humidity" ? { ...w, kind: "bar" } : w)),
@@ -223,6 +224,8 @@ test.describe("telemetry dashboard editor", () => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
     await expect.poll(() => telemetry.chartOrder()).toHaveLength(16);
+
+    await telemetry.resetToDefaults();
 
     // Simulate a saved layout made before the living-room sensor existed, plus one for a sensor that is gone.
     const widgets = await telemetry.savedWidgets();

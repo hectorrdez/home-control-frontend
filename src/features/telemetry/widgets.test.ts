@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entity } from "@/api/types";
 import {
-  WIDGET_STORAGE_KEY,
+  widgetsSetting,
   deriveWidgets,
   kindFor,
   loadWidgets,
   numericSensors,
+  parseStoredWidgets,
   parseWidgets,
   reconcileWidgets,
   saveWidgets,
@@ -97,9 +98,12 @@ describe("parseWidgets", () => {
   });
 });
 
+const CACHE_KEY = "hc.setting.telemetry.widgets";
+
 describe("storage wrapper", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    widgetsSetting.forget();
     vi.restoreAllMocks();
   });
 
@@ -108,12 +112,12 @@ describe("storage wrapper", () => {
     saveWidgets(widgets);
     // Feature 146: the first save writes an explicit size (defaults are "third").
     const withSize = widgets.map((w) => ({ ...w, size: "third" }));
-    expect(JSON.parse(window.localStorage.getItem(WIDGET_STORAGE_KEY) ?? "null")).toEqual({ version: 1, widgets: withSize });
+    expect(JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null").value).toEqual({ version: 1, widgets: withSize });
     expect(loadWidgets()).toEqual(withSize);
   });
 
   it("returns null when stored data is corrupt", () => {
-    window.localStorage.setItem(WIDGET_STORAGE_KEY, "garbage");
+    window.localStorage.setItem(CACHE_KEY, "garbage");
     expect(loadWidgets()).toBeNull();
   });
 
@@ -136,6 +140,7 @@ describe("size field (feature 146)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     window.localStorage.clear();
+    widgetsSetting.forget();
   });
 
   it("migrates legacy wide: true to size half", () => {
@@ -167,7 +172,7 @@ describe("size field (feature 146)", () => {
 
   it("save output has size and never wide", () => {
     saveWidgets([{ ...base, wide: true }, { ...base, id: "x", entityId: "sensor.b" }]);
-    const stored = JSON.parse(window.localStorage.getItem(WIDGET_STORAGE_KEY) ?? "null");
+    const stored = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null").value;
     expect(stored.widgets).toEqual([
       { ...base, size: "half" },
       { ...base, id: "x", entityId: "sensor.b", size: "third" },
@@ -194,5 +199,37 @@ describe("size field (feature 146)", () => {
   it("reconcileWidgets appends new sensors without a size (= third)", () => {
     const result = reconcileWidgets([], [humidity]);
     expect(result[0].size).toBeUndefined();
+  });
+});
+
+describe("shared layout (feature 135)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    widgetsSetting.forget();
+    vi.restoreAllMocks();
+  });
+
+  it("parses the v1 object and the legacy JSON string, rejects bad shapes", () => {
+    const widgets = deriveWidgets([temp]);
+    expect(parseStoredWidgets({ version: 1, widgets })?.widgets).toEqual(widgets.map((w) => ({ ...w, size: "third" })));
+    expect(parseStoredWidgets(JSON.stringify({ version: 1, widgets }))?.widgets).toHaveLength(1);
+    expect(parseStoredWidgets({ version: 2, widgets })).toBeNull();
+    expect(parseStoredWidgets({ version: 1, widgets: [{ id: 1 }] })).toBeNull();
+    expect(parseStoredWidgets("garbage")).toBeNull();
+    expect(parseStoredWidgets(null)).toBeNull();
+  });
+
+  it("saveWidgets and loadWidgets delegate to the synced setting", () => {
+    const set = vi.spyOn(widgetsSetting, "set");
+    saveWidgets(deriveWidgets([temp]));
+    expect(set).toHaveBeenCalledWith({ version: 1, widgets: expect.any(Array) });
+    expect(loadWidgets()).toHaveLength(1);
+  });
+
+  it("reconcile-only differences never write the setting", () => {
+    saveWidgets(deriveWidgets([temp]));
+    const set = vi.spyOn(widgetsSetting, "set");
+    reconcileWidgets(loadWidgets(), [temp, { ...temp, entityId: "sensor.new", attributes: temp.attributes, name: "New" }]);
+    expect(set).not.toHaveBeenCalled();
   });
 });

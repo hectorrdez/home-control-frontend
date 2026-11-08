@@ -8,13 +8,14 @@ import Switch from "@components/controls/Switch";
 import type { ConnectionState, Entity } from "@/api/types";
 import { useLiveBuffers } from "@/features/telemetry/useLiveBuffers";
 import {
-  loadWidgets,
   numericSensors,
   reconcileWidgets,
   saveWidgets,
+  widgetsSetting,
   type Widget,
   type WidgetSize,
 } from "@/features/telemetry/widgets";
+import { useSyncedSetting } from "@/features/settings/useSyncedSetting";
 import {
   SIZE_LABEL,
   canMove,
@@ -87,7 +88,9 @@ export default function TelemetryChartsGrid({
   onFixedPanelChange,
 }: TelemetryChartsGridProps) {
   const numeric = useMemo(() => numericSensors(sensors), [sensors]);
-  const [saved, setSaved] = useState(loadWidgets);
+  // Feature 135: the layout comes from the shared setting, so another device's change re-renders this grid.
+  const [stored] = useSyncedSetting(widgetsSetting);
+  const saved = stored?.widgets ?? null;
   const [panelOpen, setPanelOpen] = useState(false);
   const names = useEntityName();
   const zoneOf = useZoneTokenResolver();
@@ -98,9 +101,12 @@ export default function TelemetryChartsGrid({
   // Feature 118: session-only filter state (never persisted; resets on every load).
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
-  useEffect(() => {
-    saveWidgets(widgets);
-  }, [widgets]);
+  // Feature 135: only user edits persist (never reconcile-only differences). ownJson remembers what this grid wrote.
+  const ownJson = useRef<string | null>(null);
+  const persist = useCallback((next: Widget[]) => {
+    saveWidgets(next);
+    ownJson.current = JSON.stringify(widgetsSetting.get());
+  }, []);
 
   const byId = useMemo(() => new Map(numeric.map((e) => [e.entityId, e])), [numeric]);
   const rows = useMemo<ChartRow[]>(
@@ -124,11 +130,11 @@ export default function TelemetryChartsGrid({
   const facets = useMemo(() => facetCounts(rows), [rows]);
   const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
   const toggle = (entityId: string, on: boolean) =>
-    setSaved(widgets.map((w) => (w.entityId === entityId ? { ...w, visible: on } : w)));
+    persist(widgets.map((w) => (w.entityId === entityId ? { ...w, visible: on } : w)));
   // ALL / NONE only touch the rows the filters currently show.
   const setShown = (on: boolean) => {
     const ids = new Set(filtered.map((r) => r.entity.entityId));
-    setSaved(widgets.map((w) => (ids.has(w.entityId) ? { ...w, visible: on } : w)));
+    persist(widgets.map((w) => (ids.has(w.entityId) ? { ...w, visible: on } : w)));
   };
   const visible = widgets.filter((w) => w.visible && byId.has(w.entityId));
   // Feature 125: the search query filters the fixed panels too; ALL/NONE stay chart-only.
@@ -138,6 +144,15 @@ export default function TelemetryChartsGrid({
   const [editing, setEditing] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  // Feature 135: a stored layout that differs from what this grid last wrote came from another device. Edit mode stays open.
+  const seenStored = useRef(stored);
+  useEffect(() => {
+    if (stored === seenStored.current) return;
+    seenStored.current = stored;
+    if (editing && stored !== null && JSON.stringify(stored) !== ownJson.current) {
+      setAnnouncement("Layout updated from another device");
+    }
+  }, [stored, editing]);
   const listRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
   const resetRef = useRef<HTMLButtonElement>(null);
@@ -169,7 +184,7 @@ export default function TelemetryChartsGrid({
   const move = (w: Widget, dir: -1 | 1) => {
     const next = moveWidget(widgets, w.id, dir);
     if (next === widgets) return;
-    setSaved(next);
+    persist(next);
     const shown = visibleOf(next);
     const position = shown.findIndex((x) => x.id === w.id) + 1;
     // Reveal the moved chart before focus is restored: a move past the rendered slice would otherwise leave no node to focus.
@@ -179,7 +194,7 @@ export default function TelemetryChartsGrid({
   };
 
   const hide = (w: Widget) => {
-    setSaved(setVisible(widgets, w.id, false));
+    persist(setVisible(widgets, w.id, false));
     setAnnouncement(`${labelOf(byId.get(w.entityId)!)} hidden`);
     editRef.current?.focus();
   };
@@ -190,7 +205,7 @@ export default function TelemetryChartsGrid({
   };
 
   const confirmReset = () => {
-    setSaved(resetWidgets(numeric));
+    persist(resetWidgets(numeric));
     setResetOpen(false);
     setAnnouncement("Layout reset");
     resetReturnFocus.current = true;
@@ -343,9 +358,9 @@ export default function TelemetryChartsGrid({
                       canUp={canMove(widgets, w.id, -1)}
                       canDown={canMove(widgets, w.id, 1)}
                       onMove={(dir) => move(w, dir)}
-                      onKind={(kind) => setSaved(setKind(widgets, w.id, kind))}
+                      onKind={(kind) => persist(setKind(widgets, w.id, kind))}
                       onSize={(next) => {
-                        setSaved(setSize(widgets, w.id, next));
+                        persist(setSize(widgets, w.id, next));
                         setAnnouncement(`${labelOf(entity)} width ${SIZE_LABEL[next]}`);
                       }}
                       onHide={() => hide(w)}

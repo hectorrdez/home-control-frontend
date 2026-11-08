@@ -622,7 +622,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       }
       // Feature 133 "remote-settings": another device hides the first telemetry widget; 135 must pick it up.
       if (scenario === "remote-settings") {
-        timeouts.push(setTimeout(() => storeSetting("telemetry.widgets", remoteWidgetLayout(), "other-device"), 1000));
+        timeouts.push(setTimeout(() => storeSetting("telemetry.widgets", { version: 1, widgets: remoteWidgetLayout() }, "other-device"), 1000));
       }
       if (scenario === "stream-drop") {
         timeouts.push(setTimeout(() => onConnection("reconnecting"), 3000));

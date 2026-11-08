@@ -95,7 +95,7 @@ describe("mock settings API (feature 133)", () => {
       unsubscribe();
       expect(events).toContainEqual({ type: "resource_changed", resource: "settings", keys: [KEY], by: "other-device" });
       const stored = await api.getSetting(KEY);
-      const widgets = stored?.value as Array<{ visible: boolean }>;
+      const widgets = (stored?.value as { widgets: Array<{ visible: boolean }> }).widgets;
       expect(widgets.length).toBeGreaterThan(0);
       expect(widgets[0].visible).toBe(false);
       expect(widgets.slice(1).every((w) => w.visible)).toBe(true);
