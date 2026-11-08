@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EMPTY_PANEL_STATE,
-  PANEL_STORAGE_KEY,
+  panelsSetting,
   gaugePanelId,
   hideNewBatteryGauges,
   isHidden,
@@ -12,9 +12,11 @@ import {
 } from "./panelVisibility";
 
 const BATTERY = gaugePanelId("sensor.samsung_s24_battery_level");
+const CACHE_KEY = "hc.setting.telemetry.panels";
 
 afterEach(() => {
   window.localStorage.clear();
+  panelsSetting.forget();
   vi.restoreAllMocks();
 });
 
@@ -47,7 +49,7 @@ describe("panelVisibility", () => {
 
   it("persists user hides under the versioned key", () => {
     savePanelState(setPanelHidden(EMPTY_PANEL_STATE, "kpi:nodes", true));
-    const raw = JSON.parse(window.localStorage.getItem(PANEL_STORAGE_KEY) ?? "{}");
+    const raw = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "{}").value;
     expect(raw).toEqual({ v: 1, hidden: ["kpi:nodes"], seen: [] });
     expect(loadPanelState().hidden).toEqual(["kpi:nodes"]);
   });
@@ -56,7 +58,8 @@ describe("panelVisibility", () => {
     expect(parsePanelState("{not json")).toBeNull();
     expect(parsePanelState(JSON.stringify({ v: 2, hidden: [], seen: [] }))).toBeNull();
     expect(parsePanelState(JSON.stringify({ v: 1, hidden: [1], seen: [] }))).toBeNull();
-    window.localStorage.setItem(PANEL_STORAGE_KEY, "{not json");
+    panelsSetting.forget();
+    window.localStorage.setItem(CACHE_KEY, "{not json");
     expect(loadPanelState()).toEqual(EMPTY_PANEL_STATE);
   });
 

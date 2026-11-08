@@ -1,3 +1,5 @@
+import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "@/features/settings/syncedSetting";
+
 // Feature 125: show/hide the telemetry fixed panels (KPI cards, Levels gauges, climate/power history).
 // Pure module, no React. The usePanelVisibility hook wraps it for the page and the CHARTS panel.
 
@@ -39,31 +41,42 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((x) => typeof x === "string");
 }
 
-// Corrupt JSON, unknown schema version or bad shape -> null (caller falls back to the defaults).
-export function parsePanelState(raw: string | null): PanelState | null {
-  if (raw === null) return null;
-  try {
-    const data = JSON.parse(raw) as { v?: unknown; hidden?: unknown; seen?: unknown };
-    if (data.v !== SCHEMA_VERSION || !isStringArray(data.hidden) || !isStringArray(data.seen)) return null;
-    return { hidden: data.hidden, seen: data.seen };
-  } catch {
-    return null;
+// Feature 136: the stored value is the v1 object { v: 1, hidden, seen }; parse also takes the legacy localStorage JSON
+// string. Corrupt JSON, unknown schema version or bad shape -> null (caller falls back to the defaults).
+export type StoredPanels = PanelState & { v: typeof SCHEMA_VERSION };
+
+export function parseStoredPanels(raw: unknown): StoredPanels | null {
+  let data: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
+  if (typeof data !== "object" || data === null) return null;
+  const { v, hidden, seen } = data as { v?: unknown; hidden?: unknown; seen?: unknown };
+  if (v !== SCHEMA_VERSION || !isStringArray(hidden) || !isStringArray(seen)) return null;
+  return { v: SCHEMA_VERSION, hidden, seen };
 }
 
-// Storage access can throw (private mode, blocked site data), so every access is guarded.
+export function parsePanelState(raw: string | null): PanelState | null {
+  return raw === null ? null : parseStoredPanels(raw);
+}
+
+// Feature 136: the fixed-panel visibility is shared across devices (backend setting telemetry.panels, 134).
+// PANEL_STORAGE_KEY is only the one-time import source.
+export const panelsSetting = createSyncedSetting<StoredPanels>({
+  key: "telemetry.panels",
+  legacyKey: PANEL_STORAGE_KEY,
+  parse: parseStoredPanels,
+});
+registerSyncedSetting(panelsSetting as SyncedSetting<unknown>);
+
 export function loadPanelState(): PanelState {
-  try {
-    return parsePanelState(window.localStorage.getItem(PANEL_STORAGE_KEY)) ?? EMPTY_PANEL_STATE;
-  } catch {
-    return EMPTY_PANEL_STATE;
-  }
+  return panelsSetting.get() ?? EMPTY_PANEL_STATE;
 }
 
 export function savePanelState(state: PanelState): void {
-  try {
-    window.localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify({ v: SCHEMA_VERSION, ...state }));
-  } catch {
-    // Storage unavailable: the choice still works for this session.
-  }
+  panelsSetting.set({ v: SCHEMA_VERSION, hidden: state.hidden, seen: state.seen });
 }
