@@ -13,6 +13,8 @@ import {
   type CalibrationInput,
   type ConnectionState,
   type CoverCalibration,
+  type Preset,
+  type PresetInput,
   type Entity,
   type EntityAction,
   type HaStatus,
@@ -26,6 +28,7 @@ import {
   createManyDeviceEntities,
   createRawNameEntities,
   createUncalibratedCoverEntities,
+  createKnownCoverEntities,
   FIXTURE_AREAS,
 } from "./fixtures";
 import { createPrng, hashSeed } from "./prng";
@@ -86,6 +89,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
           ...createFixtureEntities(),
           ...(scenario === "raw-names" ? createRawNameEntities() : []),
           ...(scenario === "cover-calibration" ? createUncalibratedCoverEntities() : []),
+          ...(scenario === "cover-presets" ? createKnownCoverEntities() : []),
           ...(scenario === "many-devices" ? createManyDeviceEntities() : []),
         ].map((e) => [e.entityId, e]),
   );
@@ -331,8 +335,56 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     publishPosition(entityId, null);
   }
 
+  // Backend 011 rules for a timed move; a new request cancels a running move (its estimate is kept) first.
+  function moveCalibratedCover(entityId: string, percent: number): Entity {
+    if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new ApiError("server", "invalid_params", 400);
+    coverOf(entityId);
+    const cal = calibrations.get(entityId);
+    if (!cal) throw new ApiError("server", "not_calibrated", 409);
+    cancelMove(entityId);
+    const full = percent === 0 || percent === 100;
+    if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
+    startMove(entityId, cal, percent);
+    return clone(entities.get(entityId) as Entity);
+  }
+
   function calibrationInRange(ms: unknown): boolean {
     return Number.isInteger(ms) && (ms as number) >= CALIBRATION_MIN_MS && (ms as number) <= CALIBRATION_MAX_MS;
+  }
+
+  // Feature 142: saved cover positions (backend 021), same rules as the server. Mock only, in memory per page load.
+  const PRESET_CAP_PER_ENTITY = 10;
+  const PRESET_CAP_TOTAL = 500;
+  const presets = new Map<string, Preset>();
+  let presetSeq = 0;
+  if (scenario === "cover-presets") {
+    calibrations.set("cover.salon_blind", { entityId: "cover.salon_blind", openMs: 4000, closeMs: 4000, position: 0, calibratedAt: new Date().toISOString() });
+  }
+
+  function presetList(entityId?: string): Preset[] {
+    return [...presets.values()]
+      .filter((p) => entityId === undefined || p.entityId === entityId)
+      .sort((a, b) => a.entityId.localeCompare(b.entityId) || a.percent - b.percent || a.name.localeCompare(b.name))
+      .map((p) => clone(p));
+  }
+
+  function checkPresetInput(input: { name: unknown; percent: unknown }, entityId: string, exceptId?: string): string {
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    if (name.length < 1 || name.length > 30 || /[\u0000-\u001f\u007f]/.test(name)) {
+      throw new ApiError("server", "invalid_preset", 400);
+    }
+    if (!Number.isInteger(input.percent) || (input.percent as number) < 0 || (input.percent as number) > 100) {
+      throw new ApiError("server", "invalid_preset", 400);
+    }
+    const key = name.toLowerCase();
+    const clash = [...presets.values()].some((p) => p.id !== exceptId && p.entityId === entityId && p.name.toLowerCase() === key);
+    if (clash) throw new ApiError("server", "duplicate_preset", 409);
+    return name;
+  }
+
+  function presetCapCheck(entityId: string): void {
+    const own = [...presets.values()].filter((p) => p.entityId === entityId).length;
+    if (own >= PRESET_CAP_PER_ENTITY || presets.size >= PRESET_CAP_TOTAL) throw new ApiError("server", "too_many_presets", 400);
   }
 
   // Feature 128: notification rules (backend 012). Mock only, in memory; validation and duplicates follow the backend.
@@ -537,16 +589,53 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     },
 
     async setCoverPercent(entityId: string, percent: number): Promise<Entity> {
-      if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new ApiError("server", "invalid_params", 400);
-      coverOf(entityId);
-      const cal = calibrations.get(entityId);
-      if (!cal) throw new ApiError("server", "not_calibrated", 409);
-      // A new request cancels a running move (its estimate is kept) before the position rules are checked.
-      cancelMove(entityId);
-      const full = percent === 0 || percent === 100;
-      if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
-      startMove(entityId, cal, percent);
-      return clone(entities.get(entityId) as Entity);
+      return moveCalibratedCover(entityId, percent);
+    },
+
+    async getPresets(entityId?: string): Promise<Preset[]> {
+      if (entityId !== undefined && !ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      return read(() => presetList(entityId));
+    },
+
+    async createPreset(input: PresetInput): Promise<Preset> {
+      if (!ENTITY_ID.test(input.entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      coverOf(input.entityId);
+      const name = checkPresetInput(input, input.entityId);
+      presetCapCheck(input.entityId);
+      await delay(actionDelayMs);
+      const stored: Preset = { id: `preset-${++presetSeq}`, entityId: input.entityId, name, percent: input.percent, createdAt: new Date().toISOString() };
+      presets.set(stored.id, stored);
+      changed("presets", [stored.id]);
+      return clone(stored);
+    },
+
+    async updatePreset(id: string, input: { name: string; percent: number }): Promise<Preset> {
+      const current = presets.get(id);
+      if (!current) throw new ApiError("not_found", "preset_not_found", 404);
+      const name = checkPresetInput(input, current.entityId, id);
+      await delay(actionDelayMs);
+      const stored: Preset = { ...current, name, percent: input.percent };
+      presets.set(id, stored);
+      changed("presets", [id]);
+      return clone(stored);
+    },
+
+    async deletePreset(id: string): Promise<void> {
+      await delay(actionDelayMs);
+      if (presets.delete(id)) changed("presets", [id]);
+    },
+
+    async applyPreset(id: string): Promise<Entity> {
+      const preset = presets.get(id);
+      if (!preset) throw new ApiError("not_found", "preset_not_found", 404);
+      const current = coverOf(preset.entityId);
+      await delay(actionDelayMs);
+      if (calibrations.has(preset.entityId)) return moveCalibratedCover(preset.entityId, preset.percent);
+      if (typeof current.attributes.current_position !== "number") throw new ApiError("server", "preset_not_applicable", 409);
+      const updated = applyAction(current, { action: "set_cover_position", params: { position: preset.percent } });
+      entities.set(preset.entityId, updated);
+      emit(updated);
+      return clone(updated);
     },
 
     // Feature 139 (backend 020). alerts-local has no alerts endpoint: 404 -> the panel falls back to the 129 engine.

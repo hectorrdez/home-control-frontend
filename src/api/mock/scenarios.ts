@@ -19,6 +19,7 @@ export const SCENARIOS = [
   "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
   "alerts-local", // feature 139: backend without /api/alerts (404); the 129 local engine raises the alerts
   "remote-ack", // feature 139: the same timeline; another device acks each HIGH alert 2 s after it fires
+  "cover-presets", // feature 142: calibrated cover at a known position (SHUT) for saved positions
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

@@ -12,6 +12,7 @@ import { ApiProvider } from "./api/ApiContext";
 import { EntitiesProvider } from "./state/EntitiesProvider";
 import { AliasesProvider } from "./state/AliasesProvider";
 import { CalibrationsProvider } from "./state/CalibrationsProvider";
+import { PresetsProvider } from "./state/PresetsProvider";
 import { AlertRulesProvider } from "./state/AlertRulesProvider";
 import { AlertsProvider } from "./state/AlertsProvider";
 import { ToastProvider } from "./components/feedback/Toast";
@@ -26,6 +27,7 @@ createRoot(document.getElementById("root")!).render(
         <EntitiesProvider>
           <AliasesProvider>
             <CalibrationsProvider>
+              <PresetsProvider>
               <AlertRulesProvider>
                 <BrowserRouter>
                   <AlertsProvider>
@@ -33,6 +35,7 @@ createRoot(document.getElementById("root")!).render(
                   </AlertsProvider>
                 </BrowserRouter>
               </AlertRulesProvider>
+              </PresetsProvider>
             </CalibrationsProvider>
           </AliasesProvider>
         </EntitiesProvider>

@@ -5,7 +5,8 @@ import { _electron as electron, expect, test } from "@playwright/test";
 
 // Smoke test for the desktop shell (feature 107): the real main process against the Vite mock server.
 const MAIN = join(process.cwd(), "electron", "main.cjs");
-const PANEL = "http://localhost:5174/?mock=default";
+const PORT = process.env.E2E_PORT ?? 5174;
+const PANEL = `http://localhost:${PORT}/?mock=default`;
 
 function launchOptions(panelUrl: string) {
   return {
@@ -24,7 +25,7 @@ test.describe("electron shell", () => {
     const app = await electron.launch(launchOptions(PANEL));
     try {
       const win = await app.firstWindow();
-      await expect(win).toHaveURL(/localhost:5174/);
+      await expect(win).toHaveURL(new RegExp(`localhost:${PORT}`));
       await expect(win.getByRole("banner")).toBeVisible();
       const exposed = await win.evaluate(() => ({
         require: typeof (globalThis as { require?: unknown }).require,

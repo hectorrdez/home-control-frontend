@@ -13,6 +13,8 @@ import type {
   ServerEvent,
   Setting,
   ServerAlert,
+  Preset,
+  PresetInput,
 } from "./types";
 
 export interface EntityFilter {
@@ -42,6 +44,13 @@ export interface HomeApi {
   putCalibration(entityId: string, input: CalibrationInput): Promise<CoverCalibration[]>;
   deleteCalibration(entityId: string): Promise<CoverCalibration[]>;
   setCoverPercent(entityId: string, percent: number): Promise<Entity>;
+  // Feature 142 (backend 021). Writes answer with the stored preset; applyPreset answers with the moved entity.
+  // Errors are ApiError messages (e.g. duplicate_preset, too_many_presets, position_unknown, preset_not_applicable).
+  getPresets(entityId?: string): Promise<Preset[]>;
+  createPreset(input: PresetInput): Promise<Preset>;
+  updatePreset(id: string, input: { name: string; percent: number }): Promise<Preset>;
+  deletePreset(id: string): Promise<void>;
+  applyPreset(id: string): Promise<Entity>;
   // Feature 128 (backend 012). Writes answer with the stored rule; errors are ApiError messages (e.g. duplicate_rule).
   listAlertRules(): Promise<AlertRule[]>;
   createAlertRule(rule: AlertRuleInput): Promise<AlertRule>;

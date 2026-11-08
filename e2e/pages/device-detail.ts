@@ -90,6 +90,30 @@ export class DeviceDetailPage {
     return this.scope(entity).getByRole("region", { name: "Alerts" });
   }
 
+  // Feature 142: the SAVED POSITIONS card of a cover (the list and the SAVE POSITION form).
+  savedPositions(): Locator {
+    return this.page.getByRole("list", { name: "Saved positions" });
+  }
+
+  presetForm(): Locator {
+    return this.page.getByRole("form", { name: "Save position" });
+  }
+
+  presetName(): Locator {
+    return this.presetForm().getByLabel("POSITION NAME");
+  }
+
+  // Sets the form slider; the value commits on key release (the Slider component).
+  async setPresetPercent(percent: number) {
+    const slider = this.presetForm().getByRole("slider");
+    await slider.fill(String(percent));
+    await slider.press("Tab");
+  }
+
+  savePresetButton(): Locator {
+    return this.presetForm().getByRole("button", { name: "SAVE POSITION", exact: true });
+  }
+
   coverSlider(): Locator {
     return this.state().getByRole("slider");
   }

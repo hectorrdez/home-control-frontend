@@ -92,6 +92,21 @@ export interface CalibrationInput {
   closeMs: number;
 }
 
+// Feature 142 (backend 021): named cover position ("preset"), global for the household. percent is 0..100.
+export interface Preset {
+  id: string;
+  entityId: string;
+  name: string;
+  percent: number;
+  createdAt: string;
+}
+
+export interface PresetInput {
+  entityId: string;
+  name: string;
+  percent: number;
+}
+
 // Feature 128 (backend 012): notification rule. Evaluation happens in the frontend (feature 129); the API only stores rules.
 export type AlertLevel = "off" | "low" | "medium" | "high";
 
@@ -113,7 +128,7 @@ export interface AlertRule {
 export type AlertRuleInput = Omit<AlertRule, "id">;
 
 // Feature 132 (backend 016-019): frames on GET /api/stream besides state_changed. Unknown frames are ignored.
-export type ServerResource = "aliases" | "calibrations" | "alert_rules" | "settings";
+export type ServerResource = "aliases" | "calibrations" | "alert_rules" | "settings" | "presets";
 
 export interface LoggedEvent {
   id: string;
