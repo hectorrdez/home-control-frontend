@@ -18,7 +18,7 @@ describe("mock server events (feature 132)", () => {
     const entity = (await api.getEntities())[0];
     await api.setAlias(entity.entityId, "Kitchen light");
 
-    expect(seen).toEqual([{ type: "resource_changed", resource: "aliases", keys: [entity.entityId], by: getClientId() }]);
+    expect(seen.filter((e) => e.type !== "event")).toEqual([{ type: "resource_changed", resource: "aliases", keys: [entity.entityId], by: getClientId() }]);
     stop();
   });
 
@@ -34,11 +34,11 @@ describe("mock server events (feature 132)", () => {
     const stop = api.subscribe(() => undefined, () => undefined, (e) => seen.push(e));
 
     vi.advanceTimersByTime(999);
-    expect(seen).toEqual([]);
+    expect(seen.filter((e) => e.type !== "event")).toEqual([]);
     vi.advanceTimersByTime(1);
 
     const first = (await api.getEntities()).map((e) => e.entityId).sort((a, b) => a.localeCompare(b))[0];
-    expect(seen).toEqual([{ type: "resource_changed", resource: "aliases", keys: [first], by: "other-device" }]);
+    expect(seen.filter((e) => e.type !== "event")).toEqual([{ type: "resource_changed", resource: "aliases", keys: [first], by: "other-device" }]);
     expect((await api.getAliases()).find((a) => a.entityId === first)?.alias).toBe("Remote alias");
     stop();
   });

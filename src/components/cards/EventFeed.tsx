@@ -46,7 +46,7 @@ export default function EventFeed({ events, areaName }: EventFeedProps) {
                 <Icon size={16} className="shrink-0 text-primary-container" aria-hidden="true" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-sans text-body-md text-on-surface">
-                    {`${names.displayName(event)} ${event.value}`}
+                    {event.entityId ? `${names.displayName(event)} ${event.value}` : event.value}
                   </span>
                   <span className="truncate font-mono text-label-caps uppercase text-on-surface-variant">
                     {event.alert ? `ALERT ${event.alert.toUpperCase()} · ${areaName(event.area) ?? ""}` : areaName(event.area)}

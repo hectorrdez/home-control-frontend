@@ -42,6 +42,7 @@ function harness(areas: Area[]) {
     getEntities: vi.fn(),
     runAction: vi.fn(),
     getHistory: vi.fn(async () => []),
+    listEvents: vi.fn(async () => []),
     getAliases: vi.fn(async () => []),
     setAlias: vi.fn(),
     deleteAlias: vi.fn(),

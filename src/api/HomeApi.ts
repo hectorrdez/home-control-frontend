@@ -10,9 +10,20 @@ import type {
   CoverCalibration,
   AlertRule,
   AlertRuleInput,
+  LoggedEvent,
   ServerEvent,
   Setting,
 } from "./types";
+
+// Feature 140 (backend 018): GET /api/events query. Every field optional; `from`/`to` ISO dates or instants.
+export interface EventsQuery {
+  types?: string[];
+  entityId?: string;
+  from?: string;
+  to?: string;
+  before?: string;
+  limit?: number;
+}
 
 export interface EntityFilter {
   domain?: string;
@@ -52,4 +63,6 @@ export interface HomeApi {
   getSetting(key: string): Promise<Setting | null>;
   putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting>;
   deleteSetting(key: string): Promise<void>;
+  // Feature 140 (backend 018). Rejects with kind "not_found" when the backend has no events endpoint.
+  listEvents(query?: EventsQuery): Promise<LoggedEvent[]>;
 }

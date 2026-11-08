@@ -40,6 +40,7 @@ function harness(overrides: { getAreas?: () => Promise<Area[]>; runAction?: Home
     getEntities: vi.fn(),
     runAction,
     getHistory: vi.fn(),
+    listEvents: vi.fn(async () => []),
     subscribe: vi.fn((e: (x: Entity) => void, c: (s: ConnectionState) => void) => {
       onEntity = e;
       onConnection = c;

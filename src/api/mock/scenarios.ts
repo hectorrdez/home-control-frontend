@@ -17,6 +17,8 @@ export const SCENARIOS = [
   "remote-change", // feature 132: 1 s after subscribe another device changes the first alias
   "no-settings", // feature 133: settings list and get reject not_found (backend without 017)
   "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
+  "no-events", // feature 140: GET /api/events rejects not_found (backend without 018)
+  "ha-link-drop", // feature 140: ha_link false at 1 s, true at 3 s (header chip and feed)
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

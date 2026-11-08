@@ -16,6 +16,7 @@ function fakeApi(): HomeApi {
     getEntities: vi.fn(),
     runAction: vi.fn(),
     getHistory: vi.fn(),
+    listEvents: vi.fn(async () => []),
     getAliases: vi.fn(async () => []),
     setAlias: vi.fn(),
     deleteAlias: vi.fn(),

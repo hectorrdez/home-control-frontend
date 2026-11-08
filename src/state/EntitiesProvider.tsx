@@ -8,6 +8,7 @@ import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
 import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
 import { publishServerEvent, publishStreamState } from "@/api/serverEvents";
+import { SERVER_SEED_LIMIT } from "./feed";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -51,6 +52,18 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
+  // Feature 140: seeds the feed from the server event log. A failure (or a backend without 018) keeps the local feed.
+  const loadEvents = useCallback(() => {
+    void api.listEvents({ limit: SERVER_SEED_LIMIT }).then(
+      (events) => dispatch({ type: "serverFeedLoaded", events }),
+      () => undefined,
+    );
+  }, [api]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
   // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
   const refreshAreas = useCallback(() => {
     void api.getAreas().then(
@@ -67,13 +80,20 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       (next) => {
         setConnection(next);
         publishStreamState(next);
-        if (isStreamRecovery(previous, next)) refreshAreas();
+        if (isStreamRecovery(previous, next)) {
+          refreshAreas();
+          loadEvents();
+        }
         previous = next;
       },
       // Feature 132: the single subscription also fans out resource_changed, event, ha_link, alert, alert_acked.
-      publishServerEvent,
+      // Feature 140: live `event` rows join the feed (deduped by server id).
+      (serverEvent) => {
+        if (serverEvent.type === "event") dispatch({ type: "serverEventLogged", event: serverEvent.event });
+        publishServerEvent(serverEvent);
+      },
     );
-  }, [api, refreshAreas]);
+  }, [api, refreshAreas, loadEvents]);
 
   // Feature 126: a tab that was hidden for more than 60 s may have missed changes; re-fetch when it is shown again.
   useEffect(() => {

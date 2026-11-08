@@ -43,6 +43,7 @@ function createLazyMockApi(search: string): HomeApi {
     getSetting: async (key) => (await load()).getSetting(key),
     putSetting: async (key, value, baseVersion) => (await load()).putSetting(key, value, baseVersion),
     deleteSetting: async (key) => (await load()).deleteSetting(key),
+    listEvents: async (query) => (await load()).listEvents(query),
     subscribe(onEntity, onConnection, onServerEvent) {
       let stop: (() => void) | undefined;
       let closed = false;

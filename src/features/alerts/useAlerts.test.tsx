@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { ApiProvider } from "@/api/ApiContext";
@@ -79,6 +79,11 @@ const rule = (trigger: AlertRuleInput["trigger"], level: AlertRuleInput["level"]
   ...extra,
 });
 
+// Feature 140: rule setup writes config rows to the mock event log; this file checks the local (129) entries only.
+const localFeed = () => view.entities.state.feed.filter((e) => !e.serverId);
+// Feature 140: the mock event log persists in localStorage; each test starts with an empty server feed.
+beforeEach(() => localStorage.clear());
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -89,7 +94,7 @@ describe("useAlerts (feature 129)", () => {
     await mount([rule({ type: "state_becomes", value: "on" }, "medium")]);
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(view.alerts.queue).toEqual([]);
-    expect(view.entities.state.feed).toEqual([]);
+    expect(localFeed()).toEqual([]);
     expect(screen.queryByText("Office desk light: BECOMES ON")).toBeNull();
   });
 
@@ -98,7 +103,7 @@ describe("useAlerts (feature 129)", () => {
     push(LIGHT, { state: "off" });
 
     await screen.findByText("Office desk light: BECOMES OFF");
-    expect(view.entities.state.feed[0]).toMatchObject({ entityId: LIGHT, alert: "medium", value: "BECOMES OFF" });
+    expect(localFeed()[0]).toMatchObject({ entityId: LIGHT, alert: "medium", value: "BECOMES OFF" });
 
     fireEvent.click(screen.getByRole("button", { name: /Office desk light/ }));
     expect(view.path).toBe("/devices/light.office_desk");
@@ -108,7 +113,7 @@ describe("useAlerts (feature 129)", () => {
     const { push } = await mount([rule({ type: "state_becomes", value: "off" }, "low")]);
     push(LIGHT, { state: "off" });
 
-    await waitFor(() => expect(view.entities.state.feed[0]?.alert).toBe("low"));
+    await waitFor(() => expect(localFeed()[0]?.alert).toBe("low"));
     expect(screen.queryByRole("button", { name: /Office desk light/ })).toBeNull();
     expect(view.alerts.queue).toEqual([]);
     expect(view.path).toBe("/telemetry");
@@ -154,13 +159,13 @@ describe("useAlerts (feature 129)", () => {
 
     push(LIGHT, { state: "off" }); // external change from another client
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(view.entities.state.feed.filter((e) => e.alert)).toEqual([]);
+    expect(localFeed().filter((e) => e.alert)).toEqual([]);
 
     // Outside act(): the optimistic value must reach an effect run before the confirmation, as in the browser.
     const entity = view.entities.state.entities[LIGHT];
     await view.entities.sendIntent(entity, { kind: "power", on: true });
     await screen.findByText("Office desk light: USER INTERACTS");
-    expect(view.entities.state.feed.filter((e) => e.alert)).toHaveLength(1);
+    expect(localFeed().filter((e) => e.alert)).toHaveLength(1);
   });
 
   it("dedupes the same rule within the window: one firing for a quick flip-flop", async () => {
@@ -170,8 +175,8 @@ describe("useAlerts (feature 129)", () => {
     push(LIGHT, { state: "off" });
     push(LIGHT, { state: "on" });
 
-    await waitFor(() => expect(view.entities.state.feed.some((e) => e.alert === "low")).toBe(true));
-    expect(view.entities.state.feed.filter((e) => e.alert === "low")).toHaveLength(1);
+    await waitFor(() => expect(localFeed().some((e) => e.alert === "low")).toBe(true));
+    expect(localFeed().filter((e) => e.alert === "low")).toHaveLength(1);
   });
 
   it("enables the alarm sound with a user gesture and keeps the banner hint without Web Audio", async () => {

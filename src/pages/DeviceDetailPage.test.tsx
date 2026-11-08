@@ -73,6 +73,7 @@ function renderPage(entityId: string, setup: Setup = {}) {
     getEntities: vi.fn(),
     runAction: vi.fn(),
     getHistory,
+    listEvents: vi.fn(async () => []),
     getAliases: vi.fn(async () => setup.aliases ?? []),
     setAlias: vi.fn(),
     deleteAlias: vi.fn(),
