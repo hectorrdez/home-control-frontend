@@ -40,7 +40,7 @@ id|slug|state|role|commit|commit_url
 135|widgets-synced|ENDED|frontend|7850e75|https://github.com/hectorrdez/home-control-frontend/commit/7850e75
 136|panels-synced|ENDED|frontend|e05ae53|https://github.com/hectorrdez/home-control-frontend/commit/e05ae53
 137|chart-filters-synced|ENDED|frontend|87dd2d3|https://github.com/hectorrdez/home-control-frontend/commit/87dd2d3
-138|resources-live-refetch|ENDED|frontend
+138|resources-live-refetch|ENDED|frontend|716ac6b|https://github.com/hectorrdez/home-control-frontend/commit/716ac6b
 139|server-alerts|PENDING|frontend
 140|events-feed-from-server|PENDING|frontend
 141|event-history-page|PENDING|frontend
