@@ -44,3 +44,6 @@ playwright-report/
 
 # coverage
 coverage/
+
+# vitest cache
+.vitest/

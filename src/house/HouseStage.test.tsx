@@ -11,7 +11,9 @@ const hoisted = vi.hoisted(() => {
     setRooms: Mock;
     setSelected: Mock;
     setView: Mock;
+    setMode: Mock;
     setLabelElements: Mock;
+    setFloor: Mock;
     resize: Mock;
     dispose: Mock;
     zoneOf: (areaId: string) => string;
@@ -35,7 +37,9 @@ vi.mock("./HouseScene", () => ({
         setRooms: vi.fn(),
         setSelected: vi.fn(),
         setView: vi.fn(),
+        setMode: vi.fn(),
         setLabelElements: vi.fn(),
+        setFloor: vi.fn(),
         resize: vi.fn(),
         dispose: vi.fn(),
         zoneOf,
@@ -66,8 +70,9 @@ class FakeResizeObserver {
   }
 }
 
-const firstArea = DEFAULT_PLAN.floors[0].rooms[0].areaId;
-const secondArea = DEFAULT_PLAN.floors[0].rooms[1].areaId;
+const firstArea = DEFAULT_PLAN.floors[0].rooms[0].areaId; // living_room (ground)
+const secondArea = DEFAULT_PLAN.floors[0].rooms[1].areaId; // kitchen (ground)
+const upperArea = DEFAULT_PLAN.floors[1].rooms[0].areaId; // bedroom (upper)
 
 function stageWith(selectedArea: string | null = null) {
   hoisted.stage.value = {
@@ -96,18 +101,76 @@ describe("HouseStage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("mounts one scene, pushes the bound rooms and counts only the present ones", () => {
+  it("mounts one scene in the whole-house view, pushes the bound rooms and counts only the present ones", () => {
     stageWith();
     render(<HouseStage />);
 
     expect(hoisted.scenes).toHaveLength(1);
     const scene = hoisted.scenes[0];
+    expect(scene.setMode).toHaveBeenCalledWith("house");
     expect(scene.setRooms).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ areaId: firstArea, present: true })]),
       expect.objectContaining({ [firstArea]: expect.objectContaining({ on: true }) }),
     );
-    expect(screen.getByText("LEVEL 01 • 1 ROOMS")).toBeTruthy();
+    expect(screen.getByText("HOUSE • 3 LEVELS • 1 ROOMS")).toBeTruthy();
     expect(screen.getByRole("list").textContent).toContain("Kitchen");
+  });
+
+  it("presses HOUSE by default and shows a chip per floor that isolates it on click", () => {
+    stageWith();
+    render(<HouseStage />);
+    const scene = hoisted.scenes[0];
+    const house = screen.getByRole("button", { name: "Whole house" });
+    const ground = screen.getByRole("button", { name: "Planta baja" });
+    const upper = screen.getByRole("button", { name: "Planta alta" });
+    const attic = screen.getByRole("button", { name: "Altillo" });
+
+    expect(house.textContent).toBe("HOUSE");
+    expect(ground.textContent).toBe("FL 01");
+    expect(upper.textContent).toBe("FL 02");
+    expect(attic.textContent).toBe("FL 03");
+    expect(house.getAttribute("aria-pressed")).toBe("true");
+    expect(ground.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(upper);
+    expect(scene.setFloor).toHaveBeenLastCalledWith(1);
+    expect(upper.getAttribute("aria-pressed")).toBe("true");
+    expect(house.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("LEVEL 02 • 0 ROOMS")).toBeTruthy();
+
+    fireEvent.click(house);
+    expect(scene.setMode).toHaveBeenLastCalledWith("house");
+    expect(house.getAttribute("aria-pressed")).toBe("true");
+    expect(upper.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("HOUSE • 3 LEVELS • 1 ROOMS")).toBeTruthy();
+  });
+
+  it("isolates the floor that the scene reports as picked in the whole-house view", () => {
+    stageWith();
+    render(<HouseStage />);
+    const scene = hoisted.scenes[0];
+
+    act(() => scene.callbacks.onFloorPick!(0));
+    expect(scene.setFloor).toHaveBeenLastCalledWith(0);
+    expect(screen.getByText("LEVEL 01 • 1 ROOMS")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Planta baja" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("brings up the floor of a selected upper-floor room", () => {
+    hoisted.stage.value = {
+      state: {
+        areas: [{ areaId: upperArea, name: "Master suite", entityIds: [] }],
+        entities: {},
+      },
+      selectedArea: upperArea,
+      setSelectedArea: vi.fn(),
+    };
+    render(<HouseStage />);
+    const scene = hoisted.scenes[0];
+
+    expect(scene.setFloor).toHaveBeenLastCalledWith(1);
+    expect(screen.getByText("LEVEL 02 • 1 ROOMS")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Planta alta" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("sends the view presets to the scene from the camera buttons", () => {
@@ -149,6 +212,7 @@ describe("HouseStage", () => {
     expect(screen.getByRole("status").textContent).toBe("3D VIEW UNAVAILABLE");
     expect(hoisted.scenes).toHaveLength(0);
     expect((screen.getByRole("button", { name: "Top view" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Whole house" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("falls back and disposes the scene when the WebGL context is lost", () => {
