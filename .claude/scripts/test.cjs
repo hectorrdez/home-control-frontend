@@ -26,8 +26,20 @@ if (run('npm', ['run', 'test:unit']) !== 0) {
   process.exit(1);
 }
 
-console.log('[5/5] Playwright E2E tests...');
-if (run('npx', ['playwright', 'test']) !== 0) {
+// E2E lives in the sibling repo home-control-frontend-testing (feature 148). Mock mode only:
+// BASE_URL is stripped so the gate never runs against PRO. FRONTEND_DIR points the suite at this repo.
+console.log('[5/5] Playwright E2E tests (home-control-frontend-testing, mock mode)...');
+const path = require('path');
+const fs = require('fs');
+const { REPO_ROOT } = require('./_lib.cjs');
+const suiteDir = path.resolve(REPO_ROOT, '..', 'home-control-frontend-testing');
+if (!fs.existsSync(path.join(suiteDir, 'package.json'))) {
+  console.log(`FAIL: E2E suite not found at ${suiteDir} (clone home-control-frontend-testing next to this repo)`);
+  process.exit(1);
+}
+const e2eEnv = { ...process.env, FRONTEND_DIR: REPO_ROOT };
+delete e2eEnv.BASE_URL;
+if (run('npm', ['--prefix', suiteDir, 'test'], { env: e2eEnv }) !== 0) {
   console.log('FAIL: Playwright E2E tests');
   process.exit(1);
 }
