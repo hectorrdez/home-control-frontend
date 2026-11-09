@@ -54,4 +54,4 @@ id|slug|state|role|commit|commit_url
 149|house-plan-from-dwg|ENDED|frontend|48012e2|https://github.com/hectorrdez/home-control-frontend/commit/48012e2
 150|house-whole-view|ENDED|frontend|fecb3b1|https://github.com/hectorrdez/home-control-frontend/commit/fecb3b1
 151|house-cad-export|ENDED|frontend|887fc87|https://github.com/hectorrdez/home-control-frontend/commit/887fc87
-152|house-ha-areas-hatch|ENDED|frontend
+152|house-ha-areas-hatch|ENDED|frontend|22e7728|https://github.com/hectorrdez/home-control-frontend/commit/22e7728
