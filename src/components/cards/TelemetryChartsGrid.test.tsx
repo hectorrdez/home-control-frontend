@@ -7,7 +7,10 @@ import type { Area, ConnectionState, Entity } from "@/api/types";
 import { AliasesProvider } from "@/state/AliasesProvider";
 import { EntitiesProvider } from "@/state/EntitiesProvider";
 import { ToastProvider } from "@components/feedback/Toast";
-import { WIDGET_STORAGE_KEY } from "@/features/telemetry/widgets";
+import { widgetsSetting, type StoredWidgets } from "@/features/telemetry/widgets";
+import { filtersSetting } from "@/features/telemetry/widgetFilters";
+
+const CACHE_KEY = "hc.setting.telemetry.widgets";
 import TelemetryChartsGrid from "./TelemetryChartsGrid";
 
 const sensor = (id: string): Entity => ({
@@ -39,6 +42,7 @@ function harness(areas: Area[]) {
     getEntities: vi.fn(),
     runAction: vi.fn(),
     getHistory: vi.fn(async () => []),
+    listEvents: vi.fn(async () => []),
     getAliases: vi.fn(async () => []),
     setAlias: vi.fn(),
     deleteAlias: vi.fn(),
@@ -77,6 +81,8 @@ const panel = () => screen.getByLabelText("Charts");
 describe("TelemetryChartsGrid", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    widgetsSetting.forget();
+    filtersSetting.forget();
   });
   afterEach(cleanup);
 
@@ -111,7 +117,7 @@ describe("TelemetryChartsGrid", () => {
     expect(first.getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
 
-    const saved = JSON.parse(window.localStorage.getItem(WIDGET_STORAGE_KEY) ?? "{}");
+    const saved = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "{}").value;
     expect(saved.version).toBe(1);
     expect(saved.widgets.filter((w: { visible: boolean }) => !w.visible)).toHaveLength(1);
 
@@ -228,7 +234,8 @@ describe("TelemetryChartsGrid", () => {
       expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
     });
 
-    it("does not persist filters: a fresh mount starts unfiltered", () => {
+    // Feature 137: filters are the shared setting telemetry.filters, so a fresh mount restores them.
+    it("saves filters: a fresh mount restores them", () => {
       const first = renderMixed();
       openPanel();
       fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
@@ -236,19 +243,25 @@ describe("TelemetryChartsGrid", () => {
       first.unmount();
       renderMixed();
       openPanel();
-      expect(counter()).toBe("3 OF 3");
+      expect(counter()).toBe("1 OF 3");
+      expect(filtersSetting.get()?.query).toBe("kitchen");
     });
   });
 
   it("restores a saved layout from localStorage", () => {
     window.localStorage.setItem(
-      WIDGET_STORAGE_KEY,
+      CACHE_KEY,
       JSON.stringify({
-        version: 1,
-        widgets: [
-          { id: "widget.sensor.living", entityId: "sensor.living", kind: "line", visible: false, order: 0 },
-          { id: "widget.sensor.bed", entityId: "sensor.bed", kind: "area", visible: true, order: 1 },
-        ],
+        v: 1,
+        value: {
+          version: 1,
+          widgets: [
+            { id: "widget.sensor.living", entityId: "sensor.living", kind: "line", visible: false, order: 0 },
+            { id: "widget.sensor.bed", entityId: "sensor.bed", kind: "area", visible: true, order: 1 },
+          ],
+        },
+        version: null,
+        pending: false,
       }),
     );
     renderGrid([sensor("living"), sensor("bed")]);
@@ -256,7 +269,7 @@ describe("TelemetryChartsGrid", () => {
   });
 
   it("falls back to the defaults when the saved layout is corrupt", () => {
-    window.localStorage.setItem(WIDGET_STORAGE_KEY, "{not json");
+    window.localStorage.setItem(CACHE_KEY, "{not json");
     renderGrid([sensor("living")]);
     expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
   });
@@ -314,6 +327,7 @@ describe("TelemetryChartsGrid", () => {
 describe("TelemetryChartsGrid edit mode (feature 114)", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    widgetsSetting.forget();
   });
   afterEach(cleanup);
 
@@ -323,7 +337,7 @@ describe("TelemetryChartsGrid edit mode (feature 114)", () => {
   });
   const listItems = () => within(screen.getByRole("list", { name: "Live charts" })).getAllByRole("listitem");
   const editGroups = () => screen.queryAllByRole("group", { name: /^Edit / });
-  const saved = () => JSON.parse(window.localStorage.getItem(WIDGET_STORAGE_KEY) ?? "{}").widgets;
+  const saved = () => JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "{}").value.widgets;
 
   it("EDIT toggles edit bars and a fresh mount starts in view mode", () => {
     const { unmount } = renderGrid([sensor("living"), sensor("bed")]);
@@ -365,13 +379,25 @@ describe("TelemetryChartsGrid edit mode (feature 114)", () => {
     expect(saved()[0].kind).toBe("line");
   });
 
-  it("WIDE spans two columns and persists", () => {
+  it("width selector offers exactly FULL, HALF, THIRD (default THIRD) and sets the column span", () => {
     renderGrid([sensor("living"), sensor("bed")]);
     fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
-    const wide = screen.getAllByRole("button", { name: /^Wide / })[0];
-    fireEvent.click(wide);
-    expect(listItems()[0].className).toContain("md:col-span-2");
-    expect(saved().some((w: { wide?: boolean }) => w.wide === true)).toBe(true);
+    const group = () => screen.getAllByRole("group", { name: /^Width for / })[0];
+    expect(within(group()).getAllByRole("button").map((b) => b.textContent)).toEqual(["FULL", "HALF", "THIRD"]);
+    expect(within(group()).getByRole("button", { name: "THIRD" }).getAttribute("aria-pressed")).toBe("true");
+    expect(listItems()[0].className).toContain("xl:col-span-2");
+
+    fireEvent.click(within(group()).getByRole("button", { name: "FULL" }));
+    expect(listItems()[0].className).toContain("md:max-xl:col-span-2");
+    expect(listItems()[0].className).toContain("xl:col-span-6");
+    expect(within(group()).getByRole("button", { name: "FULL" }).getAttribute("aria-pressed")).toBe("true");
+    expect(saved()[0].size).toBe("full");
+
+    fireEvent.click(within(group()).getByRole("button", { name: "HALF" }));
+    expect(listItems()[0].className).toContain("xl:col-span-3");
+    expect(listItems()[0].className).not.toContain("md:max-xl:col-span-2");
+    expect(saved()[0].size).toBe("half");
+    expect(screen.queryByRole("button", { name: /^Wide / })).toBeNull();
   });
 
   it("RESET LAYOUT: cancel keeps the layout, confirm restores the defaults", () => {
@@ -525,5 +551,46 @@ describe("TelemetryChartsGrid edit mode (feature 114)", () => {
     fireEvent.click(screen.getByRole("button", { name: "DONE" }));
     expect(screen.getByText("ALL CHARTS HIDDEN")).toBeTruthy();
     expect(screen.queryByText("OPEN CHARTS TO ADD THEM BACK")).toBeNull();
+  });
+});
+
+describe("TelemetryChartsGrid shared layout (feature 135)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    widgetsSetting.forget();
+  });
+  afterEach(cleanup);
+
+  const remote = (livingVisible: boolean): StoredWidgets => ({
+    version: 1,
+    widgets: [
+      { id: "widget.sensor.living", entityId: "sensor.living", kind: "line", visible: livingVisible, order: 0, size: "third" },
+      { id: "widget.sensor.bed", entityId: "sensor.bed", kind: "area", visible: true, order: 1, size: "third" },
+    ],
+  });
+
+  it("a remote layout change re-renders the grid without a reload", () => {
+    renderGrid([sensor("living"), sensor("bed")]);
+    expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+    act(() => widgetsSetting.set(remote(false)));
+    expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
+  });
+
+  it("in edit mode a remote change is announced and edit mode stays open", () => {
+    renderGrid([sensor("living"), sensor("bed")]);
+    fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
+    act(() => widgetsSetting.set(remote(false)));
+    expect(screen.getByText("Layout updated from another device")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "DONE" })).toBeTruthy();
+  });
+
+  it("a user edit calls the setting once and is not announced as remote", () => {
+    renderGrid([sensor("living"), sensor("bed")]);
+    fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
+    const set = vi.spyOn(widgetsSetting, "set");
+    fireEvent.click(screen.getByRole("button", { name: "RESET LAYOUT" }));
+    fireEvent.click(screen.getByRole("button", { name: "CONFIRM RESET" }));
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Layout updated from another device")).toBeNull();
   });
 });

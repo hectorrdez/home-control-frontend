@@ -1,5 +1,5 @@
 import { House } from "lucide-react";
-import { AlertSoundControl } from "@components/feedback/AlertBanner";
+import { AlertSoundControl, SystemNotifyControl } from "@components/feedback/AlertBanner";
 import { useAlertCenter } from "@/state/AlertsProvider";
 import Clock from "./Clock";
 import HaStatusLine from "./HaStatusLine";
@@ -25,6 +25,7 @@ export default function Header() {
         <div className="flex items-center gap-space-md">
           <div data-slot="status-strip" className="hidden xl:flex" />
           <AlertSoundControl soundEnabled={alerts.soundEnabled} enableSound={alerts.enableSound} />
+          <SystemNotifyControl />
           <Clock />
         </div>
       </div>

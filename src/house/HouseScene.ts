@@ -68,6 +68,7 @@ export class HouseScene {
   private readonly rooms = new Map<string, RoomObjects>();
   private readonly labels = new Map<string, HTMLElement>();
   private readonly materials: THREE.Material[] = [];
+  private readonly zoneOf: (areaId: string) => string; // feature 147: assigned zone token per area (130 hash as fallback)
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -80,9 +81,10 @@ export class HouseScene {
   private readonly listeners: Array<[EventTarget, string, EventListener]> = [];
 
   // Throws when WebGL is unavailable; the caller shows the fallback panel.
-  constructor(container: HTMLElement, callbacks: SceneCallbacks, plan: HousePlan = DEFAULT_PLAN) {
+  constructor(container: HTMLElement, callbacks: SceneCallbacks, plan: HousePlan = DEFAULT_PLAN, zoneOf: (areaId: string) => string = zoneColorToken) {
     this.container = container;
     this.callbacks = callbacks;
+    this.zoneOf = zoneOf;
     this.width = Math.max(1, container.clientWidth);
     this.height = Math.max(1, container.clientHeight);
 
@@ -259,7 +261,7 @@ export class HouseScene {
     const { rect } = plan;
     const center = new THREE.Vector3(rect.x, LABEL_HEIGHT, rect.z);
     const hue = token(plan.hue);
-    const zone = token(zoneColorToken(plan.areaId));
+    const zone = token(this.zoneOf(plan.areaId));
     const group = new THREE.Group();
 
     const tintMat = this.track(new THREE.MeshBasicMaterial({ color: zone, transparent: true, opacity: 0.04, side: THREE.DoubleSide }));

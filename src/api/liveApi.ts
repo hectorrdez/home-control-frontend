@@ -1,7 +1,9 @@
-import type { EntityFilter, HomeApi } from "./HomeApi";
-import { ApiError, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries } from "./types";
+import type { EntityFilter, EventsQuery, HomeApi } from "./HomeApi";
+import { ApiError, SettingConflictError, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type LoggedEvent, type Setting } from "./types";
 import { backoffDelay } from "./backoff";
-import { parseStateChanged, streamUrl, type EventSourceFactory } from "./liveSubscribe";
+import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
+import { getClientId, getClientName } from "./clientIdentity";
+import type { ServerAlert, ServerEvent } from "./types";
 
 export interface LiveApiOptions {
   baseUrl: string; // "" = same origin (Vite dev proxy forwards /api)
@@ -37,7 +39,12 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
   const openSource: EventSourceFactory = eventSourceFactory ?? ((url) => new EventSource(url));
   const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // `onError` lets one call map a failure to a richer error (feature 133: 409 carries the parsed body).
+  async function request<T>(
+    path: string,
+    init: RequestInit = {},
+    onError?: (status: number, body: Envelope<unknown> | undefined) => ApiError | undefined,
+  ): Promise<T> {
     let res: Response;
     try {
       res = await doFetch(`${baseUrl}${path}`, {
@@ -46,6 +53,9 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
           Accept: "application/json",
           ...(init.body ? { "Content-Type": "application/json" } : {}),
           Authorization: `Bearer ${token}`,
+          // Feature 132 (backend 016): writer identity, echoed as resource_changed.by.
+          "X-Client-Id": getClientId(),
+          "X-Client-Name": getClientName(),
           ...init.headers,
         },
       });
@@ -55,6 +65,8 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     const body = (await res.json().catch(() => undefined)) as Envelope<T> | undefined;
     if (!res.ok) {
+      const mapped = onError?.(res.status, body as Envelope<unknown> | undefined);
+      if (mapped) throw mapped;
       const code = errorCode(body);
       throw new ApiError(kindFor(res.status, code), code ?? `HTTP ${res.status}`, res.status);
     }
@@ -73,6 +85,19 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
   };
 
   return {
+    async listEvents(query: EventsQuery = {}): Promise<LoggedEvent[]> {
+      // Feature 140 (backend 018): newest first. 404 -> not_found (backend without the event log).
+      const params = new URLSearchParams();
+      if (query.types?.length) params.set("types", query.types.join(","));
+      if (query.entityId) params.set("entityId", query.entityId);
+      if (query.from) params.set("from", query.from);
+      if (query.to) params.set("to", query.to);
+      if (query.before) params.set("before", query.before);
+      if (query.limit !== undefined) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      return request<LoggedEvent[]>(`/api/events${qs ? `?${qs}` : ""}`);
+    },
+
     async getStatus(): Promise<HaStatus> {
       const [status] = await request<HaStatus[]>("/api/ha/status");
       if (!status) throw new ApiError("server", "Empty status response");
@@ -99,14 +124,14 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
     },
 
     // SSE on GET /api/stream. Reconnects with backoff (1 s .. 30 s, jitter); the server sends `ready` once the stream is up.
-    subscribe(onEntity, onConnection) {
+    subscribe(onEntity, onConnection, onServerEvent) {
       let source: EventSource | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let attempt = 0;
       let closed = false;
 
       const connect = () => {
-        const es = openSource(streamUrl(baseUrl, token));
+        const es = openSource(streamUrl(baseUrl, token, getClientId()));
         source = es;
         es.addEventListener("ready", () => {
           attempt = 0;
@@ -116,6 +141,13 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
           const entity = parseStateChanged((event as MessageEvent).data);
           if (entity) onEntity(entity);
         });
+        // Feature 132: resource_changed, event, ha_link, alert, alert_acked. Malformed or unknown frames are dropped.
+        for (const name of SERVER_EVENT_NAMES) {
+          es.addEventListener(name, (event) => {
+            const parsed: ServerEvent | null = parseServerEvent(name, (event as MessageEvent).data);
+            if (parsed && onServerEvent) onServerEvent(parsed);
+          });
+        }
         es.onerror = () => {
           if (closed) return;
           es.close();
@@ -179,7 +211,52 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
       return request<CoverCalibration[]>(`/api/calibrations/${encodeURIComponent(entityId)}`, { method: "DELETE" });
     },
 
+    // Feature 142: backend 021 (presets, served from memory). Writes answer with `data: [preset]`.
+    async getPresets(entityId?: string): Promise<Preset[]> {
+      const query = entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
+      return request<Preset[]>(`/api/presets${query}`);
+    },
+
+    async createPreset(input: PresetInput): Promise<Preset> {
+      const [stored] = await request<Preset[]>("/api/presets", { method: "POST", body: JSON.stringify(input) });
+      return stored;
+    },
+
+    async updatePreset(id, input): Promise<Preset> {
+      const [stored] = await request<Preset[]>(`/api/presets/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      return stored;
+    },
+
+    async deletePreset(id): Promise<void> {
+      await request<unknown[]>(`/api/presets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+
+    async applyPreset(id): Promise<Entity> {
+      const [entity] = await request<Entity[]>(`/api/presets/${encodeURIComponent(id)}/apply`, { method: "POST" });
+      return entity;
+    },
+
     // Feature 128: backend 012 (alert rules, served from memory). Writes answer with `data: [rule]`.
+    // Feature 139 (backend 020): server-side alerts.
+    async listAlerts(status, limit) {
+      const params = new URLSearchParams({ status });
+      if (limit !== undefined) params.set("limit", String(limit));
+      return request<ServerAlert[]>(`/api/alerts?${params.toString()}`);
+    },
+
+    async ackAlert(id: string): Promise<ServerAlert> {
+      const [alert] = await request<ServerAlert[]>(`/api/alerts/${encodeURIComponent(id)}/ack`, { method: "POST" });
+      if (!alert) throw new ApiError("server", "Empty ack response");
+      return alert;
+    },
+
+    async ackAllAlerts(): Promise<ServerAlert[]> {
+      return request<ServerAlert[]>("/api/alerts/ack-all", { method: "POST" });
+    },
+
     async listAlertRules(): Promise<AlertRule[]> {
       return request<AlertRule[]>("/api/alert-rules");
     },
@@ -199,6 +276,41 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteAlertRule(id): Promise<void> {
       await request<unknown[]>(`/api/alert-rules/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+
+    // Feature 133: backend 017 shared settings. Writes answer with the stored setting in data[0].
+    async getSettings(): Promise<Setting[]> {
+      return request<Setting[]>("/api/settings");
+    },
+
+    async getSetting(key): Promise<Setting | null> {
+      try {
+        const [setting] = await request<Setting[]>(`/api/settings/${encodeURIComponent(key)}`);
+        return setting ?? null;
+      } catch (err) {
+        // A missing key is a normal answer, not an error. Any other 404 (no settings endpoint) still rejects.
+        if (err instanceof ApiError && err.kind === "not_found" && err.message === "setting_not_found") return null;
+        throw err;
+      }
+    },
+
+    async putSetting(key, value, baseVersion): Promise<Setting> {
+      const body = baseVersion === undefined ? { value } : { value, baseVersion };
+      const [stored] = await request<Setting[]>(
+        `/api/settings/${encodeURIComponent(key)}`,
+        { method: "PUT", body: JSON.stringify(body) },
+        (status, envelope) => {
+          if (status !== 409 || errorCode(envelope) !== "version_conflict") return undefined;
+          const current = Array.isArray(envelope?.data) ? ((envelope.data[0] ?? null) as Setting | null) : null;
+          return new SettingConflictError(current);
+        },
+      );
+      if (!stored) throw new ApiError("server", "Empty setting response");
+      return stored;
+    },
+
+    async deleteSetting(key): Promise<void> {
+      await request<unknown[]>(`/api/settings/${encodeURIComponent(key)}`, { method: "DELETE" });
     },
 
     async setCoverPercent(entityId, percent): Promise<Entity> {

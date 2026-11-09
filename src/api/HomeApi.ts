@@ -10,7 +10,23 @@ import type {
   CoverCalibration,
   AlertRule,
   AlertRuleInput,
+  LoggedEvent,
+  ServerEvent,
+  Setting,
+  ServerAlert,
+  Preset,
+  PresetInput,
 } from "./types";
+
+// Feature 140 (backend 018): GET /api/events query. Every field optional; `from`/`to` ISO dates or instants.
+export interface EventsQuery {
+  types?: string[];
+  entityId?: string;
+  from?: string;
+  to?: string;
+  before?: string;
+  limit?: number;
+}
 
 export interface EntityFilter {
   domain?: string;
@@ -26,6 +42,8 @@ export interface HomeApi {
   subscribe(
     onEntity: (e: Entity) => void,
     onConnection: (s: ConnectionState) => void,
+    // Feature 132: non-entity frames (resource_changed, event, ha_link, alert, alert_acked). Optional.
+    onServerEvent?: (e: ServerEvent) => void,
   ): () => void;
   getHistory(entityIds: string[], hours: number): Promise<HistorySeries[]>;
   // Feature 115 (backend 008). getAliases rejects with kind "not_found" when the backend has no aliases endpoint.
@@ -37,9 +55,28 @@ export interface HomeApi {
   putCalibration(entityId: string, input: CalibrationInput): Promise<CoverCalibration[]>;
   deleteCalibration(entityId: string): Promise<CoverCalibration[]>;
   setCoverPercent(entityId: string, percent: number): Promise<Entity>;
+  // Feature 142 (backend 021). Writes answer with the stored preset; applyPreset answers with the moved entity.
+  // Errors are ApiError messages (e.g. duplicate_preset, too_many_presets, position_unknown, preset_not_applicable).
+  getPresets(entityId?: string): Promise<Preset[]>;
+  createPreset(input: PresetInput): Promise<Preset>;
+  updatePreset(id: string, input: { name: string; percent: number }): Promise<Preset>;
+  deletePreset(id: string): Promise<void>;
+  applyPreset(id: string): Promise<Entity>;
   // Feature 128 (backend 012). Writes answer with the stored rule; errors are ApiError messages (e.g. duplicate_rule).
   listAlertRules(): Promise<AlertRule[]>;
   createAlertRule(rule: AlertRuleInput): Promise<AlertRule>;
   updateAlertRule(id: string, rule: AlertRuleInput): Promise<AlertRule>;
   deleteAlertRule(id: string): Promise<void>;
+  // Feature 133 (backend 017). getSettings rejects with kind "not_found" when the backend has no settings endpoint.
+  // getSetting resolves null for a missing key. putSetting rejects with SettingConflictError on 409 version_conflict.
+  getSettings(): Promise<Setting[]>;
+  getSetting(key: string): Promise<Setting | null>;
+  putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting>;
+  deleteSetting(key: string): Promise<void>;
+  // Feature 139 (backend 020). listAlerts rejects with kind "not_found" when the backend has no alerts endpoint (local fallback).
+  listAlerts(status: "open" | "all", limit?: number): Promise<ServerAlert[]>;
+  ackAlert(id: string): Promise<ServerAlert>;
+  ackAllAlerts(): Promise<ServerAlert[]>;
+  // Feature 140 (backend 018). Rejects with kind "not_found" when the backend has no events endpoint.
+  listEvents(query?: EventsQuery): Promise<LoggedEvent[]>;
 }

@@ -1,6 +1,10 @@
-import type { EntityFilter, HomeApi } from "../HomeApi";
+import type { EntityFilter, EventsQuery, HomeApi } from "../HomeApi";
+import { getClientId, getClientName } from "../clientIdentity";
+import { deriveWidgets, type Widget } from "../../features/telemetry/widgets";
 import {
   ApiError,
+  SettingConflictError,
+  type Setting,
   type Alias,
   type AlertRule,
   type AlertRuleInput,
@@ -9,16 +13,23 @@ import {
   type CalibrationInput,
   type ConnectionState,
   type CoverCalibration,
+  type Preset,
+  type PresetInput,
   type Entity,
   type EntityAction,
   type HaStatus,
   type HistorySeries,
+  type ServerAlert,
+  type LoggedEvent,
+  type ServerEvent,
+  type ServerResource,
 } from "../types";
 import {
   createFixtureEntities,
   createManyDeviceEntities,
   createRawNameEntities,
   createUncalibratedCoverEntities,
+  createKnownCoverEntities,
   FIXTURE_AREAS,
 } from "./fixtures";
 import { createPrng, hashSeed } from "./prng";
@@ -45,11 +56,15 @@ const ALERT_RULES: AlertRule[] = [
   { id: "seed-high", entityId: "lock.front_door", trigger: { type: "state_becomes", value: "unlocked" }, level: "high", message: "Front door unlocked" },
   { id: "seed-low", entityId: "light.office_desk", trigger: { type: "state_becomes", value: "off" }, level: "low" },
 ];
-const ALERT_TIMELINE: Array<{ ms: number; entityId: string; state: string }> = [
-  { ms: 1500, entityId: "sensor.office_desk_power", state: "unavailable" },
-  { ms: 4000, entityId: "lock.front_door", state: "unlocked" },
-  { ms: 6000, entityId: "light.office_desk", state: "off" },
+// Feature 139: the same timeline also fires the server alert (backend 020) for the matching seeded rule.
+const ALERT_TIMELINE: Array<{ ms: number; entityId: string; state: string; ruleId: string; level: "low" | "medium" | "high"; text: string }> = [
+  { ms: 1500, entityId: "sensor.office_desk_power", state: "unavailable", ruleId: "seed-medium", level: "medium", text: "DISCONNECTS" },
+  { ms: 4000, entityId: "lock.front_door", state: "unlocked", ruleId: "seed-high", level: "high", text: "Front door unlocked" },
+  { ms: 6000, entityId: "light.office_desk", state: "off", ruleId: "seed-low", level: "low", text: "BECOMES OFF" },
 ];
+// Feature 139 "remote-ack": another device acks a HIGH alert this long after it fired.
+const REMOTE_ACK_MS = 2000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -75,11 +90,112 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
           ...createFixtureEntities(),
           ...(scenario === "raw-names" ? createRawNameEntities() : []),
           ...(scenario === "cover-calibration" ? createUncalibratedCoverEntities() : []),
+          ...(scenario === "cover-presets" ? createKnownCoverEntities() : []),
           ...(scenario === "many-devices" ? createManyDeviceEntities() : []),
         ].map((e) => [e.entityId, e]),
   );
   const listeners = new Set<(e: Entity) => void>();
+  // Feature 132: non-entity frames. Own writes emit resource_changed with by = this panel client id.
+  const serverListeners = new Set<(e: ServerEvent) => void>();
+  function emitServer(event: ServerEvent) {
+    for (const listener of serverListeners) listener(event);
+  }
+  function changed(resource: ServerResource, keys: string[]) {
+    recordEvent({ type: "config_changed", source: "api", payload: { resource, keys } });
+    emitServer({ type: "resource_changed", resource, keys, by: getClientId() });
+  }
   const rng = createPrng(hashSeed(`stream:${seed}`));
+
+  // Feature 140: in-memory event log shaped like backend 018 (newest first). Kept in localStorage so a reload
+  // still shows it; the live `event` frame mirrors every row.
+  const EVENT_LOG_KEY = "hc.mock.events.v1";
+  const EVENT_LOG_CAP = 500;
+  const EVENT_TYPE_RE = /^[a-z_]+$/;
+  const SEED_EVENT_COUNT = 130;
+  const storedLog = readStoredEventLog();
+  const eventLog: LoggedEvent[] = storedLog ?? buildSeedEvents(seed);
+  let eventSeq = eventLog.reduce((max, e) => Math.max(max, Number(e.id)), 0);
+  function readStoredEventLog(): LoggedEvent[] | null {
+    try {
+      const raw = globalThis.localStorage?.getItem(EVENT_LOG_KEY);
+      if (raw === null || raw === undefined) return null;
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as LoggedEvent[]).slice(0, EVENT_LOG_CAP) : [];
+    } catch {
+      return [];
+    }
+  }
+  // Feature 141: a deterministic history for the first visit (>= 120 rows, every type), newest first.
+  function buildSeedEvents(value: number): LoggedEvent[] {
+    const next = createPrng(hashSeed(`events:${value}`));
+    const pick = <T,>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
+    const ids = [...entities.keys()].sort((a, b) => a.localeCompare(b));
+    const clients = ["Kitchen tablet", "Hall phone", "Wall panel"];
+    const start = Date.parse("2026-11-01T00:00:00.000Z");
+    const rows: LoggedEvent[] = [];
+    for (let i = 0; i < SEED_EVENT_COUNT; i++) {
+      const roll = next();
+      const entityId = ids.length ? pick(ids) : null;
+      const clientName = pick(clients);
+      const alertId = `seed-${i + 1}`;
+      let row: Pick<LoggedEvent, "type" | "source" | "entityId" | "level" | "clientName" | "payload">;
+      if (roll < 0.5) {
+        row = { type: "action", source: "api", entityId, level: null, clientName, payload: { action: pick(["turn_on", "turn_off", "toggle"]), ok: next() > 0.1 } };
+      } else if (roll < 0.65) {
+        row = { type: "availability", source: "ha", entityId, level: null, clientName: null, payload: { available: next() > 0.3 } };
+      } else if (roll < 0.75) {
+        row = { type: "config_changed", source: "api", entityId: null, level: null, clientName, payload: { resource: pick(["aliases", "settings", "alert_rules"]), keys: [] } };
+      } else if (roll < 0.85) {
+        row = { type: "alert", source: "engine", entityId, level: pick(["low", "medium", "high"]), clientName: null, payload: { alertId, ruleId: null, text: "Motion detected", trigger: { type: "connects" }, clientId: null } };
+      } else if (roll < 0.92) {
+        row = { type: "alert_acked", source: "api", entityId, level: null, clientName, payload: { alertId } };
+      } else {
+        row = { type: "ha_link", source: "ha", entityId: null, level: null, clientName: null, payload: { connected: next() > 0.2 } };
+      }
+      rows.push({ id: String(i + 1), ts: new Date(start + i * 6 * 60_000).toISOString(), clientId: null, ...row });
+    }
+    return rows.reverse();
+  }
+  type MockEventInput = Pick<LoggedEvent, "type" | "source" | "payload"> &
+    Partial<Pick<LoggedEvent, "entityId" | "level" | "clientId" | "clientName">>;
+  function persistEventLog(): void {
+    try {
+      globalThis.localStorage?.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog));
+    } catch {
+      // Storage can be blocked; the log then lives for this page only.
+    }
+  }
+  if (!storedLog) persistEventLog();
+  function recordEvent(input: MockEventInput): void {
+    eventSeq += 1;
+    const event: LoggedEvent = {
+      entityId: null,
+      level: null,
+      clientId: getClientId(),
+      clientName: getClientName(),
+      ...input,
+      id: String(eventSeq),
+      ts: new Date().toISOString(),
+    };
+    eventLog.unshift(event);
+    eventLog.length = Math.min(eventLog.length, EVENT_LOG_CAP);
+    try {
+      globalThis.localStorage?.setItem(EVENT_LOG_KEY, JSON.stringify(eventLog));
+    } catch {
+      // Storage can be blocked; the log then lives for this page only.
+    }
+    emitServer({ type: "event", event: clone(event) });
+  }
+  // Mirrors the backend 018 query validation (invalid_query 400).
+  function eventsQueryOk(q: EventsQuery): boolean {
+    if (q.types && (q.types.length > 10 || q.types.some((t) => !EVENT_TYPE_RE.test(t)))) return false;
+    if (q.entityId !== undefined && !ENTITY_ID.test(q.entityId)) return false;
+    if ((q.from !== undefined && Number.isNaN(Date.parse(q.from))) || (q.to !== undefined && Number.isNaN(Date.parse(q.to)))) return false;
+    if (q.from !== undefined && q.to !== undefined && Date.parse(q.from) > Date.parse(q.to)) return false;
+    if (q.before !== undefined && !/^\d+$/.test(q.before)) return false;
+    if (q.limit !== undefined && !(Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 500)) return false;
+    return true;
+  }
 
   // Reads share the scenario switch: error rejects, slow delays, everything else is normal.
   async function read<T>(produce: () => T | Promise<T>): Promise<T> {
@@ -312,8 +428,56 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     publishPosition(entityId, null);
   }
 
+  // Backend 011 rules for a timed move; a new request cancels a running move (its estimate is kept) first.
+  function moveCalibratedCover(entityId: string, percent: number): Entity {
+    if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new ApiError("server", "invalid_params", 400);
+    coverOf(entityId);
+    const cal = calibrations.get(entityId);
+    if (!cal) throw new ApiError("server", "not_calibrated", 409);
+    cancelMove(entityId);
+    const full = percent === 0 || percent === 100;
+    if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
+    startMove(entityId, cal, percent);
+    return clone(entities.get(entityId) as Entity);
+  }
+
   function calibrationInRange(ms: unknown): boolean {
     return Number.isInteger(ms) && (ms as number) >= CALIBRATION_MIN_MS && (ms as number) <= CALIBRATION_MAX_MS;
+  }
+
+  // Feature 142: saved cover positions (backend 021), same rules as the server. Mock only, in memory per page load.
+  const PRESET_CAP_PER_ENTITY = 10;
+  const PRESET_CAP_TOTAL = 500;
+  const presets = new Map<string, Preset>();
+  let presetSeq = 0;
+  if (scenario === "cover-presets") {
+    calibrations.set("cover.salon_blind", { entityId: "cover.salon_blind", openMs: 4000, closeMs: 4000, position: 0, calibratedAt: new Date().toISOString() });
+  }
+
+  function presetList(entityId?: string): Preset[] {
+    return [...presets.values()]
+      .filter((p) => entityId === undefined || p.entityId === entityId)
+      .sort((a, b) => a.entityId.localeCompare(b.entityId) || a.percent - b.percent || a.name.localeCompare(b.name))
+      .map((p) => clone(p));
+  }
+
+  function checkPresetInput(input: { name: unknown; percent: unknown }, entityId: string, exceptId?: string): string {
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    if (name.length < 1 || name.length > 30 || /[\u0000-\u001f\u007f]/.test(name)) {
+      throw new ApiError("server", "invalid_preset", 400);
+    }
+    if (!Number.isInteger(input.percent) || (input.percent as number) < 0 || (input.percent as number) > 100) {
+      throw new ApiError("server", "invalid_preset", 400);
+    }
+    const key = name.toLowerCase();
+    const clash = [...presets.values()].some((p) => p.id !== exceptId && p.entityId === entityId && p.name.toLowerCase() === key);
+    if (clash) throw new ApiError("server", "duplicate_preset", 409);
+    return name;
+  }
+
+  function presetCapCheck(entityId: string): void {
+    const own = [...presets.values()].filter((p) => p.entityId === entityId).length;
+    if (own >= PRESET_CAP_PER_ENTITY || presets.size >= PRESET_CAP_TOTAL) throw new ApiError("server", "too_many_presets", 400);
   }
 
   // Feature 128: notification rules (backend 012). Mock only, in memory; validation and duplicates follow the backend.
@@ -321,7 +485,36 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
   const ALERT_LEVELS: readonly string[] = ["off", "low", "medium", "high"];
   const alertRules = new Map<string, AlertRule>();
   let alertSeq = 0;
-  if (scenario === "alerts") for (const rule of ALERT_RULES) alertRules.set(rule.id, rule);
+  const seedsRules = scenario === "alerts" || scenario === "alerts-local" || scenario === "remote-ack";
+  if (seedsRules) for (const rule of ALERT_RULES) alertRules.set(rule.id, rule);
+
+  // Feature 139: server-side alerts (backend 020). The mock fires them itself; the panel does not evaluate rules then.
+  const serverAlerts: ServerAlert[] = [];
+  let serverAlertSeq = 0;
+  function emitAlert(step: { ruleId: string; entityId: string; level: "low" | "medium" | "high"; text: string }): ServerAlert {
+    const alert: ServerAlert = {
+      id: `alert-${++serverAlertSeq}`,
+      ruleId: step.ruleId,
+      entityId: step.entityId,
+      level: step.level,
+      text: step.text,
+      firedAt: new Date().toISOString(),
+      ackedAt: null,
+      ackedBy: null,
+      clientId: null,
+    };
+    serverAlerts.push(alert);
+    emitServer({ type: "alert", alert: clone(alert) });
+    return alert;
+  }
+  function ackServerAlert(alert: ServerAlert, by: string | null): ServerAlert {
+    if (alert.ackedAt !== null) return alert;
+    alert.ackedAt = new Date().toISOString();
+    alert.ackedBy = by;
+    emitServer({ type: "alert_acked", id: alert.id, ackedAt: alert.ackedAt, ackedBy: by });
+    return alert;
+  }
+  const isOpenAlert = (alert: ServerAlert) => alert.ackedAt === null && Date.now() - Date.parse(alert.firedAt) < DAY_MS;
 
   function validTrigger({ type, value }: { type?: unknown; value?: unknown }): boolean {
     if (type === "connects" || type === "disconnects" || type === "interacted") return true;
@@ -355,7 +548,95 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     return { id, entityId: rule.entityId, trigger: { ...rule.trigger }, level: rule.level, ...(rule.message === undefined ? {} : { message: rule.message }) };
   }
 
+  // Feature 133: shared settings (backend 017), same rules as the server. Mock only, in memory per page load.
+  const SETTING_CAP = 200;
+  const SETTING_MAX_BYTES = 65536;
+  const SETTING_KEY = /^[a-z0-9]+(\.[a-z0-9_-]+){1,4}$/;
+  const settings = new Map<string, Setting>();
+
+  function settingKeyOk(key: string): void {
+    if (key.length > 80 || !SETTING_KEY.test(key)) throw new ApiError("server", "invalid_setting_key", 400);
+  }
+
+  // Stores one value like backend 017: a new key starts at version 1, a real change bumps it, the same JSON keeps it.
+  function storeSetting(key: string, value: unknown, by: string | null): Setting {
+    const existing = settings.get(key);
+    if (existing && JSON.stringify(existing.value) === JSON.stringify(value)) return existing;
+    const stored: Setting = {
+      key,
+      value: clone(value),
+      version: (existing?.version ?? 0) + 1,
+      updatedAt: new Date().toISOString(),
+      updatedBy: by,
+    };
+    settings.set(key, stored);
+    recordEvent({ type: "config_changed", source: "api", clientId: by, payload: { resource: "settings", keys: [key] } });
+    emitServer({ type: "resource_changed", resource: "settings", keys: [key], by });
+    return stored;
+  }
+
+  // Seeded "remote-settings" layout: the default telemetry widgets with the first one hidden.
+  function remoteWidgetLayout(): Widget[] {
+    return deriveWidgets([...entities.values()]).map((w, i) => (i === 0 ? { ...w, visible: false } : w));
+  }
+
   return {
+    async listEvents(query: EventsQuery = {}): Promise<LoggedEvent[]> {
+      if (scenario === "no-events") throw new ApiError("not_found", "not_found", 404);
+      if (!eventsQueryOk(query)) throw new ApiError("server", "invalid_query", 400);
+      return read(() => {
+        const fromMs = query.from !== undefined ? Date.parse(query.from) : null;
+        const toMs = query.to !== undefined ? Date.parse(query.to) : null;
+        const types = query.types ?? [];
+        return eventLog
+          .filter(
+            (e) =>
+              (types.length === 0 || types.includes(e.type)) &&
+              (query.entityId === undefined || e.entityId === query.entityId) &&
+              (fromMs === null || Date.parse(e.ts) >= fromMs) &&
+              (toMs === null || Date.parse(e.ts) <= toMs) &&
+              (query.before === undefined || Number(e.id) < Number(query.before)),
+          )
+          .slice(0, query.limit ?? 100)
+          .map(clone);
+      });
+    },
+
+    async getSettings(): Promise<Setting[]> {
+      if (scenario === "no-settings") throw new ApiError("not_found", "not_found", 404);
+      return read(() => [...settings.values()].sort((a, b) => a.key.localeCompare(b.key)).map(clone));
+    },
+
+    async getSetting(key: string): Promise<Setting | null> {
+      if (scenario === "no-settings") throw new ApiError("not_found", "not_found", 404);
+      settingKeyOk(key);
+      return read(() => {
+        const found = settings.get(key);
+        return found ? clone(found) : null;
+      });
+    },
+
+    async putSetting(key: string, value: unknown, baseVersion?: number): Promise<Setting> {
+      settingKeyOk(key);
+      if (value === undefined || (baseVersion !== undefined && (!Number.isInteger(baseVersion) || baseVersion < 1))) {
+        throw new ApiError("server", "invalid_setting", 400);
+      }
+      if (new TextEncoder().encode(JSON.stringify(value)).length > SETTING_MAX_BYTES) {
+        throw new ApiError("server", "setting_too_large", 413);
+      }
+      const existing = settings.get(key);
+      if (baseVersion !== undefined && existing?.version !== baseVersion) {
+        throw new SettingConflictError(existing ? clone(existing) : null);
+      }
+      if (!existing && settings.size >= SETTING_CAP) throw new ApiError("server", "too_many_settings", 400);
+      return clone(storeSetting(key, value, getClientId()));
+    },
+
+    async deleteSetting(key: string): Promise<void> {
+      settingKeyOk(key);
+      if (settings.delete(key)) changed("settings", [key]);
+    },
+
     async getAliases(): Promise<Alias[]> {
       if (scenario === "error") throw new ApiError("unavailable", "Mock scenario: error");
       if (scenario === "empty") return [];
@@ -373,6 +654,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       aliasWriteGuard();
       aliases.set(entityId, trimmed);
       saveAliases();
+      changed("aliases", [entityId]);
       return aliasList();
     },
 
@@ -382,6 +664,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       aliasWriteGuard();
       aliases.delete(entityId);
       saveAliases();
+      changed("aliases", [entityId]);
       return aliasList();
     },
 
@@ -407,6 +690,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         position: null,
         calibratedAt: new Date().toISOString(),
       });
+      changed("calibrations", [entityId]);
       return calibrationList();
     },
 
@@ -415,20 +699,80 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       cancelMove(entityId);
       calibrations.delete(entityId);
+      changed("calibrations", [entityId]);
       return calibrationList();
     },
 
     async setCoverPercent(entityId: string, percent: number): Promise<Entity> {
-      if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new ApiError("server", "invalid_params", 400);
-      coverOf(entityId);
-      const cal = calibrations.get(entityId);
-      if (!cal) throw new ApiError("server", "not_calibrated", 409);
-      // A new request cancels a running move (its estimate is kept) before the position rules are checked.
-      cancelMove(entityId);
-      const full = percent === 0 || percent === 100;
-      if (!full && cal.position === null) throw new ApiError("server", "position_unknown", 409);
-      startMove(entityId, cal, percent);
-      return clone(entities.get(entityId) as Entity);
+      return moveCalibratedCover(entityId, percent);
+    },
+
+    async getPresets(entityId?: string): Promise<Preset[]> {
+      if (entityId !== undefined && !ENTITY_ID.test(entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      return read(() => presetList(entityId));
+    },
+
+    async createPreset(input: PresetInput): Promise<Preset> {
+      if (!ENTITY_ID.test(input.entityId)) throw new ApiError("server", "invalid_entity_id", 400);
+      coverOf(input.entityId);
+      const name = checkPresetInput(input, input.entityId);
+      presetCapCheck(input.entityId);
+      await delay(actionDelayMs);
+      const stored: Preset = { id: `preset-${++presetSeq}`, entityId: input.entityId, name, percent: input.percent, createdAt: new Date().toISOString() };
+      presets.set(stored.id, stored);
+      changed("presets", [stored.id]);
+      return clone(stored);
+    },
+
+    async updatePreset(id: string, input: { name: string; percent: number }): Promise<Preset> {
+      const current = presets.get(id);
+      if (!current) throw new ApiError("not_found", "preset_not_found", 404);
+      const name = checkPresetInput(input, current.entityId, id);
+      await delay(actionDelayMs);
+      const stored: Preset = { ...current, name, percent: input.percent };
+      presets.set(id, stored);
+      changed("presets", [id]);
+      return clone(stored);
+    },
+
+    async deletePreset(id: string): Promise<void> {
+      await delay(actionDelayMs);
+      if (presets.delete(id)) changed("presets", [id]);
+    },
+
+    async applyPreset(id: string): Promise<Entity> {
+      const preset = presets.get(id);
+      if (!preset) throw new ApiError("not_found", "preset_not_found", 404);
+      const current = coverOf(preset.entityId);
+      await delay(actionDelayMs);
+      if (calibrations.has(preset.entityId)) return moveCalibratedCover(preset.entityId, preset.percent);
+      if (typeof current.attributes.current_position !== "number") throw new ApiError("server", "preset_not_applicable", 409);
+      const updated = applyAction(current, { action: "set_cover_position", params: { position: preset.percent } });
+      entities.set(preset.entityId, updated);
+      emit(updated);
+      return clone(updated);
+    },
+
+    // Feature 139 (backend 020). alerts-local has no alerts endpoint: 404 -> the panel falls back to the 129 engine.
+    async listAlerts(status: "open" | "all", limit = 50): Promise<ServerAlert[]> {
+      if (scenario === "alerts-local") throw new ApiError("not_found", "alerts_not_found", 404);
+      return read(() =>
+        [...serverAlerts]
+          .reverse()
+          .filter((alert) => status === "all" || isOpenAlert(alert))
+          .slice(0, limit)
+          .map(clone),
+      );
+    },
+
+    async ackAlert(id: string): Promise<ServerAlert> {
+      const alert = serverAlerts.find((candidate) => candidate.id === id);
+      if (!alert) throw new ApiError("server", "alert_not_found", 404);
+      return clone(ackServerAlert(alert, getClientId()));
+    },
+
+    async ackAllAlerts(): Promise<ServerAlert[]> {
+      return serverAlerts.filter(isOpenAlert).map((alert) => clone(ackServerAlert(alert, getClientId())));
     },
 
     async listAlertRules(): Promise<AlertRule[]> {
@@ -445,6 +789,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       const stored = storedRule(`rule-${++alertSeq}`, rule);
       alertRules.set(stored.id, stored);
+      changed("alert_rules", [stored.id]);
       return clone(stored);
     },
 
@@ -454,12 +799,14 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       await delay(actionDelayMs);
       const stored = storedRule(id, rule);
       alertRules.set(id, stored);
+      changed("alert_rules", [id]);
       return clone(stored);
     },
 
     async deleteAlertRule(id: string): Promise<void> {
       await delay(actionDelayMs);
       alertRules.delete(id);
+      changed("alert_rules", [id]);
     },
 
     async getStatus(): Promise<HaStatus> {
@@ -497,13 +844,17 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     },
 
     async runAction(entityId: string, action: EntityAction): Promise<Entity> {
-      if (scenario === "action-error") throw new ApiError("server", "Mock scenario: action-error", 500);
+      if (scenario === "action-error") {
+        recordEvent({ type: "action", source: "api", entityId, payload: { action: action.action, ok: false, error: "action-error" } });
+        throw new ApiError("server", "Mock scenario: action-error", 500);
+      }
       if (action.action === "stop_cover") cancelMove(entityId);
       const current = entities.get(entityId);
       if (!current) throw new ApiError("not_found", "entity_not_found", 404);
       await delay(actionDelayMs);
       const updated = applyAction(current, action);
       entities.set(entityId, updated);
+      recordEvent({ type: "action", source: "api", entityId, payload: { action: action.action, ok: true } });
       // Like Home Assistant (117): the answer still shows the state before the change; the new state
       // reaches the stream a little later, so the optimistic value has to bridge the gap.
       setTimeout(() => {
@@ -513,10 +864,31 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
       return clone(current);
     },
 
-    subscribe(onEntity: (e: Entity) => void, onConnection: (s: ConnectionState) => void) {
+    subscribe(
+      onEntity: (e: Entity) => void,
+      onConnection: (s: ConnectionState) => void,
+      onServerEvent?: (e: ServerEvent) => void,
+    ) {
       listeners.add(onEntity);
+      if (onServerEvent) serverListeners.add(onServerEvent);
       const timeouts: ReturnType<typeof setTimeout>[] = [];
       onConnection("open");
+
+      // Feature 132 "remote-change": another device renames the Kitchen ceiling light (a home card); the panel must refetch it.
+      // Feature 138: the E2E asserts the new name on the home page without a reload.
+      if (scenario === "remote-change") {
+        timeouts.push(setTimeout(() => {
+          const firstId = "light.kitchen_ceiling";
+          if (!entities.has(firstId)) return;
+          aliases.set(firstId, "Remote alias");
+          saveAliases();
+          emitServer({ type: "resource_changed", resource: "aliases", keys: [firstId], by: "other-device" });
+        }, 1000));
+      }
+      // Feature 133 "remote-settings": another device hides the first telemetry widget; 135 must pick it up.
+      if (scenario === "remote-settings") {
+        timeouts.push(setTimeout(() => storeSetting("telemetry.widgets", { version: 1, widgets: remoteWidgetLayout() }, "other-device"), 1000));
+      }
       if (scenario === "stream-drop") {
         timeouts.push(setTimeout(() => onConnection("reconnecting"), 3000));
         timeouts.push(setTimeout(() => onConnection("open"), 6000));
@@ -524,9 +896,26 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
       // Feature 126 "device-flap": both members of the Desk plug device lose their link, then recover. Emitted in
       // one tick, like a device dropping off the network, so the feed dedupes them into one event.
-      if (scenario === "alerts") {
+      if (scenario === "alerts" || scenario === "alerts-local" || scenario === "remote-ack") {
         for (const change of ALERT_TIMELINE) {
-          timeouts.push(setTimeout(() => setEntityState(change.entityId, change.state), change.ms));
+          timeouts.push(setTimeout(() => {
+            setEntityState(change.entityId, change.state);
+            if (scenario === "alerts-local") return;
+            const alert = emitAlert(change);
+            if (scenario === "remote-ack" && alert.level === "high") {
+              timeouts.push(setTimeout(() => ackServerAlert(alert, "other-device"), REMOTE_ACK_MS));
+            }
+          }, change.ms));
+        }
+      }
+
+      // Feature 140 "ha-link-drop": the backend lost Home Assistant at 1 s and got it back at 3 s (019 ha_link frame + row).
+      if (scenario === "ha-link-drop") {
+        for (const [ms, connected] of [[1000, false], [3000, true]] as const) {
+          timeouts.push(setTimeout(() => {
+            emitServer({ type: "ha_link", connected, at: new Date().toISOString() });
+            recordEvent({ type: "ha_link", source: "ha", payload: { connected } });
+          }, ms));
         }
       }
 
@@ -552,6 +941,7 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
 
       return () => {
         listeners.delete(onEntity);
+        if (onServerEvent) serverListeners.delete(onServerEvent);
         clearInterval(interval);
         for (const timer of timeouts) clearTimeout(timer);
       };

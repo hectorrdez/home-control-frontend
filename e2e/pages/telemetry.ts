@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { Header } from "../components/header";
 import { Navigation } from "../components/navigation";
 
@@ -116,18 +116,49 @@ export class TelemetryPage {
       .getByRole("button", { name: kind, exact: true });
   }
 
-  wideToggle(label: string) {
-    return this.page.getByRole("button", { name: `Wide ${label}`, exact: true });
+  // Feature 146: FULL / HALF / THIRD width pills of one chart's edit bar.
+  widthOption(label: string, size: "FULL" | "HALF" | "THIRD") {
+    return this.page
+      .getByRole("group", { name: `Width for ${label}`, exact: true })
+      .getByRole("button", { name: size, exact: true });
   }
 
-  // Saved chart layout (localStorage, feature 113/114). Read/replace the widget list for seeding edge cases.
+  // The "Live charts" list and the grid slot (listitem) that holds one chart card.
+  liveChartsList() {
+    return this.page.getByRole("list", { name: "Live charts", exact: true });
+  }
+
+  chartSlot(sensorName: string) {
+    return this.liveChartsList().getByRole("listitem").filter({ has: this.chartCard(sensorName) });
+  }
+
+  // Saved chart layout: the local cache of the shared setting telemetry.widgets (feature 113/114/135). Read/replace the
+  // widget list for seeding edge cases.
   async savedWidgets(): Promise<Array<Record<string, unknown>>> {
-    return this.page.evaluate(() => JSON.parse(window.localStorage.getItem("hc.telemetry.widgets.v1") ?? "{}").widgets ?? []);
+    return this.page.evaluate(
+      () => JSON.parse(window.localStorage.getItem("hc.setting.telemetry.widgets") ?? "{}").value?.widgets ?? [],
+    );
+  }
+
+  // Feature 135: a user edit is what persists the layout. RESET LAYOUT + CONFIRM saves the defaults in one step.
+  async resetToDefaults() {
+    await this.editButton().click();
+    await this.resetLayout().click();
+    await this.confirmReset().click();
+    await this.editButton().click();
+    // Wait for the server to acknowledge the save (cache pending=false), so a later seed is not overwritten by it.
+    await this.page.waitForFunction(
+      () => JSON.parse(window.localStorage.getItem("hc.setting.telemetry.widgets") ?? "{}").pending === false,
+    );
   }
 
   async setSavedWidgets(widgets: Array<Record<string, unknown>>) {
     await this.page.evaluate(
-      (list) => window.localStorage.setItem("hc.telemetry.widgets.v1", JSON.stringify({ version: 1, widgets: list })),
+      (list) =>
+        window.localStorage.setItem(
+          "hc.setting.telemetry.widgets",
+          JSON.stringify({ v: 1, value: { version: 1, widgets: list }, version: null, pending: false }),
+        ),
       widgets,
     );
   }
@@ -155,9 +186,10 @@ export class TelemetryPage {
     return items.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""));
   }
 
-  // Feature 112: the climate history chart (named "<room> climate, <range>: ...").
-  climateChart(room: string) {
-    return this.page.getByRole("img", { name: new RegExp(`^${room} climate,`) });
+  // Feature 112/144: the climate history charts (named "<room> temperature, <range>: ..." and "<room> humidity, ...").
+  climateChart(room: string, metric: "temperature" | "humidity" = "temperature") {
+    // The range label (e.g. "24H:") tells these apart from the live sensor charts, which share the "<name> temperature" shape.
+    return this.page.getByRole("img", { name: new RegExp(`^${room} ${metric}, (6H|24H|7D|30D):`) });
   }
 
   rangeTab(label: string) {
@@ -178,12 +210,18 @@ export class TelemetryPage {
   }
 
   // Drawn curves of the climate chart (SVG paths have no accessible name, so they carry a data-testid).
-  climateCurves(room: string, kind: "room-line" | "mean-line" | "humidity-line" | "temp-area") {
-    return this.climateChart(room).getByTestId(`climate-${kind}`);
+  climateCurves(room: string, kind: "room-line" | "mean-line" | "humidity-line" | "humidity-room-line" | "temp-area") {
+    const metric = kind.startsWith("humidity") ? "humidity" : "temperature";
+    return this.climateChart(room, metric).getByTestId(`climate-${kind}`);
   }
 
   climateTitle() {
     return this.page.getByRole("heading", { name: "CLIMATE HISTORY", exact: true });
+  }
+
+  // Feature 147: the zone dot of a chart card, legend entry or zone pill (decorative; data-zone-token carries the zone color).
+  zoneDot(scope: Locator) {
+    return scope.getByTestId("zone-dot");
   }
 
   historyNotAvailable() {

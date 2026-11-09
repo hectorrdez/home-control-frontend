@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entity } from "@/api/types";
 import {
-  WIDGET_STORAGE_KEY,
+  widgetsSetting,
   deriveWidgets,
   kindFor,
   loadWidgets,
   numericSensors,
+  parseStoredWidgets,
   parseWidgets,
   reconcileWidgets,
   saveWidgets,
@@ -93,25 +94,30 @@ describe("parseWidgets", () => {
   });
 
   it("returns the widgets for a valid payload", () => {
-    expect(parseWidgets(valid)).toEqual([{ id: "w", entityId: "sensor.a", kind: "gauge", visible: false, order: 0 }]);
+    expect(parseWidgets(valid)).toEqual([{ id: "w", entityId: "sensor.a", kind: "gauge", visible: false, order: 0, size: "third" }]);
   });
 });
+
+const CACHE_KEY = "hc.setting.telemetry.widgets";
 
 describe("storage wrapper", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    widgetsSetting.forget();
     vi.restoreAllMocks();
   });
 
   it("round-trips a layout under the versioned key", () => {
     const widgets = deriveWidgets([temp]);
     saveWidgets(widgets);
-    expect(JSON.parse(window.localStorage.getItem(WIDGET_STORAGE_KEY) ?? "null")).toEqual({ version: 1, widgets });
-    expect(loadWidgets()).toEqual(widgets);
+    // Feature 146: the first save writes an explicit size (defaults are "third").
+    const withSize = widgets.map((w) => ({ ...w, size: "third" }));
+    expect(JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null").value).toEqual({ version: 1, widgets: withSize });
+    expect(loadWidgets()).toEqual(withSize);
   });
 
   it("returns null when stored data is corrupt", () => {
-    window.localStorage.setItem(WIDGET_STORAGE_KEY, "garbage");
+    window.localStorage.setItem(CACHE_KEY, "garbage");
     expect(loadWidgets()).toBeNull();
   });
 
@@ -127,37 +133,103 @@ describe("storage wrapper", () => {
   });
 });
 
-describe("wide field (feature 114)", () => {
+describe("size field (feature 146)", () => {
   const base: Widget = { id: "w", entityId: "sensor.a", kind: "line", visible: true, order: 0 };
+  const layout = (widgets: unknown[]) => JSON.stringify({ version: 1, widgets });
 
   beforeEach(() => {
     vi.restoreAllMocks();
     window.localStorage.clear();
+    widgetsSetting.forget();
   });
 
-  it("accepts a widget without wide and one with a boolean wide", () => {
-    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [base] }))).toEqual([base]);
-    const wide = { ...base, wide: true };
-    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [wide] }))).toEqual([wide]);
+  it("migrates legacy wide: true to size half", () => {
+    expect(parseWidgets(layout([{ ...base, wide: true }]))).toEqual([{ ...base, size: "half" }]);
+  });
+
+  it("migrates a widget without wide to size third", () => {
+    expect(parseWidgets(layout([base]))).toEqual([{ ...base, size: "third" }]);
+    expect(parseWidgets(layout([{ ...base, wide: false }]))).toEqual([{ ...base, size: "third" }]);
+  });
+
+  it("keeps a valid size and drops wide from the parsed result", () => {
+    expect(parseWidgets(layout([{ ...base, size: "full", wide: true }]))).toEqual([{ ...base, size: "full" }]);
+  });
+
+  it.each(["full", "half", "third"])("accepts size %s", (size) => {
+    expect(parseWidgets(layout([{ ...base, size }]))).toEqual([{ ...base, size }]);
+  });
+
+  it("rejects an invalid size and the whole layout falls back", () => {
+    expect(parseWidgets(layout([{ ...base, size: "huge" }]))).toBeNull();
+    expect(parseWidgets(layout([{ ...base, size: 2 }]))).toBeNull();
+    expect(parseWidgets(layout([{ ...base, size: null }]))).toBeNull();
   });
 
   it("rejects a non-boolean wide and the whole layout falls back", () => {
-    expect(parseWidgets(JSON.stringify({ version: 1, widgets: [{ ...base, wide: "yes" }] }))).toBeNull();
+    expect(parseWidgets(layout([{ ...base, wide: "yes" }]))).toBeNull();
   });
 
-  it("round-trips wide: true through storage", () => {
-    const widgets: Widget[] = [{ ...base, wide: true }];
+  it("save output has size and never wide", () => {
+    saveWidgets([{ ...base, wide: true }, { ...base, id: "x", entityId: "sensor.b" }]);
+    const stored = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null").value;
+    expect(stored.widgets).toEqual([
+      { ...base, size: "half" },
+      { ...base, id: "x", entityId: "sensor.b", size: "third" },
+    ]);
+    expect(stored.widgets.some((w: Record<string, unknown>) => "wide" in w)).toBe(false);
+  });
+
+  it("round-trips a size through storage", () => {
+    const widgets: Widget[] = [{ ...base, size: "full" }];
     saveWidgets(widgets);
     expect(loadWidgets()).toEqual(widgets);
   });
 
-  it("reconcileWidgets keeps saved wide and kind for a sensor that is still present", () => {
+  it("reconcileWidgets keeps saved size and kind for a sensor that is still present", () => {
     const saved: Widget[] = [
-      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, wide: true },
+      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, size: "half" },
     ];
     const result = reconcileWidgets(saved, [humidity]);
     expect(result).toEqual([
-      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, wide: true },
+      { id: "widget.sensor.kitchen_humidity", entityId: "sensor.kitchen_humidity", kind: "gauge", visible: true, order: 0, size: "half" },
     ]);
+  });
+
+  it("reconcileWidgets appends new sensors without a size (= third)", () => {
+    const result = reconcileWidgets([], [humidity]);
+    expect(result[0].size).toBeUndefined();
+  });
+});
+
+describe("shared layout (feature 135)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    widgetsSetting.forget();
+    vi.restoreAllMocks();
+  });
+
+  it("parses the v1 object and the legacy JSON string, rejects bad shapes", () => {
+    const widgets = deriveWidgets([temp]);
+    expect(parseStoredWidgets({ version: 1, widgets })?.widgets).toEqual(widgets.map((w) => ({ ...w, size: "third" })));
+    expect(parseStoredWidgets(JSON.stringify({ version: 1, widgets }))?.widgets).toHaveLength(1);
+    expect(parseStoredWidgets({ version: 2, widgets })).toBeNull();
+    expect(parseStoredWidgets({ version: 1, widgets: [{ id: 1 }] })).toBeNull();
+    expect(parseStoredWidgets("garbage")).toBeNull();
+    expect(parseStoredWidgets(null)).toBeNull();
+  });
+
+  it("saveWidgets and loadWidgets delegate to the synced setting", () => {
+    const set = vi.spyOn(widgetsSetting, "set");
+    saveWidgets(deriveWidgets([temp]));
+    expect(set).toHaveBeenCalledWith({ version: 1, widgets: expect.any(Array) });
+    expect(loadWidgets()).toHaveLength(1);
+  });
+
+  it("reconcile-only differences never write the setting", () => {
+    saveWidgets(deriveWidgets([temp]));
+    const set = vi.spyOn(widgetsSetting, "set");
+    reconcileWidgets(loadWidgets(), [temp, { ...temp, entityId: "sensor.new", attributes: temp.attributes, name: "New" }]);
+    expect(set).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,13 @@ import { useAlerts, type AlertCenterValue } from "@/features/alerts/useAlerts";
 import AlertBanner from "@components/feedback/AlertBanner";
 
 // Feature 129: one alert monitor for the app. Outside the provider the centre is idle (no queue, sound off).
-const IDLE: AlertCenterValue = { queue: [], soundEnabled: false, enableSound: () => undefined, dismiss: () => undefined };
+const IDLE: AlertCenterValue = {
+  queue: [],
+  soundEnabled: false,
+  enableSound: () => undefined,
+  dismiss: () => undefined,
+  dismissAll: () => undefined,
+};
 
 const AlertCenterContext = createContext<AlertCenterValue | null>(null);
 

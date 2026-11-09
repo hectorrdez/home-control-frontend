@@ -3,7 +3,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import type { Entity } from "@/api/types";
 import FilterPill from "@components/controls/FilterPill";
 import HistoryBody from "./HistoryBody";
-import { cssToken } from "@/features/telemetry/chartTokens";
+import { useZoneToken, zoneStroke } from "@/features/zones/ZoneColorsContext";
 import { RANGES, clock, downsample, fmt, toPoints, type HistoryPoint, type RangeLabel } from "@/features/telemetry/history";
 import { useHistory } from "@/features/telemetry/useHistory";
 
@@ -34,7 +34,8 @@ export default function EntityHistoryCard({ entity, displayName }: EntityHistory
     return downsample(toPoints(state.series.find((s) => s.entityId === entity.entityId)));
   }, [state, entity.entityId]);
 
-  const stroke = cssToken("secondary", "currentColor");
+  // Feature 147: the series takes the zone color of the entity's area (neutral when unassigned).
+  const stroke = zoneStroke(useZoneToken(entity.area));
   const summary = summaryText(points, unit);
 
   return (

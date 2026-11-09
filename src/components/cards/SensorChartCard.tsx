@@ -10,8 +10,13 @@ import EditableName from "@components/controls/EditableName";
 import { useEntityName } from "@/features/names/useEntityName";
 import { deviceLabel } from "@/features/names/displayName";
 import { normalize } from "@/features/telemetry/widgetFilters";
+import { ZoneDot } from "@/features/zones/ZoneDot";
+import { seriesTooltipText } from "@/features/telemetry/seriesTooltip";
+import { zoneStroke } from "@/features/zones/ZoneColorsContext";
+import type { ZoneToken } from "@/features/zones/zoneColors";
 
 // Feature 113: one live chart per numeric sensor. Colors come from the shared token helper (features/telemetry/chartTokens).
+// Feature 147: the series take the zone color of the entity's area (neutral when it has none); gauges keep their semantic fill.
 
 const TREND_LABEL: Record<"up" | "down" | "flat", string> = { up: "UP", down: "DOWN", flat: "FLAT" };
 
@@ -31,12 +36,15 @@ function timeLabel(t: unknown): string {
 interface ChartProps {
   kind: WidgetKind;
   points: Point[];
+  color: string; // zone color of the series (neutral when the entity has no area)
+  identity: string; // "<area> · <label>": the tooltip names the room
+  unit: string;
 }
 
-function SensorChart({ kind, points }: ChartProps) {
+function SensorChart({ kind, points, color, identity, unit }: ChartProps) {
   const data = points.map((p) => ({ t: p.t, v: p.v }));
-  const stroke = cssToken("secondary", "currentColor");
-  const tooltip = <Tooltip labelFormatter={timeLabel} />;
+  // Feature 147: a null series name hides the default "v: " prefix.
+  const tooltip = <Tooltip labelFormatter={timeLabel} formatter={(value) => [seriesTooltipText(identity, value, unit), null]} />;
 
   if (kind === "gauge") {
     const value = latestValue(points) ?? 0;
@@ -63,7 +71,7 @@ function SensorChart({ kind, points }: ChartProps) {
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
           <YAxis hide domain={["auto", "auto"]} />
           {tooltip}
-          <Bar dataKey="v" fill={cssToken("tertiary-fixed-dim", "currentColor")} isAnimationActive={false} />
+          <Bar dataKey="v" fill={color} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     );
@@ -76,7 +84,7 @@ function SensorChart({ kind, points }: ChartProps) {
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
           <YAxis hide domain={["auto", "auto"]} />
           {tooltip}
-          <Area dataKey="v" type="monotone" stroke={stroke} fill={stroke} fillOpacity={0.2} dot={false} connectNulls={false} isAnimationActive={false} />
+          <Area dataKey="v" type="monotone" stroke={color} fill={color} fillOpacity={0.2} dot={false} connectNulls={false} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -88,7 +96,7 @@ function SensorChart({ kind, points }: ChartProps) {
         <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
         <YAxis hide domain={["auto", "auto"]} />
         {tooltip}
-        <Line dataKey="v" type="monotone" stroke={cssToken("primary-container", "currentColor")} dot={false} connectNulls={false} isAnimationActive={false} />
+        <Line dataKey="v" type="monotone" stroke={color} dot={false} connectNulls={false} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -97,12 +105,13 @@ function SensorChart({ kind, points }: ChartProps) {
 interface SensorChartCardProps {
   entity: Entity;
   areaName: string;
+  zoneToken: ZoneToken | null; // feature 147: assigned by the grid; null = entity without area
   widget: Widget;
   points: Point[];
   connection: ConnectionState;
 }
 
-function SensorChartCardView({ entity, areaName, widget, points, connection }: SensorChartCardProps) {
+function SensorChartCardView({ entity, areaName, zoneToken, widget, points, connection }: SensorChartCardProps) {
   const unit = typeof entity.attributes.unit_of_measurement === "string" ? entity.attributes.unit_of_measurement : "";
   const names = useEntityName();
   const label = names.displayName(entity);
@@ -111,7 +120,8 @@ function SensorChartCardView({ entity, areaName, widget, points, connection }: S
   const device = deviceLabel(entity);
   const showDevice = device !== "" && !normalize(title).includes(normalize(device));
   const spokenLabel = showDevice ? `${label}, ${device}` : label;
-  const subtitle = [showDevice ? device : "", areaName].filter(Boolean).join(" · ");
+  const deviceText = showDevice ? `${device} · ` : "";
+  const zone = zoneStroke(zoneToken);
   const current = latestValue(points);
   const value = current === null ? "--" : String(Math.round(current * 10) / 10);
   const now = points.length > 0 ? points[points.length - 1].t : 0;
@@ -119,7 +129,12 @@ function SensorChartCardView({ entity, areaName, widget, points, connection }: S
   const summary = `${spokenLabel}: ${value}${unit ? ` ${unit}` : ""}, ${trend.label}`;
 
   return (
-    <Card role="region" aria-label={label} className={`flex flex-col gap-space-xs ${connection === "open" ? "" : "opacity-60"}`}>
+    <Card
+      role="region"
+      aria-label={label}
+      className={`flex flex-col gap-space-xs border-t-2 ${connection === "open" ? "" : "opacity-60"}`}
+      style={zoneToken ? { borderTopColor: `var(--color-${zoneToken})` } : undefined}
+    >
       <div className="flex items-start justify-between gap-space-xs">
         <div className="flex flex-col">
           <EditableName
@@ -131,7 +146,11 @@ function SensorChartCardView({ entity, areaName, widget, points, connection }: S
             onRename={(alias) => names.renameEntity(entity, alias)}
             textClassName="font-label-caps text-label-caps uppercase text-on-surface-variant"
           />
-          <span className="font-mono text-label-caps uppercase text-on-surface-variant">{subtitle}</span>
+          <span className="font-mono text-label-caps uppercase text-on-surface-variant">
+            {deviceText}
+            <ZoneDot token={zoneToken} className="mr-space-xs align-middle" />
+            {areaName}
+          </span>
         </div>
         <span className="font-mono text-label-caps uppercase text-on-surface-variant">{trend.text}</span>
       </div>
@@ -140,12 +159,12 @@ function SensorChartCardView({ entity, areaName, widget, points, connection }: S
         <span className="font-mono text-label-caps uppercase text-on-surface-variant">{unit}</span>
       </div>
       <div role="img" aria-label={summary}>
-        <SensorChart kind={widget.kind} points={points} />
+        <SensorChart kind={widget.kind} points={points} color={zone} identity={`${areaName} · ${label}`} unit={unit} />
       </div>
     </Card>
   );
 }
 
-// Re-renders only when its own series (or the connection state) changes.
+// Re-renders only when its own series (or the connection state) changes. The zone token arrives as a prop, so the memo holds.
 const SensorChartCard = memo(SensorChartCardView);
 export default SensorChartCard;

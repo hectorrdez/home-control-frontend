@@ -1,11 +1,11 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { Fragment, useMemo, useState, type KeyboardEvent } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Entity } from "@/api/types";
 import FilterPill from "@components/controls/FilterPill";
 import ClimateTooltip from "./ClimateTooltip";
 import HistoryBody from "./HistoryBody";
 import { ZoneDot } from "@/features/zones/ZoneDot";
-import { zoneColorToken } from "@/features/zones/zoneColors";
+import { useZoneTokenResolver, zoneStroke } from "@/features/zones/ZoneColorsContext";
 import { cssToken } from "@/features/telemetry/chartTokens";
 import {
   RANGES,
@@ -16,6 +16,7 @@ import {
   fmt,
   meanAcrossSeries,
   mergeRoomClimate,
+  roomLines,
   toPoints,
   type HistoryPoint,
   type RangeLabel,
@@ -25,9 +26,12 @@ import {
 import { numericState } from "@/features/telemetry/telemetry";
 import { useHistory } from "@/features/telemetry/useHistory";
 
-// Feature 112: temperature (left axis, area) and humidity (right axis, line) for one room or the ALL ROOMS mean.
+// Feature 112: temperature (area) and humidity (line) for one room or the ALL ROOMS mean.
 // Feature 131: ALL ROOMS with 2+ rooms = one zone-colored line per room, a thicker TOTAL MEAN line and the humidity mean.
+// Feature 144: temperature and humidity are two stacked charts sharing the time axis and one cursor.
+// Assumption (card marked): "separate" = one metric per chart, not one chart per room.
 const ALL = "all";
+const HUM_PAD = 5; // humidity axis: data range padded by 5 %, clamped to 0..100
 
 // Numeric sensors of one device class in a room (or in every room when room is null).
 function sensorsIn(entities: Entity[], room: string | null, deviceClass: string): Entity[] {
@@ -40,12 +44,14 @@ function sensorsIn(entities: Entity[], room: string | null, deviceClass: string)
   );
 }
 
-// What the chart draws: per-room lines (ALL ROOMS only), the temperature mean or the single room, and the humidity mean.
+// What the charts draw: per-room lines (ALL ROOMS, 2+ rooms with that metric), the temperature and humidity series.
 interface ClimateView {
-  lines: RoomLine[];
+  lines: RoomLine[]; // temperature per room; empty = one temperature series
+  humLines: RoomLine[]; // humidity per room (feature 144); empty = one humidity series
   temp: HistoryPoint[];
   hum: HistoryPoint[];
   solo: string | null; // the room whose zone color colors a single temperature area
+  humSolo: string | null; // the room whose zone color colors a single humidity series (feature 147)
 }
 
 interface ClimateHistoryCardProps {
@@ -55,6 +61,7 @@ interface ClimateHistoryCardProps {
 
 export default function ClimateHistoryCard({ entities, areaName }: ClimateHistoryCardProps) {
   const rooms = useMemo(() => climateRooms(entities), [entities]);
+  const humRoomIds = useMemo(() => climateRooms(entities, "humidity"), [entities]);
   const [room, setRoom] = useState<string>(ALL);
   const [range, setRange] = useState<RangeLabel>("24H");
   const [cursor, setCursor] = useState<number | null>(null);
@@ -67,6 +74,7 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
   );
   const { state, retry } = useHistory(ids, hours);
   const roomLabel = room === ALL ? "All rooms" : areaName(room);
+  const zoneOf = useZoneTokenResolver();
 
   const view = useMemo<ClimateView | null>(() => {
     if (state.status !== "ready") return null;
@@ -74,21 +82,27 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
       sensors.map((e) => toPoints(state.series.find((s) => s.entityId === e.entityId)));
     // One room: the first temperature and first humidity series (feature 112 behavior).
     const firstOf = (id: string, deviceClass: string) => seriesOf(sensorsIn(entities, id, deviceClass).slice(0, 1))[0] ?? [];
-    if (room !== ALL) return { lines: [], temp: firstOf(room, "temperature"), hum: firstOf(room, "humidity"), solo: room };
-    // ALL ROOMS: each room is its own mean; the total mean averages the plotted room lines, so rooms weigh equally.
-    const lines = rooms.flatMap((id): RoomLine[] => {
-      const points = meanAcrossSeries(seriesOf(sensorsIn(entities, id, "temperature")));
-      return points.length > 0 ? [{ room: id, points }] : [];
-    });
-    // Humidity keeps feature 112: the mean of every humidity sensor series (unassigned ones included).
-    const hum = meanAcrossSeries(seriesOf(sensorsIn(entities, null, "humidity")));
-    // Exactly one room with temperature data: same series and color as selecting that room.
-    const only = lines.length === 1 ? lines[0].room : null;
-    if (only) return { lines: [], temp: firstOf(only, "temperature"), hum: firstOf(only, "humidity"), solo: only };
-    // No room temperature at all: humidity still shows.
-    if (lines.length === 0) return { lines: [], temp: [], hum, solo: null };
-    return { lines, temp: meanAcrossSeries(lines.map((l) => l.points)), hum, solo: null };
-  }, [state, room, rooms, entities]);
+    if (room !== ALL) {
+      return { lines: [], humLines: [], temp: firstOf(room, "temperature"), hum: firstOf(room, "humidity"), solo: room, humSolo: room };
+    }
+    // ALL ROOMS: each chart decides its lines from its own metric's data (feature 144 review).
+    // 2+ rooms with that metric: one line per room, and the total mean averages those room lines (rooms weigh equally).
+    // Exactly one room: its first series, same as selecting that room. No room: humidity = unassigned sensors' mean.
+    const tempRooms = roomLines(rooms, (id) => seriesOf(sensorsIn(entities, id, "temperature")));
+    const humRooms = roomLines(humRoomIds, (id) => seriesOf(sensorsIn(entities, id, "humidity")));
+    const solo = tempRooms.length === 1 ? tempRooms[0].room : null;
+    const lines = tempRooms.length >= 2 ? tempRooms : [];
+    const humLines = humRooms.length >= 2 ? humRooms : [];
+    const temp = lines.length > 0 ? meanAcrossSeries(lines.map((l) => l.points)) : solo ? firstOf(solo, "temperature") : [];
+    const hum =
+      humLines.length > 0
+        ? meanAcrossSeries(humLines.map((l) => l.points))
+        : humRooms.length === 1
+          ? firstOf(humRooms[0].room, "humidity")
+          : meanAcrossSeries(seriesOf(sensorsIn(entities, null, "humidity")));
+    const humSolo = humRooms.length === 1 ? humRooms[0].room : null;
+    return { lines, humLines, temp, hum, solo, humSolo };
+  }, [state, room, rooms, humRoomIds, entities]);
 
   const rows = useMemo<RoomClimateRow[]>(
     // Each series is thinned on its own before the merge, so a sparse room never loses all its points to a dense one.
@@ -96,17 +110,29 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
     () => {
       if (!view) return [];
       const lines = view.lines.map((l) => ({ room: l.room, points: downsample(l.points) }));
+      const humLines = view.humLines.map((l) => ({ room: l.room, points: downsample(l.points) }));
       const temp = lines.length > 0 ? meanAcrossSeries(lines.map((l) => l.points)) : downsample(view.temp);
-      return mergeRoomClimate(lines, temp, downsample(view.hum));
+      const hum = humLines.length > 0 ? meanAcrossSeries(humLines.map((l) => l.points)) : downsample(view.hum);
+      return mergeRoomClimate(lines, temp, hum, humLines);
     },
     [view],
   );
 
   const lines = view?.lines ?? [];
-  const multi = lines.length > 0;
-  const roomColor = (id: string) => cssToken(zoneColorToken(id), "currentColor");
-  const tempColor = view?.solo ? roomColor(view.solo) : cssToken("tertiary", "currentColor");
+  const humLines = view?.humLines ?? [];
+  const multiTemp = lines.length > 0;
+  const multiHum = humLines.length > 0;
+  const multi = multiTemp || multiHum;
+  const legendRooms = [...new Set([...lines, ...humLines].map((l) => l.room))];
+  // Feature 147: the room's assigned zone color (the same one as its pill, its legend dot and the CHARTS panel).
+  const roomColor = (id: string) => zoneStroke(zoneOf(id));
+  const soloRoom = view?.solo ?? null;
+  const humSolo = view?.humSolo ?? null;
+  const tempColor = soloRoom ? roomColor(soloRoom) : cssToken("tertiary", "currentColor");
+  // Feature 147: a single humidity series takes its room's zone token, like the temperature one.
+  const humColor = humSolo ? roomColor(humSolo) : cssToken("primary-container", "currentColor");
   const meanColor = cssToken("on-surface", "currentColor");
+  const summary = climateSummary(rows);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (rows.length === 0 || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
@@ -116,12 +142,43 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
     setCursor((c) => Math.min(last, Math.max(0, (c ?? last) + step)));
   };
 
+  // Hovering either chart moves the shared cursor (feature 144).
+  const onChartMove = (next: { activeTooltipIndex?: unknown }) => {
+    setCursor(typeof next.activeTooltipIndex === "number" ? next.activeTooltipIndex : null);
+  };
+  const clearCursor = () => setCursor(null);
+
   const active = cursor === null ? undefined : rows[Math.min(cursor, rows.length - 1)];
+  // Each metric reads its room lines when it has them, otherwise its single series (no room lines in one chart is not the other's problem).
+  // Feature 147: each readout part of a room carries its zone dot; the aria-valuetext string keeps the same text.
+  const sep = multi ? " • " : " ";
+  const parts: { room: string | null; text: string }[] = active
+    ? [
+        ...(multiTemp
+          ? [
+              ...lines.map(({ room: id }) => ({ room: id, text: `${areaName(id).toUpperCase()} ${fmt(active.rooms[id] ?? null)} °C` })),
+              { room: null, text: `MEAN ${fmt(active.temp)} °C` },
+            ]
+          : [{ room: null, text: `${fmt(active.temp)} °C` }]),
+        ...(multiHum
+          ? [
+              ...humLines.map(({ room: id }) => ({ room: id, text: `${areaName(id).toUpperCase()} ${fmt(active.humRooms[id] ?? null, 0)} %` })),
+              { room: null, text: `MEAN ${fmt(active.hum, 0)} %` },
+            ]
+          : [{ room: null, text: `${fmt(active.hum, 0)} %` }]),
+      ]
+    : [];
   const readout = active
-    ? multi
-      ? `${clock(active.t)} ${lines.map(({ room: id }) => `${areaName(id).toUpperCase()} ${fmt(active.rooms[id] ?? null)} °C • `).join("")}MEAN ${fmt(active.temp)} °C ${fmt(active.hum, 0)} %`
-      : `${clock(active.t)} ${fmt(active.temp)} °C ${fmt(active.hum, 0)} %`
+    ? `${clock(active.t)} ${parts.map((p) => p.text).join(sep)}`
     : "FOCUS THE CURSOR AND USE ARROW KEYS TO READ VALUES";
+  // Feature 147: with one room the visible readout names it (zone dot + name); aria-valuetext keeps the 144 text.
+  const readoutRoom = !multi ? soloRoom : null;
+
+  // Shared by both charts: same X axis, same Y-axis width so the plot areas line up.
+  const xAxis = (labels: boolean) => (
+    <XAxis dataKey="t" tickFormatter={clock} minTickGap={32} tick={labels} />
+  );
+  const cursorLine = active && <ReferenceLine x={active.t} stroke={meanColor} />;
 
   return (
     <div className="flex flex-col gap-space-sm">
@@ -148,80 +205,129 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
       </div>
 
       <HistoryBody state={state} retry={retry} empty={rows.length === 0}>
-        <div role="img" aria-label={`${roomLabel} climate, ${range}: ${climateSummary(rows)}`}>
-          <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={rows}>
-              <CartesianGrid stroke={cssToken("outline-variant", "currentColor")} strokeOpacity={0.3} vertical={false} />
-              <XAxis dataKey="t" tickFormatter={clock} minTickGap={32} />
-              <YAxis yAxisId="temp" unit=" °C" domain={["auto", "auto"]} stroke={cssToken("tertiary", "currentColor")} />
-              <YAxis yAxisId="hum" orientation="right" unit=" %" domain={[0, 100]} stroke={cssToken("primary-container", "currentColor")} />
-              <Tooltip
-                content={({ active: on, label }) => (
-                  <ClimateTooltip row={on ? rows.find((r) => r.t === label) : undefined} lines={lines} areaName={areaName} />
-                )}
-              />
-              {multi ? (
-                lines.map(({ room: id }) => (
-                  <Line
-                    key={id}
-                    data-testid="climate-room-line"
-                    yAxisId="temp"
-                    dataKey={(r: RoomClimateRow) => r.rooms[id] ?? null}
-                    name={areaName(id)}
+        <div className="flex flex-col gap-space-xs">
+          <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">TEMPERATURE</p>
+          <div role="img" aria-label={`${roomLabel} temperature, ${range}: ${summary}`}>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={rows} onMouseMove={onChartMove} onMouseLeave={clearCursor}>
+                <CartesianGrid stroke={cssToken("outline-variant", "currentColor")} strokeOpacity={0.3} vertical={false} />
+                {xAxis(false)}
+                <YAxis width={56} unit=" °C" domain={["auto", "auto"]} stroke={cssToken("tertiary", "currentColor")} />
+                <Tooltip
+                  content={({ active: on, label }) => (
+                    <ClimateTooltip
+                      row={on ? rows.find((r) => r.t === label) : undefined}
+                      metric="temp"
+                      lines={lines}
+                      solo={soloRoom}
+                      areaName={areaName}
+                    />
+                  )}
+                />
+                {multiTemp ? (
+                  lines.map(({ room: id }) => (
+                    <Line
+                      key={id}
+                      data-testid="climate-room-line"
+                      dataKey={(r: RoomClimateRow) => r.rooms[id] ?? null}
+                      name={areaName(id)}
+                      type="monotone"
+                      stroke={roomColor(id)}
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  ))
+                ) : (
+                  <Area
+                    data-testid="climate-temp-area"
+                    dataKey="temp"
+                    name="Temperature"
                     type="monotone"
-                    stroke={roomColor(id)}
-                    strokeWidth={1.5}
+                    stroke={tempColor}
+                    fill={tempColor}
+                    fillOpacity={0.15}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                )}
+                {multiTemp && (
+                  <Line
+                    data-testid="climate-mean-line"
+                    dataKey="temp"
+                    name="Total mean"
+                    type="monotone"
+                    stroke={meanColor}
+                    strokeWidth={3}
                     dot={false}
                     connectNulls
                     isAnimationActive={false}
                   />
-                ))
-              ) : (
-                <Area
-                  data-testid="climate-temp-area"
-                  yAxisId="temp"
-                  dataKey="temp"
-                  name="Temperature"
-                  type="monotone"
-                  stroke={tempColor}
-                  fill={tempColor}
-                  fillOpacity={0.15}
-                  connectNulls
-                  isAnimationActive={false}
+                )}
+                {cursorLine}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">HUMIDITY</p>
+          <div role="img" aria-label={`${roomLabel} humidity, ${range}: ${summary}`}>
+            <ResponsiveContainer width="100%" height={140}>
+              <ComposedChart data={rows} onMouseMove={onChartMove} onMouseLeave={clearCursor}>
+                <CartesianGrid stroke={cssToken("outline-variant", "currentColor")} strokeOpacity={0.3} vertical={false} />
+                {xAxis(true)}
+                <YAxis
+                  width={56}
+                  unit=" %"
+                  domain={[(min: number) => Math.max(0, Math.floor(min - HUM_PAD)), (max: number) => Math.min(100, Math.ceil(max + HUM_PAD))]}
+                  stroke={humColor}
                 />
-              )}
-              <Line
-                data-testid="climate-humidity-line"
-                yAxisId="hum"
-                dataKey="hum"
-                name="Humidity"
-                type="monotone"
-                stroke={cssToken("primary-container", "currentColor")}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-              {multi && (
+                <Tooltip
+                  content={({ active: on, label }) => (
+                    <ClimateTooltip
+                      row={on ? rows.find((r) => r.t === label) : undefined}
+                      metric="hum"
+                      lines={humLines}
+                      solo={humSolo}
+                      areaName={areaName}
+                    />
+                  )}
+                />
+                {multiHum
+                  ? humLines.map(({ room: id }) => (
+                      <Line
+                        key={id}
+                        data-testid="climate-humidity-room-line"
+                        dataKey={(r: RoomClimateRow) => r.humRooms[id] ?? null}
+                        name={areaName(id)}
+                        type="monotone"
+                        stroke={roomColor(id)}
+                        strokeWidth={1.5}
+                        dot={false}
+                        connectNulls
+                        isAnimationActive={false}
+                      />
+                    ))
+                  : null}
                 <Line
-                  data-testid="climate-mean-line"
-                  yAxisId="temp"
-                  dataKey="temp"
-                  name="Total mean"
+                  data-testid="climate-humidity-line"
+                  dataKey="hum"
+                  name={multiHum ? "Total mean humidity" : "Humidity"}
                   type="monotone"
-                  stroke={meanColor}
-                  strokeWidth={3}
+                  stroke={multiHum ? meanColor : humColor}
+                  strokeWidth={multiHum ? 3 : 1}
                   dot={false}
                   connectNulls
                   isAnimationActive={false}
                 />
-              )}
-              {active && <ReferenceLine x={active.t} stroke={meanColor} />}
-            </ComposedChart>
-          </ResponsiveContainer>
+                {cursorLine}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
         {multi && (
           <ul aria-label="Chart legend" className="flex flex-wrap gap-space-md">
-            {lines.map(({ room: id }) => (
+            {legendRooms.map((id) => (
               <li key={id} className="flex items-center gap-space-xs font-mono text-label-caps uppercase text-on-surface-variant">
                 <ZoneDot areaId={id} />
                 {areaName(id)}
@@ -242,18 +348,40 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
           aria-valuenow={active ? Math.min(cursor ?? 0, rows.length - 1) : 0}
           aria-valuetext={readout}
           onKeyDown={onKeyDown}
-          onBlur={() => setCursor(null)}
+          onBlur={clearCursor}
           className="rounded focus-visible:outline-2 focus-visible:outline-primary-container"
         >
-          <p className="font-mono text-label-caps uppercase text-on-surface">{readout}</p>
+          <p className="font-mono text-label-caps uppercase text-on-surface">
+            {active ? (
+              <>
+                {clock(active.t)}
+                {readoutRoom && (
+                  <>
+                    {" "}
+                    <ZoneDot areaId={readoutRoom} className="mx-space-xs align-middle" />
+                    {`${areaName(readoutRoom).toUpperCase()} `}
+                  </>
+                )}
+                {parts.map((part, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && sep}
+                    {part.room && <ZoneDot areaId={part.room} className="mx-space-xs align-middle" />}
+                    {part.text}
+                  </Fragment>
+                ))}
+              </>
+            ) : (
+              readout
+            )}
+          </p>
         </div>
-        <p className="font-mono text-label-caps uppercase text-on-surface-variant">{climateSummary(rows)}</p>
+        <p className="font-mono text-label-caps uppercase text-on-surface-variant">{summary}</p>
         <table className="sr-only">
           <caption>{`${roomLabel} history, ${range}`}</caption>
           <thead>
             <tr>
               <th scope="col">Time</th>
-              {multi ? (
+              {multiTemp ? (
                 <>
                   {lines.map(({ room: id }) => (
                     <th key={id} scope="col">{`${areaName(id)} °C`}</th>
@@ -263,14 +391,23 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
               ) : (
                 <th scope="col">Temperature °C</th>
               )}
-              <th scope="col">Humidity %</th>
+              {multiHum ? (
+                <>
+                  {humLines.map(({ room: id }) => (
+                    <th key={`h-${id}`} scope="col">{`${areaName(id)} humidity %`}</th>
+                  ))}
+                  <th scope="col">Total mean humidity %</th>
+                </>
+              ) : (
+                <th scope="col">Humidity %</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.t}>
                 <td>{clock(r.t)}</td>
-                {multi ? (
+                {multiTemp ? (
                   <>
                     {lines.map(({ room: id }) => (
                       <td key={id}>{fmt(r.rooms[id] ?? null)}</td>
@@ -280,7 +417,16 @@ export default function ClimateHistoryCard({ entities, areaName }: ClimateHistor
                 ) : (
                   <td>{fmt(r.temp)}</td>
                 )}
-                <td>{fmt(r.hum)}</td>
+                {multiHum ? (
+                  <>
+                    {humLines.map(({ room: id }) => (
+                      <td key={`h-${id}`}>{fmt(r.humRooms[id] ?? null)}</td>
+                    ))}
+                    <td>{fmt(r.hum)}</td>
+                  </>
+                ) : (
+                  <td>{fmt(r.hum)}</td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -3,6 +3,7 @@ import { useApi } from "@/api/ApiContext";
 import type { Alias, Entity } from "@/api/types";
 import { ApiError } from "@/api/types";
 import { displayName, NAME_MAX_LENGTH } from "@/features/names/displayName";
+import { useLiveRefetch } from "./useLiveRefetch";
 
 // Feature 115: user aliases from backend 008. Aliases never travel on entities; the client merges them.
 export type AliasesStatus = "loading" | "ready" | "unavailable" | "error";
@@ -58,6 +59,10 @@ export function AliasesProvider({ children }: { children: ReactNode }) {
   }, [api, reloadToken]);
 
   const retry = useCallback(() => setReloadToken((n) => n + 1), []);
+
+  // Feature 138: another device renamed an entity; a failed refetch keeps the current names.
+  const reload = useCallback(() => api.getAliases().then((list) => setAliases(toRecord(list))), [api]);
+  useLiveRefetch("aliases", reload);
 
   const renameEntity = useCallback(
     (entity: Entity, raw: string): Promise<boolean> => {

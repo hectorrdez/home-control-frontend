@@ -5,7 +5,12 @@ import Slider from "@components/controls/Slider";
 import Stepper from "@components/controls/Stepper";
 import Switch from "@components/controls/Switch";
 import type { Intent } from "@/state/actions";
-import type { Entity } from "@/api/types";
+import type { Entity, Preset } from "@/api/types";
+import { useToast } from "@components/feedback/Toast";
+import { presetErrorText } from "@/features/presets/presets";
+import { usePresets } from "@/state/PresetsProvider";
+import { isUnavailable } from "@/state/selectors";
+import PresetModesMenu from "./PresetModesMenu";
 import { domainHue, type Hue } from "./deviceState";
 import { useEntityName } from "@/features/names/useEntityName";
 import { useCalibrations } from "@/state/CalibrationsProvider";
@@ -26,12 +31,13 @@ interface ControlProps {
   hue: Hue;
   disabled: boolean;
   send: (intent: Intent) => void;
+  modes?: boolean; // feature 143: Home 3D panel only; a cover with saved positions gets a MODES menu
 }
 
-export default function DeviceControls({ entity, disabled, send }: Omit<ControlProps, "hue" | "label">) {
+export default function DeviceControls({ entity, disabled, send, modes = false }: Omit<ControlProps, "hue" | "label">) {
   const hue = domainHue(entity.domain);
   const label = useEntityName().displayName(entity);
-  const props: ControlProps = { entity, label, hue, disabled, send };
+  const props: ControlProps = { entity, label, hue, disabled, send, modes };
   switch (entity.domain) {
     case "light":
       return <LightControls {...props} />;
@@ -41,7 +47,7 @@ export default function DeviceControls({ entity, disabled, send }: Omit<ControlP
     case "climate":
       return <ClimateControls {...props} />;
     case "cover":
-      return <CoverControls {...props} />;
+      return modes ? <CoverModes {...props} /> : <CoverControls {...props} />;
     case "lock":
       return <LockControl {...props} />;
     case "scene":
@@ -201,6 +207,43 @@ function CalibratedCoverControls({ entity, hue, disabled, send }: ControlProps) 
           FULL (100%)
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Feature 143: on the Home 3D panel a cover with saved positions (142) gets MODES. Picking one runs applyPreset;
+// the card shows the busy state until the reply, and a failure shows a toast with the 142 wording.
+function CoverModes(props: ControlProps) {
+  const { entity, disabled, send } = props;
+  const { status, presetsFor, apply } = usePresets();
+  const toast = useToast();
+  const [applying, setApplying] = useState(false);
+  const presets: Preset[] = status === "ready" ? presetsFor(entity.entityId) : [];
+
+  const onApply = (preset: Preset) => {
+    setApplying(true);
+    apply(preset.id).then(
+      () => setApplying(false),
+      (err: unknown) => {
+        setApplying(false);
+        toast.show(presetErrorText(err, "COULD NOT RUN POSITION"));
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-space-sm">
+      <CoverControls {...props} disabled={disabled || applying} send={send} />
+      {presets.length > 0 && (
+        <div className="flex justify-end">
+          <PresetModesMenu
+            presets={presets}
+            disabled={disabled || applying || isUnavailable(entity)}
+            busy={applying}
+            onApply={onApply}
+          />
+        </div>
+      )}
     </div>
   );
 }

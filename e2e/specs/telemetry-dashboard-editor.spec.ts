@@ -58,20 +58,61 @@ test.describe("telemetry dashboard editor", () => {
     await expect(telemetry.moveUp(second)).toBeDisabled();
   });
 
-  test("chart type and wide changes persist across reload", async ({ page }) => {
+  test("chart type and width changes persist across reload", async ({ page }) => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
 
     await telemetry.editButton().click();
     await telemetry.chartType(HUMIDITY, "LINE").click();
-    await telemetry.wideToggle(HUMIDITY).click();
+    await telemetry.widthOption(HUMIDITY, "FULL").click();
     await expect(telemetry.chartType(HUMIDITY, "LINE")).toHaveAttribute("aria-pressed", "true");
 
     await page.reload();
     await telemetry.editButton().click();
     await expect(telemetry.chartType(HUMIDITY, "LINE")).toHaveAttribute("aria-pressed", "true");
     await expect(telemetry.chartType(HUMIDITY, "GAUGE")).toHaveAttribute("aria-pressed", "false");
-    await expect(telemetry.wideToggle(HUMIDITY)).toHaveAttribute("aria-pressed", "true");
+    await expect(telemetry.widthOption(HUMIDITY, "FULL")).toHaveAttribute("aria-pressed", "true");
+    await expect(telemetry.widthOption(HUMIDITY, "HALF")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("width modes render FULL, HALF and THIRD of the live charts row at desktop width", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await telemetry.open();
+    await telemetry.editButton().click();
+    const listWidth = (await telemetry.liveChartsList().boundingBox())?.width ?? 0;
+    const cardWidth = async () => (await telemetry.chartSlot(HUMIDITY).boundingBox())?.width ?? 0;
+
+    await telemetry.widthOption(HUMIDITY, "FULL").click();
+    await expect.poll(async () => (await cardWidth()) / listWidth).toBeGreaterThan(0.98);
+
+    await telemetry.widthOption(HUMIDITY, "HALF").click();
+    await expect.poll(async () => (await cardWidth()) / listWidth).toBeGreaterThan(0.44);
+    await expect.poll(async () => (await cardWidth()) / listWidth).toBeLessThan(0.54);
+
+    await telemetry.widthOption(HUMIDITY, "THIRD").click();
+    await expect.poll(async () => (await cardWidth()) / listWidth).toBeGreaterThan(0.28);
+    await expect.poll(async () => (await cardWidth()) / listWidth).toBeLessThan(0.36);
+  });
+
+  test("a saved legacy wide chart loads as HALF", async ({ page }) => {
+    const telemetry = new TelemetryPage(page);
+    await telemetry.open();
+    await expect(telemetry.chartCard(HUMIDITY)).toBeVisible();
+    // Feature 135: the layout is only saved on a user edit, so save the defaults first.
+    await telemetry.resetToDefaults();
+    const widgets = (await telemetry.savedWidgets()).map((w) => {
+      if (w.entityId !== "sensor.kitchen_humidity") return w;
+      const legacy: Record<string, unknown> = { ...w, wide: true };
+      delete legacy.size;
+      return legacy;
+    });
+    await telemetry.setSavedWidgets(widgets);
+
+    await page.reload();
+    await telemetry.editButton().click();
+    await expect(telemetry.widthOption(HUMIDITY, "HALF")).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(async () => (await telemetry.savedWidgets()).some((w) => "wide" in w)).toBe(false);
   });
 
   test("RESET LAYOUT cancel keeps the changes, confirm restores the defaults", async ({ page }) => {
@@ -109,7 +150,7 @@ test.describe("telemetry dashboard editor", () => {
     await telemetry.confirmReset().click();
     await expect.poll(() => telemetry.chartOrder()).toEqual(initial);
     await expect(telemetry.chartType(HUMIDITY, "GAUGE")).toHaveAttribute("aria-pressed", "true");
-    await expect(telemetry.wideToggle(HUMIDITY)).toHaveAttribute("aria-pressed", "false");
+    await expect(telemetry.widthOption(HUMIDITY, "THIRD")).toHaveAttribute("aria-pressed", "true");
 
     // Alias, fixed panel and filter are unchanged.
     await expect(telemetry.chartCard("Salon temperatura")).toBeVisible();
@@ -161,7 +202,7 @@ test.describe("telemetry dashboard editor", () => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
     // Humidity is a % sensor: LINE/AREA/GAUGE are offered, a saved BAR is not.
-    await expect.poll(async () => (await telemetry.savedWidgets()).length).toBeGreaterThan(0);
+    await telemetry.resetToDefaults();
     const widgets = await telemetry.savedWidgets();
     await telemetry.setSavedWidgets(
       widgets.map((w) => (w.entityId === "sensor.kitchen_humidity" ? { ...w, kind: "bar" } : w)),
@@ -183,6 +224,8 @@ test.describe("telemetry dashboard editor", () => {
     const telemetry = new TelemetryPage(page);
     await telemetry.open();
     await expect.poll(() => telemetry.chartOrder()).toHaveLength(16);
+
+    await telemetry.resetToDefaults();
 
     // Simulate a saved layout made before the living-room sensor existed, plus one for a sensor that is gone.
     const widgets = await telemetry.savedWidgets();

@@ -90,11 +90,11 @@ export function hourlyAverages(points: HistoryPoint[]): HourBar[] {
     .map(({ hour, watts }) => ({ hour, watts }));
 }
 
-// Room ids for the chips: the area of each temperature sensor, unique, in first-seen order.
-export function climateRooms(entities: Entity[]): string[] {
+// Room ids of one device class (temperature chips; humidity rooms feature 144): the area of each numeric sensor, unique, first-seen order.
+export function climateRooms(entities: Entity[], deviceClass = "temperature"): string[] {
   const seen = new Set<string>();
   for (const e of entities) {
-    if (e.domain === "sensor" && e.attributes.device_class === "temperature" && numericState(e) !== null && e.area) {
+    if (e.domain === "sensor" && e.attributes.device_class === deviceClass && numericState(e) !== null && e.area) {
       seen.add(e.area);
     }
   }
@@ -127,20 +127,37 @@ export interface RoomLine {
   points: HistoryPoint[];
 }
 
-// A climate row plus each plotted room's temperature at that timestamp, keyed by area id (absent when no point).
+// A climate row plus each plotted room's temperature and humidity at that timestamp, keyed by area id (absent when no point).
+// Feature 144: humRooms feeds the humidity chart; rooms feeds the temperature chart.
 export interface RoomClimateRow extends ClimateRow {
   rooms: Partial<Record<string, number>>;
+  humRooms: Partial<Record<string, number>>;
 }
 
-// ALL ROOMS merge: one row per timestamp across every room line, the total mean temperature and the humidity.
-export function mergeRoomClimate(lines: RoomLine[], temp: HistoryPoint[], hum: HistoryPoint[]): RoomClimateRow[] {
+// ALL ROOMS, one device class (temperature or humidity): a room's line is the mean of its sensors of that class.
+// Rooms with no points are skipped, so a room without that sensor type gets no line.
+export function roomLines(rooms: string[], seriesOfRoom: (room: string) => HistoryPoint[][]): RoomLine[] {
+  return rooms.flatMap((room): RoomLine[] => {
+    const points = meanAcrossSeries(seriesOfRoom(room));
+    return points.length > 0 ? [{ room, points }] : [];
+  });
+}
+
+// ALL ROOMS merge: one row per timestamp across every room line (temperature and humidity), the total means.
+export function mergeRoomClimate(
+  lines: RoomLine[],
+  temp: HistoryPoint[],
+  hum: HistoryPoint[],
+  humLines: RoomLine[] = [],
+): RoomClimateRow[] {
   const rows = new Map<string, RoomClimateRow>();
   const rowAt = (t: string): RoomClimateRow => {
-    const row = rows.get(t) ?? { t, temp: null, hum: null, rooms: {} };
+    const row = rows.get(t) ?? { t, temp: null, hum: null, rooms: {}, humRooms: {} };
     rows.set(t, row);
     return row;
   };
   for (const { room, points } of lines) for (const p of points) rowAt(p.t).rooms[room] = p.v;
+  for (const { room, points } of humLines) for (const p of points) rowAt(p.t).humRooms[room] = p.v;
   for (const p of temp) rowAt(p.t).temp = p.v;
   for (const p of hum) rowAt(p.t).hum = p.v;
   return [...rows.values()].sort((a, b) => Date.parse(a.t) - Date.parse(b.t));

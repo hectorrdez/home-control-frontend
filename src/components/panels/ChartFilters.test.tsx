@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_FILTERS, type ChartFilters as Filters, type FacetCounts } from "@/features/telemetry/widgetFilters";
 import ChartFilters from "./ChartFilters";
+import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
+import { ZONE_TOKENS } from "@/features/zones/zoneColors";
 
 const facets: FacetCounts = {
   zones: [
@@ -89,5 +91,18 @@ describe("ChartFilters", () => {
     );
     expect(within(group("Categories")).queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByRole("status", { name: "Charts shown" }).textContent).toBe("0 OF 0");
+  });
+});
+// Feature 147: each zone pill shows the zone dot of the assigned token; the unassigned pill has no dot.
+describe("ChartFilters zone pills (feature 147)", () => {
+  it("shows the assigned zone dot before the zone name", () => {
+    render(
+      <ZoneColorsProvider areaIds={["kitchen", "office"]}>
+        <ChartFilters filters={EMPTY_FILTERS} onChange={vi.fn()} facets={facets} shown={3} total={3} />
+      </ZoneColorsProvider>,
+    );
+    const kitchen = screen.getByRole("button", { name: "KITCHEN 2" });
+    expect(kitchen.querySelector("[data-zone-token]")?.getAttribute("data-zone-token")).toBe(ZONE_TOKENS[0]);
+    expect(screen.getByRole("button", { name: "UNASSIGNED 1" }).querySelector("[data-zone-token]")).toBeNull();
   });
 });

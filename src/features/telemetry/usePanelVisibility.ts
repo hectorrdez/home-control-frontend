@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useSyncedSetting } from "@/features/settings/useSyncedSetting";
 import {
+  EMPTY_PANEL_STATE,
   hideNewBatteryGauges,
   isHidden,
-  loadPanelState,
+  panelsSetting,
   savePanelState,
   setPanelHidden,
   type PanelState,
@@ -10,21 +12,22 @@ import {
 
 // Feature 125: React state over the panelVisibility store. The page owns one instance and passes it to the CHARTS panel.
 // batteryGaugeIds: entity ids of the battery gauges on screen (hidden the first time they are seen). Keep it memoized.
+// Feature 136: the shared setting is the source, so another device's change applies live.
 export function usePanelVisibility(batteryGaugeIds: readonly string[]) {
-  const [saved, setSaved] = useState<PanelState>(loadPanelState);
+  const [stored] = useSyncedSetting(panelsSetting);
+  const saved: PanelState = stored ?? EMPTY_PANEL_STATE;
   const state = useMemo(() => hideNewBatteryGauges(saved, batteryGaugeIds), [saved, batteryGaugeIds]);
 
+  // Only a change this device makes (a newly seen battery gauge) is saved; a remote value is never echoed back.
   useEffect(() => {
-    savePanelState(state);
-  }, [state]);
+    if (state !== saved) savePanelState(state);
+  }, [state, saved]);
 
   const isPanelHidden = useCallback((id: string) => isHidden(id, state.hidden), [state]);
 
   const setPanelVisible = useCallback(
-    (id: string, visible: boolean) => {
-      setSaved((prev) => setPanelHidden(hideNewBatteryGauges(prev, batteryGaugeIds), id, !visible));
-    },
-    [batteryGaugeIds],
+    (id: string, visible: boolean) => savePanelState(setPanelHidden(state, id, !visible)),
+    [state],
   );
 
   return { isPanelHidden, setPanelVisible };

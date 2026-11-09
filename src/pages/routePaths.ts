@@ -5,4 +5,5 @@ export const ROUTE_PATHS: Record<string, string> = {
   devices: "/devices",
   deviceDetail: "/devices/:deviceKey", // features 122/123; build concrete URLs with PathUtils.deviceDetailPath
   telemetry: "/telemetry",
+  history: "/history", // feature 141
 };

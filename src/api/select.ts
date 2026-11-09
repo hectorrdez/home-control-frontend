@@ -39,11 +39,24 @@ function createLazyMockApi(search: string): HomeApi {
     createAlertRule: async (rule) => (await load()).createAlertRule(rule),
     updateAlertRule: async (id, rule) => (await load()).updateAlertRule(id, rule),
     deleteAlertRule: async (id) => (await load()).deleteAlertRule(id),
-    subscribe(onEntity, onConnection) {
+    getPresets: async (entityId) => (await load()).getPresets(entityId),
+    createPreset: async (input) => (await load()).createPreset(input),
+    updatePreset: async (id, input) => (await load()).updatePreset(id, input),
+    deletePreset: async (id) => (await load()).deletePreset(id),
+    applyPreset: async (id) => (await load()).applyPreset(id),
+    getSettings: async () => (await load()).getSettings(),
+    getSetting: async (key) => (await load()).getSetting(key),
+    putSetting: async (key, value, baseVersion) => (await load()).putSetting(key, value, baseVersion),
+    deleteSetting: async (key) => (await load()).deleteSetting(key),
+    listAlerts: async (status, limit) => (await load()).listAlerts(status, limit),
+    ackAlert: async (id) => (await load()).ackAlert(id),
+    ackAllAlerts: async () => (await load()).ackAllAlerts(),
+    listEvents: async (query) => (await load()).listEvents(query),
+    subscribe(onEntity, onConnection, onServerEvent) {
       let stop: (() => void) | undefined;
       let closed = false;
       void load().then((impl) => {
-        if (!closed) stop = impl.subscribe(onEntity, onConnection);
+        if (!closed) stop = impl.subscribe(onEntity, onConnection, onServerEvent);
       });
       return () => {
         closed = true;

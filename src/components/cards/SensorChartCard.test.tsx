@@ -10,6 +10,8 @@ import { AliasesProvider } from "@/state/AliasesProvider";
 import { EntitiesProvider } from "@/state/EntitiesProvider";
 import { ToastProvider } from "@components/feedback/Toast";
 import SensorChartCard from "./SensorChartCard";
+import { seriesTooltipText } from "@/features/telemetry/seriesTooltip";
+import type { ZoneToken } from "@/features/zones/zoneColors";
 
 // Recharts measures its container; jsdom has no layout, so the container hands the chart a fixed size.
 vi.mock("recharts", async (importOriginal) => {
@@ -45,7 +47,7 @@ const rising: Point[] = [
   { t: 120_000, v: 20 },
 ];
 
-function renderCard(props: { points?: Point[]; kind?: WidgetKind; connection?: "open" | "reconnecting" | "closed"; entity?: Entity } = {}) {
+function renderCard(props: { points?: Point[]; kind?: WidgetKind; connection?: "open" | "reconnecting" | "closed"; entity?: Entity; zoneToken?: ZoneToken | null } = {}) {
   const api = createMockApi({ actionDelayMs: 0 });
   return render(
     <ApiProvider api={api}>
@@ -55,6 +57,7 @@ function renderCard(props: { points?: Point[]; kind?: WidgetKind; connection?: "
             <SensorChartCard
               entity={props.entity ?? entity}
               areaName="Living room"
+              zoneToken={props.zoneToken ?? null}
               widget={widget(props.kind ?? "line")}
               points={props.points ?? rising}
               connection={props.connection ?? "open"}
@@ -167,5 +170,52 @@ describe("SensorChartCard", () => {
       points: [{ t: 0, v: 3 }],
     });
     expect(screen.getByRole("img", { name: "Living temperature: 3, no trend yet" })).toBeTruthy();
+  });
+});
+// Feature 147: the series, the dot and the top border carry the zone color of the entity's area.
+describe("SensorChartCard zone colors (feature 147)", () => {
+  afterEach(() => {
+    for (const name of ["zone-lime", "zone-coral", "on-surface-variant", "secondary"]) {
+      document.documentElement.style.removeProperty(`--color-${name}`);
+    }
+  });
+
+  it.each<WidgetKind>(["line", "area", "bar"])("paints the %s series with the zone color of its area", (kind) => {
+    document.documentElement.style.setProperty("--color-zone-lime", "lime-test-color");
+    renderCard({ kind, zoneToken: "zone-lime", points: [{ t: 0, v: 60 }, { t: 120_000, v: 60 }] });
+    expect(document.querySelector('[stroke="lime-test-color"], [fill="lime-test-color"]')).not.toBeNull();
+  });
+
+  it("an entity without area gets the neutral color and no zone dot", () => {
+    document.documentElement.style.setProperty("--color-zone-lime", "lime-test-color");
+    document.documentElement.style.setProperty("--color-on-surface-variant", "neutral-test-color");
+    renderCard({ kind: "line", zoneToken: null });
+    expect(document.querySelector('[stroke="neutral-test-color"]')).not.toBeNull();
+    expect(document.querySelector('[stroke="lime-test-color"]')).toBeNull();
+    expect(document.querySelector("[data-zone-token]")).toBeNull();
+  });
+
+  it("the subtitle carries a zone dot with the card's token", () => {
+    renderCard({ zoneToken: "zone-coral" });
+    expect(document.querySelector('[data-zone-token="zone-coral"]')).not.toBeNull();
+    expect(screen.getByText("Living room")).toBeTruthy();
+  });
+
+  it("the card top border takes the zone color", () => {
+    renderCard({ zoneToken: "zone-coral" });
+    expect(screen.getByRole("region", { name: "Living temperature" }).style.borderTopColor).toBe("var(--color-zone-coral)");
+  });
+
+  it("a gauge keeps its semantic fill, not the zone color", () => {
+    document.documentElement.style.setProperty("--color-secondary", "secondary-test-color");
+    document.documentElement.style.setProperty("--color-zone-lime", "lime-test-color");
+    renderCard({ kind: "gauge", zoneToken: "zone-lime", points: [{ t: 0, v: 95 }] });
+    expect(document.querySelector('[fill="secondary-test-color"]')).not.toBeNull();
+    expect(document.querySelector('[fill="lime-test-color"]')).toBeNull();
+  });
+
+  it("the tooltip names the area, the label, the value and the unit", () => {
+    expect(seriesTooltipText("Living room · Living temperature", 20.5, "C")).toBe("Living room · Living temperature: 20.5 C");
+    expect(seriesTooltipText("Living room · Living temperature", 20, "")).toBe("Living room · Living temperature: 20");
   });
 });

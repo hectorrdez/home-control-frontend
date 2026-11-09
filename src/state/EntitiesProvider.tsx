@@ -1,11 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useApi } from "@/api/ApiContext";
 import type { ConnectionState, Entity } from "@/api/types";
-import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, type EntitiesState } from "./entities";
+import { entitiesReducer, initialEntitiesState, SETTLE_TIMEOUT_MS, UNASSIGNED, type EntitiesState } from "./entities";
 import type { FeedEvent } from "./feed";
 import { applyIntent, intentAction, type Intent } from "./actions";
 import type { DomainFilter } from "./selectors";
 import { isStreamRecovery, shouldResyncAfterHidden } from "./resync";
+import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
+import { publishServerEvent, publishStreamState } from "@/api/serverEvents";
+import { SERVER_SEED_LIMIT } from "./feed";
 
 interface EntitiesContextValue {
   state: EntitiesState;
@@ -49,6 +52,18 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     void load();
   }, [load]);
 
+  // Feature 140: seeds the feed from the server event log. A failure (or a backend without 018) keeps the local feed.
+  const loadEvents = useCallback(() => {
+    void api.listEvents({ limit: SERVER_SEED_LIMIT }).then(
+      (events) => dispatch({ type: "serverFeedLoaded", events }),
+      () => undefined,
+    );
+  }, [api]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
   // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
   const refreshAreas = useCallback(() => {
     void api.getAreas().then(
@@ -64,11 +79,21 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       (entity) => dispatch({ type: "entityUpdated", entity }),
       (next) => {
         setConnection(next);
-        if (isStreamRecovery(previous, next)) refreshAreas();
+        publishStreamState(next);
+        if (isStreamRecovery(previous, next)) {
+          refreshAreas();
+          loadEvents();
+        }
         previous = next;
       },
+      // Feature 132: the single subscription also fans out resource_changed, event, ha_link, alert, alert_acked.
+      // Feature 140: live `event` rows join the feed (deduped by server id).
+      (serverEvent) => {
+        if (serverEvent.type === "event") dispatch({ type: "serverEventLogged", event: serverEvent.event });
+        publishServerEvent(serverEvent);
+      },
     );
-  }, [api, refreshAreas]);
+  }, [api, refreshAreas, loadEvents]);
 
   // Feature 126: a tab that was hidden for more than 60 s may have missed changes; re-fetch when it is shown again.
   useEffect(() => {
@@ -151,7 +176,14 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
     [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert],
   );
 
-  return <EntitiesContext.Provider value={value}>{children}</EntitiesContext.Provider>;
+  // Feature 147: zone colors come from the same areas list (every HA area, the unassigned group excluded).
+  const zoneAreaIds = useMemo(() => state.areas.map((a) => a.areaId).filter((id) => id !== UNASSIGNED), [state.areas]);
+
+  return (
+    <EntitiesContext.Provider value={value}>
+      <ZoneColorsProvider areaIds={zoneAreaIds}>{children}</ZoneColorsProvider>
+    </EntitiesContext.Provider>
+  );
 }
 
 export function useEntities(): EntitiesContextValue {

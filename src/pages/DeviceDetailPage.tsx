@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, CircleOff } from "lucide-react";
 import PageGrid from "@layouts/PageGrid";
@@ -17,6 +17,7 @@ import DeviceControls from "@components/cards/DeviceControls";
 import EntityHistoryCard from "@components/cards/EntityHistoryCard";
 import CoverCalibrationPanel from "@components/cards/CoverCalibrationPanel";
 import AlertRulesPanel from "@components/cards/AlertRulesPanel";
+import SavedPositionsCard from "@components/cards/SavedPositionsCard";
 import { describeState, domainIcon, domainHue, type Hue } from "@components/cards/deviceState";
 import { useDeviceAction } from "@components/cards/useDeviceAction";
 import { attributeRows } from "@/features/devices/attributes";
@@ -90,6 +91,7 @@ function EntityBody({ entity }: { entity: Entity }) {
   const drawValue = draw ? numericState(draw) : null;
   const showHistory = entity.domain === "sensor" && numericState(entity) !== null;
   const attributes = attributeRows(entity);
+  const positionNameRef = useRef<HTMLInputElement>(null); // feature 142: SAVE A POSITION focuses the form
   const changed = new Date(entity.lastChanged);
   const changedText = Number.isNaN(changed.getTime()) ? "--" : changed.toLocaleString();
 
@@ -126,7 +128,16 @@ function EntityBody({ entity }: { entity: Entity }) {
           ) : (
             <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">READ ONLY</p>
           )}
-          {entity.domain === "cover" && <CoverCalibrationPanel entity={entity} disabled={pending} />}
+          {entity.domain === "cover" && (
+            <CoverCalibrationPanel
+              entity={entity}
+              disabled={pending}
+              onSavePosition={() => {
+                positionNameRef.current?.scrollIntoView({ block: "center" });
+                positionNameRef.current?.focus();
+              }}
+            />
+          )}
           {/* Live status for screen readers; the visible feedback is the loader inside the control. */}
           <span aria-live="polite" className="sr-only">
             {pending ? (settling ? "UPDATING" : "SENDING") : ""}
@@ -141,6 +152,7 @@ function EntityBody({ entity }: { entity: Entity }) {
             <EntityHistoryCard entity={entity} displayName={displayName} />
           </Card>
         )}
+        {entity.domain === "cover" && <SavedPositionsCard entity={entity} nameRef={positionNameRef} />}
         <AlertRulesPanel entity={entity} />
         <Card role="region" aria-label="Attributes" className="flex flex-col gap-space-sm">
           <h2 className="font-label-caps text-label-caps uppercase text-on-surface-variant">ATTRIBUTES</h2>

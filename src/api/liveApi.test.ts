@@ -156,7 +156,7 @@ describe("liveApi realtime subscribe (105)", () => {
       (s) => states.push(s),
     );
 
-    expect(FakeSource.instances[0].url).toBe("http://panel.test/api/stream?token=tok");
+    expect(FakeSource.instances[0].url).toMatch(/^http:\/\/panel\.test\/api\/stream\?token=tok&clientId=[0-9a-f-]{36}$/);
     FakeSource.instances[0].listeners.ready({});
     FakeSource.instances[0].listeners.state_changed({ data: '{"entityId":"light.a","state":"on"}' });
     FakeSource.instances[0].onerror?.();

@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { HouseScene, SceneCallbacks } from "./HouseScene";
 import { DEFAULT_PLAN } from "./plan";
+import { ZoneColorsProvider } from "@/features/zones/ZoneColorsContext";
+import { ZONE_TOKENS } from "@/features/zones/zoneColors";
 
 const hoisted = vi.hoisted(() => {
   type Fake = {
@@ -12,6 +14,7 @@ const hoisted = vi.hoisted(() => {
     setLabelElements: Mock;
     resize: Mock;
     dispose: Mock;
+    zoneOf: (areaId: string) => string;
   };
   return {
     scenes: [] as Fake[],
@@ -22,7 +25,7 @@ const hoisted = vi.hoisted(() => {
 
 vi.mock("./HouseScene", () => ({
   HouseScene: class {
-    constructor(_host: HTMLElement, callbacks: SceneCallbacks) {
+    constructor(_host: HTMLElement, callbacks: SceneCallbacks, _plan: unknown, zoneOf: (areaId: string) => string) {
       if (hoisted.failNextConstruction) {
         hoisted.failNextConstruction = false;
         throw new Error("no webgl");
@@ -35,6 +38,7 @@ vi.mock("./HouseScene", () => ({
         setLabelElements: vi.fn(),
         resize: vi.fn(),
         dispose: vi.fn(),
+        zoneOf,
       };
       hoisted.scenes.push(self);
       return self as unknown as HouseScene;
@@ -168,5 +172,38 @@ describe("HouseStage", () => {
     unmount();
     expect(scene.dispose).toHaveBeenCalledTimes(1);
     expect(observers[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the camera on area reorder and restores rooms, selection and labels after a color change", () => {
+    stageWith(firstArea);
+    const show = (areaIds: string[]) => (
+      <ZoneColorsProvider areaIds={areaIds}>
+        <HouseStage />
+      </ZoneColorsProvider>
+    );
+    const { rerender, unmount } = render(show([firstArea, secondArea]));
+    const first = hoisted.scenes[0];
+    expect(first.zoneOf(firstArea)).toBe(ZONE_TOKENS[1]);
+
+    rerender(show([secondArea, firstArea, firstArea]));
+    expect(hoisted.scenes).toHaveLength(1);
+    expect(first.dispose).not.toHaveBeenCalled();
+
+    rerender(show([firstArea]));
+    expect(hoisted.scenes).toHaveLength(2);
+    expect(first.dispose).toHaveBeenCalledTimes(1);
+    expect(observers[0].disconnect).toHaveBeenCalledTimes(1);
+    const second = hoisted.scenes[1];
+    expect(second.setRooms).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ areaId: firstArea, present: true })]),
+      expect.objectContaining({ [firstArea]: expect.objectContaining({ on: true }) }),
+    );
+    expect(second.setSelected).toHaveBeenCalledWith(firstArea);
+    expect(second.setLabelElements).toHaveBeenCalledWith(expect.any(Map));
+    expect(second.zoneOf(firstArea)).toBe(ZONE_TOKENS[0]);
+
+    unmount();
+    expect(second.dispose).toHaveBeenCalledTimes(1);
+    expect(observers[1].disconnect).toHaveBeenCalledTimes(1);
   });
 });

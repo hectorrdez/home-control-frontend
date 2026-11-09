@@ -1,5 +1,6 @@
 import FilterPill from "@components/controls/FilterPill";
 import Button from "@components/controls/Button";
+import { ZoneDot } from "@/features/zones/ZoneDot";
 import {
   EMPTY_FILTERS,
   isFiltered,
@@ -25,9 +26,11 @@ interface ChartFiltersProps {
   facets: FacetCounts;
   shown: number;
   total: number;
+  // Feature 137: reports search focus so a remote filter change waits until the input is left.
+  onSearchFocusChange?: (focused: boolean) => void;
 }
 
-export default function ChartFilters({ filters, onChange, facets, shown, total }: ChartFiltersProps) {
+export default function ChartFilters({ filters, onChange, facets, shown, total, onSearchFocusChange }: ChartFiltersProps) {
   return (
     <div className="flex flex-col gap-space-sm">
       <input
@@ -36,6 +39,8 @@ export default function ChartFilters({ filters, onChange, facets, shown, total }
         placeholder="Search"
         value={filters.query}
         onChange={(event) => onChange({ ...filters, query: event.target.value })}
+        onFocus={() => onSearchFocusChange?.(true)}
+        onBlur={() => onSearchFocusChange?.(false)}
         className="min-h-11 w-full rounded border border-outline-variant bg-surface px-space-xs py-space-xs font-sans text-title-md text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container"
       />
       <div className="flex items-center justify-between gap-space-xs">
@@ -57,6 +62,7 @@ export default function ChartFilters({ filters, onChange, facets, shown, total }
               aria-label={`${label} ${zone.count}`}
               onClick={() => onChange({ ...filters, zones: toggleIn(filters.zones, zone.id) })}
             >
+              <ZoneDot areaId={zone.id} />
               {label}
             </FilterPill>
           );

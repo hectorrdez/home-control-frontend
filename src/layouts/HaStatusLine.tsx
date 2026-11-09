@@ -18,10 +18,11 @@ const TONE: Record<HaConnection, { text: string; beacon: string }> = {
 
 // Stale stream (105): the beacon turns amber and a RECONNECTING chip shows; values keep their last state.
 export default function HaStatusLine() {
-  const { state, version } = useHaStatus();
+  const { state, version, linkLost } = useHaStatus();
   const { connection } = useEntities();
-  const label = state === "online" && version ? `ONLINE // HA ${version}` : LABEL[state];
-  const tone = TONE[state];
+  // Feature 140: the backend lost HA; shown with error tokens until the link is back.
+  const label = linkLost ? "HA LINK LOST" : state === "online" && version ? `ONLINE // HA ${version}` : LABEL[state];
+  const tone = linkLost ? TONE.offline : TONE[state];
   const stale = connection === "reconnecting";
 
   return (

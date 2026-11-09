@@ -1,5 +1,5 @@
 import type { Entity } from "@/api/types";
-import { deriveWidgets, type Widget, type WidgetKind } from "./widgets";
+import { deriveWidgets, type Widget, type WidgetKind, type WidgetSize } from "./widgets";
 
 // Feature 114a: pure editor logic for the telemetry dashboard layout. No React, no storage.
 // Every function returns a NEW array (or the input reference when nothing applies).
@@ -10,6 +10,14 @@ export const KIND_LABEL: Record<WidgetKind, string> = {
   bar: "BAR",
   gauge: "GAUGE",
 };
+
+// Feature 146: the three width modes, in pill order.
+export const SIZE_LABEL: Record<WidgetSize, string> = {
+  full: "FULL",
+  half: "HALF",
+  third: "THIRD",
+};
+export const SIZES: readonly WidgetSize[] = ["full", "half", "third"];
 
 // Gauge is 0..100 only, so it is offered for "%" sensors and nothing else.
 export function validKinds(entity: Entity): WidgetKind[] {
@@ -57,11 +65,11 @@ export function setKind(widgets: Widget[], id: string, kind: WidgetKind): Widget
   return patchWidget(widgets, id, { kind });
 }
 
-export function setWide(widgets: Widget[], id: string, wide: boolean): Widget[] {
-  return patchWidget(widgets, id, { wide });
+export function setSize(widgets: Widget[], id: string, size: WidgetSize): Widget[] {
+  return patchWidget(widgets, id, { size });
 }
 
-// Reset = the 113 defaults: all visible, default kinds, not wide, default order.
+// Reset = the 113 defaults: all visible, default kinds, default size (absent = third), default order.
 export function resetWidgets(sensors: Entity[]): Widget[] {
   return deriveWidgets(sensors);
 }

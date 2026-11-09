@@ -14,6 +14,14 @@ export const SCENARIOS = [
   "device-flap", // feature 126: the Desk plug device goes unavailable at 1.5 s and back at 4 s (row + feed live)
   "cover-calibration", // feature 127: adds a cover without current_position (calibrate, then set a percentage)
   "alerts", // feature 129: seeded MEDIUM/HIGH/LOW rules and three timed changes (1.5 s, 4 s, 6 s)
+  "remote-change", // feature 132: 1 s after subscribe another device changes the Kitchen ceiling alias (138)
+  "no-settings", // feature 133: settings list and get reject not_found (backend without 017)
+  "remote-settings", // feature 133: 1 s after subscribe another device hides the first telemetry widget
+  "alerts-local", // feature 139: backend without /api/alerts (404); the 129 local engine raises the alerts
+  "remote-ack", // feature 139: the same timeline; another device acks each HIGH alert 2 s after it fires
+  "cover-presets", // feature 142: calibrated cover at a known position (SHUT) for saved positions
+  "no-events", // feature 140: GET /api/events rejects not_found (backend without 018)
+  "ha-link-drop", // feature 140: ha_link false at 1 s, true at 3 s (header chip and feed)
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

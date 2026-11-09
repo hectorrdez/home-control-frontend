@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useApi } from "@/api/ApiContext";
 import type { AlertRule, AlertRuleInput } from "@/api/types";
+import { useLiveRefetch } from "./useLiveRefetch";
 
 // Feature 128 (backend 012): notification rules, loaded once. Any load failure (including a backend without the
 // endpoint) leaves status "unavailable" and the editor shows ALERTS UNAVAILABLE.
@@ -52,6 +53,10 @@ export function AlertRulesProvider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, [api]);
+
+  // Feature 138: another device changed a rule; a failed refetch keeps the current list.
+  const reload = useCallback(() => api.listAlertRules().then(setRules), [api]);
+  useLiveRefetch("alert_rules", reload);
 
   // Replaces the rule with the same id (optimistic value or stored answer).
   const swap = useCallback((next: AlertRule) => {

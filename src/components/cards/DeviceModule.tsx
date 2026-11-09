@@ -11,6 +11,7 @@ type DeviceModuleProps = {
   entity: Entity;
   areaName: string;
   drawText?: string; // linked plug power sensor, e.g. "42 W" (103 mapping)
+  presetModes?: boolean; // feature 143: MODES menu for covers with saved positions (Home 3D panel only)
 };
 
 const beaconTone = {
@@ -48,7 +49,7 @@ const hueWash = {
 
 // Device card (103 read-only, 104 controls, 117 feedback). A pending or settling action shows a loader in the
 // control that sent it; success flashes the card, failure highlights it and shows the error toast.
-export default function DeviceModule({ entity, areaName, drawText }: DeviceModuleProps) {
+export default function DeviceModule({ entity, areaName, drawText, presetModes = false }: DeviceModuleProps) {
   const Icon = domainIcon(entity.domain);
   const hue = domainHue(entity.domain);
   const view = describeState(entity);
@@ -126,7 +127,7 @@ export default function DeviceModule({ entity, areaName, drawText }: DeviceModul
       <span aria-live="polite" className="sr-only">
         {pending ? (settling ? "UPDATING" : "SENDING") : ""}
       </span>
-      <DeviceControls entity={entity} disabled={pending} send={send} />
+      <DeviceControls entity={entity} disabled={pending} send={send} modes={presetModes} />
     </Card>
   );
 }

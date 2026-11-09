@@ -195,6 +195,7 @@ export default function DevicePanel() {
                     entity={entity}
                     areaName={section.area.areaId === UNASSIGNED ? "UNASSIGNED" : section.area.name.toUpperCase()}
                     drawText={drawLabel(draws.get(entity.entityId))}
+                    presetModes
                   />
                 </li>
               ))}

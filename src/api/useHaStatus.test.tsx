@@ -14,6 +14,7 @@ function fakeApi(getStatus: () => Promise<HaStatus>): HomeApi {
     runAction: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
     getHistory: vi.fn(),
+    listEvents: vi.fn(async () => []),
   } as unknown as HomeApi;
 }
 
@@ -25,15 +26,15 @@ describe("useHaStatus", () => {
     const api = fakeApi(async () => ({ online: true, message: "ok", version: "2026.11.0" }));
     const { result } = renderHook(() => useHaStatus(), { wrapper: wrap(api) });
 
-    expect(result.current).toEqual({ state: "connecting", version: null });
-    await waitFor(() => expect(result.current).toEqual({ state: "online", version: "2026.11.0" }));
+    expect(result.current).toEqual({ state: "connecting", version: null, linkLost: false });
+    await waitFor(() => expect(result.current).toEqual({ state: "online", version: "2026.11.0", linkLost: false }));
   });
 
   it("reports offline without a version when HA is unreachable", async () => {
     const api = fakeApi(async () => ({ online: false, message: "down", version: "2026.11.0" }));
     const { result } = renderHook(() => useHaStatus(), { wrapper: wrap(api) });
 
-    await waitFor(() => expect(result.current).toEqual({ state: "offline", version: null }));
+    await waitFor(() => expect(result.current).toEqual({ state: "offline", version: null, linkLost: false }));
   });
 
   it("maps a rejected token to unauthorized and any other failure to offline", async () => {
@@ -90,6 +91,6 @@ describe("useHaStatus", () => {
     await act(async () => {
       resolve({ online: true, message: "ok", version: "late" });
     });
-    expect(result.current).toEqual({ state: "connecting", version: null });
+    expect(result.current).toEqual({ state: "connecting", version: null, linkLost: false });
   });
 });

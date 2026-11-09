@@ -1,10 +1,10 @@
 'use strict';
 // Electron main process: window on the panel URL, tray, autostart, remembered size.
-// No preload and no Node exposure to the page (contextIsolation on, nodeIntegration off, sandbox on).
+// The preload exposes one call (showWindow, feature 145); no other Node access (contextIsolation on, nodeIntegration off, sandbox on).
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain } = require('electron');
 const lib = require('./lib.cjs');
 
 // HC_DATA_DIR isolates config/window state (used by the Playwright smoke test).
@@ -55,12 +55,7 @@ function start() {
   let tray = null;
   let quitting = false;
 
-  function showWindow() {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  }
+  const showWindow = lib.createShowWindow(() => win);
 
   function toggleWindow() {
     if (!win) return;
@@ -79,6 +74,7 @@ function start() {
       autoHideMenuBar: true,
       backgroundColor: tokens.background,
       webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -155,6 +151,7 @@ function start() {
     );
   }
 
+  ipcMain.on(lib.SHOW_WINDOW_CHANNEL, showWindow);
   app.on('second-instance', showWindow);
   app.on('activate', showWindow);
   app.on('before-quit', () => {
@@ -163,6 +160,8 @@ function start() {
   // Tray keeps the app alive when the window is hidden.
   app.on('window-all-closed', () => {});
 
+  // Windows groups and names the notifications (feature 145).
+  if (process.platform === 'win32') app.setAppUserModelId('es.hectorrdez.homecontrol');
   app.whenReady().then(() => {
     createWindow();
     createTray();
