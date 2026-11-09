@@ -28,16 +28,21 @@ vi.mock("three", async (importOriginal) => {
   return { ...actual, WebGLRenderer: FakeWebGLRenderer };
 });
 
+// Two stacked floors. The upper "bedroom" sits exactly over the ground "kitchen", so only the shown floor can be picked.
 const plan: HousePlan = {
   plate: 22,
   floors: [
     {
       index: 0,
+      label: "Planta baja",
       walls: [{ x: 0, z: -10, w: 20, d: 0.4, h: 2.6 }],
+      glass: [{ x: 0, z: -10, w: 2, d: 0.2, h: 1.2, y: 0.9 }],
+      fixtures: [{ x: 5, z: 5, w: 1, d: 1, h: 0.2 }],
       rooms: [
         {
           id: "kitchen",
           areaId: "kitchen",
+          areaIds: ["kitchen", "cocina"],
           label: "Kitchen",
           rect: { x: 0, z: 0, w: 20, d: 20, h: 0 },
           hue: "primary-container",
@@ -46,8 +51,27 @@ const plan: HousePlan = {
         {
           id: "hall",
           areaId: "hall",
+          areaIds: ["hall"],
           label: "Hall",
           rect: { x: 60, z: 60, w: 2, d: 2, h: 0 },
+          hue: "secondary",
+          furniture: [],
+        },
+      ],
+    },
+    {
+      index: 1,
+      label: "Planta alta",
+      walls: [],
+      glass: [],
+      fixtures: [],
+      rooms: [
+        {
+          id: "bedroom",
+          areaId: "bedroom",
+          areaIds: ["bedroom"],
+          label: "Bedroom",
+          rect: { x: 0, z: 0, w: 20, d: 20, h: 0 },
           hue: "secondary",
           furniture: [],
         },
@@ -58,6 +82,7 @@ const plan: HousePlan = {
 
 interface Internals {
   camera: THREE.PerspectiveCamera;
+  floorGroups: THREE.Group[];
   rooms: Map<string, { group: THREE.Group; present: boolean; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
   disposed: boolean;
 }
@@ -148,6 +173,47 @@ describe("HouseScene", () => {
     pointer(canvas, "pointerdown", 50, 50);
     pointer(canvas, "pointerup", 80, 50);
     expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows one floor at a time and only picks rooms of the shown floor", () => {
+    const { scene, canvas } = mountScene();
+    const groups = internals(scene).floorGroups;
+    expect(groups[0].visible).toBe(true);
+    expect(groups[1].visible).toBe(false);
+
+    pointer(canvas, "pointerdown", 50, 50);
+    pointer(canvas, "pointerup", 50, 50);
+    expect(callbacks.onSelect).toHaveBeenLastCalledWith("kitchen");
+
+    scene.setFloor(1);
+    expect(groups[0].visible).toBe(false);
+    expect(groups[1].visible).toBe(true);
+    pointer(canvas, "pointerdown", 50, 50);
+    pointer(canvas, "pointerup", 50, 50);
+    expect(callbacks.onSelect).toHaveBeenLastCalledWith("bedroom");
+
+    vi.mocked(callbacks.onSelect).mockClear();
+    scene.setFloor(0);
+    expect(groups[0].visible).toBe(true);
+    expect(groups[1].visible).toBe(false);
+    pointer(canvas, "pointerdown", 50, 50);
+    pointer(canvas, "pointerup", 50, 50);
+    expect(callbacks.onSelect).toHaveBeenCalledTimes(1);
+    expect(callbacks.onSelect).toHaveBeenCalledWith("kitchen");
+  });
+
+  it("reports the re-bound area after setRooms changes a room areaId", () => {
+    const { scene, canvas } = mountScene();
+    scene.setRooms([{ id: "kitchen", areaId: "cocina", present: true }], {});
+
+    pointer(canvas, "pointerdown", 50, 50);
+    pointer(canvas, "pointerup", 50, 50);
+    expect(callbacks.onSelect).toHaveBeenLastCalledWith("cocina");
+
+    scene.setSelected("cocina");
+    expect(internals(scene).rooms.get("kitchen")!.outlineMat.opacity).toBe(1);
+    scene.setSelected("kitchen");
+    expect(internals(scene).rooms.get("kitchen")!.outlineMat.opacity).toBeCloseTo(0.5);
   });
 
   it("does not select a room that is dimmed as not present", () => {
@@ -270,14 +336,26 @@ describe("HouseScene", () => {
     expect(camera.position.x).toBeGreaterThan(0);
   });
 
-  it("positions the room labels on screen after each frame", () => {
+  it("positions the room labels on screen after each frame, hiding labels of other floors", () => {
     const { scene } = mountScene();
-    const label = document.createElement("div");
-    scene.setLabelElements(new Map([["kitchen", label]]));
+    const kitchenLabel = document.createElement("div");
+    const bedroomLabel = document.createElement("div");
+    scene.setLabelElements(
+      new Map([
+        ["kitchen", kitchenLabel],
+        ["bedroom", bedroomLabel],
+      ]),
+    );
     flush();
 
-    expect(label.style.opacity).toBe("1");
-    expect(label.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, -100%\)$/);
+    expect(kitchenLabel.style.opacity).toBe("1");
+    expect(kitchenLabel.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, -100%\)$/);
+    expect(bedroomLabel.style.opacity).toBe("0");
+
+    scene.setFloor(1);
+    flush();
+    expect(kitchenLabel.style.opacity).toBe("0");
+    expect(bedroomLabel.style.opacity).toBe("1");
   });
 
   it("follows the container size on resize", () => {

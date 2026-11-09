@@ -12,6 +12,7 @@ const hoisted = vi.hoisted(() => {
     setSelected: Mock;
     setView: Mock;
     setLabelElements: Mock;
+    setFloor: Mock;
     resize: Mock;
     dispose: Mock;
     zoneOf: (areaId: string) => string;
@@ -36,6 +37,7 @@ vi.mock("./HouseScene", () => ({
         setSelected: vi.fn(),
         setView: vi.fn(),
         setLabelElements: vi.fn(),
+        setFloor: vi.fn(),
         resize: vi.fn(),
         dispose: vi.fn(),
         zoneOf,
@@ -66,8 +68,9 @@ class FakeResizeObserver {
   }
 }
 
-const firstArea = DEFAULT_PLAN.floors[0].rooms[0].areaId;
-const secondArea = DEFAULT_PLAN.floors[0].rooms[1].areaId;
+const firstArea = DEFAULT_PLAN.floors[0].rooms[0].areaId; // living_room (ground)
+const secondArea = DEFAULT_PLAN.floors[0].rooms[1].areaId; // kitchen (ground)
+const upperArea = DEFAULT_PLAN.floors[1].rooms[0].areaId; // bedroom (upper)
 
 function stageWith(selectedArea: string | null = null) {
   hoisted.stage.value = {
@@ -108,6 +111,42 @@ describe("HouseStage", () => {
     );
     expect(screen.getByText("LEVEL 01 • 1 ROOMS")).toBeTruthy();
     expect(screen.getByRole("list").textContent).toContain("Kitchen");
+  });
+
+  it("shows a floor chip per floor, pressed for the shown floor, and switches the scene floor on click", () => {
+    stageWith();
+    render(<HouseStage />);
+    const scene = hoisted.scenes[0];
+    const ground = screen.getByRole("button", { name: "Planta baja" });
+    const upper = screen.getByRole("button", { name: "Planta alta" });
+
+    expect(ground.textContent).toBe("FL 01");
+    expect(upper.textContent).toBe("FL 02");
+    expect(ground.getAttribute("aria-pressed")).toBe("true");
+    expect(upper.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(upper);
+    expect(scene.setFloor).toHaveBeenLastCalledWith(1);
+    expect(upper.getAttribute("aria-pressed")).toBe("true");
+    expect(ground.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("LEVEL 02 • 0 ROOMS")).toBeTruthy();
+  });
+
+  it("brings up the floor of a selected upper-floor room", () => {
+    hoisted.stage.value = {
+      state: {
+        areas: [{ areaId: upperArea, name: "Master suite", entityIds: [] }],
+        entities: {},
+      },
+      selectedArea: upperArea,
+      setSelectedArea: vi.fn(),
+    };
+    render(<HouseStage />);
+    const scene = hoisted.scenes[0];
+
+    expect(scene.setFloor).toHaveBeenLastCalledWith(1);
+    expect(screen.getByText("LEVEL 02 • 1 ROOMS")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Planta alta" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("sends the view presets to the scene from the camera buttons", () => {

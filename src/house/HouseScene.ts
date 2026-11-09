@@ -11,8 +11,9 @@ export type ViewPreset = "iso" | "top" | "reset";
 
 export interface RoomState {
   id: string;
-  areaId: string;
+  areaId: string; // resolved HA area (bindRooms)
   present: boolean; // false -> dimmed and unselectable
+  floor?: number; // floor the room belongs to; re-parents the room group when it differs from the built one
 }
 
 export interface SceneCallbacks {
@@ -22,7 +23,8 @@ export interface SceneCallbacks {
 
 interface RoomObjects {
   plan: RoomPlan;
-  areaId: string;
+  areaId: string; // resolved area; drives highlight and selection
+  floor: number;
   group: THREE.Group;
   center: THREE.Vector3;
   present: boolean;
@@ -30,6 +32,7 @@ interface RoomObjects {
   outline: THREE.LineSegments;
   outlineMat: THREE.LineBasicMaterial;
   tintMat: THREE.MeshBasicMaterial;
+  markerMat: THREE.MeshStandardMaterial;
   light: THREE.PointLight;
   hue: THREE.Color; // glow hue from the plan (lit state)
   zone: THREE.Color; // stable zone color (feature 130): tint, outline and marker
@@ -48,7 +51,7 @@ function token(name: string): THREE.Color {
 function boxMesh(box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number): THREE.Group {
   const geometry = new THREE.BoxGeometry(box.w, box.h, box.d);
   const group = new THREE.Group();
-  group.position.set(box.x, box.h / 2, box.z);
+  group.position.set(box.x, (box.y ?? 0) + box.h / 2, box.z);
   group.add(new THREE.Mesh(geometry, material));
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geometry),
@@ -66,6 +69,8 @@ export class HouseScene {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly rooms = new Map<string, RoomObjects>();
+  private readonly floorGroups: THREE.Group[] = []; // one group per floor, indexed by floor.index
+  private activeFloor = 0;
   private readonly labels = new Map<string, HTMLElement>();
   private readonly materials: THREE.Material[] = [];
   private readonly zoneOf: (areaId: string) => string; // feature 147: assigned zone token per area (130 hash as fallback)
@@ -135,11 +140,30 @@ export class HouseScene {
     this.requestRender();
   }
 
-  // Room list from the live areas: updates dimming, glows and the highlight. Call on every store change.
+  // Shows only one floor (walls, glass, fixtures, rooms); rooms of hidden floors are not pickable.
+  setFloor(index: number): void {
+    this.activeFloor = index;
+    this.applyFloor();
+    this.requestRender();
+  }
+
+  // Room list from the live areas: updates dimming, glows, the highlight and the zone color of a re-bound area.
   setRooms(rooms: RoomState[], glows: Record<string, RoomGlow>): void {
     for (const room of rooms) {
       const obj = this.rooms.get(room.id);
       if (!obj) continue;
+      if (room.areaId !== obj.areaId) {
+        obj.areaId = room.areaId;
+        obj.zone.copy(token(this.zoneOf(room.areaId)));
+        obj.tintMat.color.copy(obj.zone);
+        obj.outlineMat.color.copy(obj.zone);
+        obj.markerMat.color.copy(obj.zone);
+        obj.markerMat.emissive.copy(obj.zone);
+      }
+      if (room.floor !== undefined && room.floor !== obj.floor && this.floorGroups[room.floor]) {
+        this.floorGroups[room.floor].add(obj.group); // Object3D.add re-parents the group
+        obj.floor = room.floor;
+      }
       obj.present = room.present;
       const glow = glows[room.areaId] ?? { on: false, intensity: 0, hue: "light" as const };
       obj.light.visible = glow.on;
@@ -249,15 +273,27 @@ export class HouseScene {
     this.scene.add(edge);
 
     for (const floor of plan.floors) {
-      for (const wall of floor.walls) {
-        const mat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.35 }));
-        this.scene.add(boxMesh(wall, mat, token("secondary"), 0.8));
-      }
-      for (const room of floor.rooms) this.buildRoom(room);
+      const group = new THREE.Group();
+      this.floorGroups[floor.index] = group;
+      this.scene.add(group);
+      const wallMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.35 }));
+      for (const wall of floor.walls) group.add(boxMesh(wall, wallMat, token("secondary"), 0.8));
+      const glassMat = this.track(new THREE.MeshPhongMaterial({ color: token("primary-container"), transparent: true, opacity: 0.25 }));
+      for (const pane of floor.glass) group.add(boxMesh(pane, glassMat, token("primary-container"), 0.6));
+      const fixtureMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }));
+      for (const box of floor.fixtures) group.add(boxMesh(box, fixtureMat, token("secondary"), 0.7));
+      for (const room of floor.rooms) this.buildRoom(room, floor.index, group);
     }
+    this.applyFloor();
   }
 
-  private buildRoom(plan: RoomPlan): void {
+  private applyFloor(): void {
+    this.floorGroups.forEach((group, i) => {
+      group.visible = i === this.activeFloor;
+    });
+  }
+
+  private buildRoom(plan: RoomPlan, floor: number, parent: THREE.Group): void {
     const { rect } = plan;
     const center = new THREE.Vector3(rect.x, LABEL_HEIGHT, rect.z);
     const hue = token(plan.hue);
@@ -279,10 +315,8 @@ export class HouseScene {
     const furnitureMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }));
     for (const box of plan.furniture) group.add(boxMesh(box, furnitureMat, hue, 0.7));
 
-    const marker = new THREE.Mesh(
-      this.trackGeometry(new THREE.SphereGeometry(0.3, 16, 16)),
-      this.track(new THREE.MeshStandardMaterial({ color: zone, emissive: zone, emissiveIntensity: 0.8 })),
-    );
+    const markerMat = this.track(new THREE.MeshStandardMaterial({ color: zone, emissive: zone, emissiveIntensity: 0.8 }));
+    const marker = new THREE.Mesh(this.trackGeometry(new THREE.SphereGeometry(0.3, 16, 16)), markerMat);
     marker.position.copy(center);
     group.add(marker);
 
@@ -291,10 +325,11 @@ export class HouseScene {
     light.visible = false;
     group.add(light);
 
-    this.scene.add(group);
+    parent.add(group);
     this.rooms.set(plan.id, {
       plan,
       areaId: plan.areaId,
+      floor,
       group,
       center,
       present: true,
@@ -302,6 +337,7 @@ export class HouseScene {
       outline,
       outlineMat,
       tintMat,
+      markerMat,
       light,
       hue,
       zone,
@@ -320,7 +356,7 @@ export class HouseScene {
 
   private applyHighlight(): void {
     for (const obj of this.rooms.values()) {
-      const active = this.selected === obj.plan.areaId && obj.present;
+      const active = this.selected === obj.areaId && obj.present;
       // Active = primary-container at full opacity (readable on every zone color); idle = the zone color.
       obj.outlineMat.color.copy(active ? token("primary-container") : obj.zone);
       obj.outlineMat.opacity = active ? 1 : 0.5;
@@ -332,9 +368,10 @@ export class HouseScene {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects([...this.rooms.values()].map((r) => r.hit), false);
+    const rooms = [...this.rooms.values()].filter((r) => r.floor === this.activeFloor);
+    const hits = this.raycaster.intersectObjects(rooms.map((r) => r.hit), false);
     if (hits.length === 0) return undefined;
-    return [...this.rooms.values()].find((r) => r.hit === hits[0].object);
+    return rooms.find((r) => r.hit === hits[0].object);
   }
 
   private requestRender(): void {
@@ -353,7 +390,7 @@ export class HouseScene {
       const obj = this.rooms.get(id);
       if (!obj) continue;
       v.copy(obj.center).project(this.camera);
-      const visible = v.z < 1;
+      const visible = v.z < 1 && obj.floor === this.activeFloor;
       el.style.opacity = visible ? "1" : "0";
       el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, -100%)`;
     }

@@ -51,3 +51,4 @@ id|slug|state|role|commit|commit_url
 146|chart-width-modes|ENDED|frontend|f7a0893|https://github.com/hectorrdez/home-control-frontend/commit/f7a0893
 147|zone-colors-in-charts|ENDED|frontend|79b9ca3|https://github.com/hectorrdez/home-control-frontend/commit/79b9ca3
 148|extract-e2e|ENDED|frontend|f986453|https://github.com/hectorrdez/home-control-frontend/commit/f986453
+149|house-plan-from-dwg|ENDED|frontend

@@ -18,6 +18,8 @@ const VIEWS: Array<{ preset: ViewPreset; label: string }> = [
 const buttonClass =
   "min-h-11 rounded border border-outline-variant/40 bg-surface-container-lowest/80 px-space-sm font-mono text-label-caps uppercase text-on-surface-variant hover:border-primary-container/40 hover:text-primary-container focus-visible:outline-2 focus-visible:outline-primary-container";
 
+const pressedClass = "border-primary-container text-primary-container";
+
 export default function HouseStage() {
   const { state, selectedArea, setSelectedArea } = useEntities();
   const zoneOf = useZoneTokenResolver();
@@ -26,12 +28,14 @@ export default function HouseStage() {
   const sceneRef = useRef<HouseScene | null>(null);
   const onSelectRef = useRef(setSelectedArea);
   const [unavailable, setUnavailable] = useState(false);
-  // Latest scene inputs, so a rebuilt scene (new zone assignment) gets the current rooms, glows and selection.
+  const [floor, setFloor] = useState(0);
+  // Latest scene inputs, so a rebuilt scene (new zone assignment) gets the current rooms, glows, selection and floor.
   const latest = useRef<{
     rooms: Parameters<HouseScene["setRooms"]>[0];
     glows: Parameters<HouseScene["setRooms"]>[1];
     selected: string | null;
-  }>({ rooms: [], glows: {}, selected: null });
+    floor: number;
+  }>({ rooms: [], glows: {}, selected: null, floor: 0 });
 
   useEffect(() => {
     onSelectRef.current = setSelectedArea;
@@ -64,6 +68,7 @@ export default function HouseStage() {
     sceneRef.current = scene;
     scene.setRooms(latest.current.rooms, latest.current.glows);
     scene.setSelected(latest.current.selected);
+    scene.setFloor(latest.current.floor);
     scene.setLabelElements(labelEls.current);
     const observer = new ResizeObserver(() => scene.resize());
     observer.observe(host);
@@ -92,13 +97,13 @@ export default function HouseStage() {
 
   const areaName = (areaId: string, fallback: string) => state.areas.find((a) => a.areaId === areaId)?.name ?? fallback;
 
-  const sceneRooms = useMemo(() => rooms.map((r) => ({ id: r.id, areaId: r.areaId, present: r.present })), [rooms]);
+  const sceneRooms = useMemo(() => rooms.map((r) => ({ id: r.id, areaId: r.areaId, present: r.present, floor: r.floor })), [rooms]);
 
   // Keeps `latest` current. If a scene is rebuilt in the same commit as a rooms/selection change, the rooms/selection
   // effects below run after the mount effect and apply the new values to the new scene.
   useEffect(() => {
-    latest.current = { rooms: sceneRooms, glows, selected: selectedArea };
-  }, [sceneRooms, glows, selectedArea]);
+    latest.current = { rooms: sceneRooms, glows, selected: selectedArea, floor };
+  }, [sceneRooms, glows, selectedArea, floor]);
 
   useEffect(() => {
     sceneRef.current?.setRooms(sceneRooms, glows);
@@ -109,10 +114,26 @@ export default function HouseStage() {
   }, [selectedArea]);
 
   useEffect(() => {
+    sceneRef.current?.setFloor(floor);
+  }, [floor]);
+
+  // Labels of the shown floor only; the scene keeps a copy of the map, so refresh it when the floor or rooms change.
+  useEffect(() => {
     sceneRef.current?.setLabelElements(labelEls.current);
-  }, [rooms]);
+  }, [rooms, floor]);
+
+  // Selecting a room on another floor brings that floor up. Adjusted during render on a selection change only,
+  // so a manual floor switch is not undone by a store change.
+  const [lastSelected, setLastSelected] = useState<string | null>(null);
+  if (selectedArea !== lastSelected) {
+    setLastSelected(selectedArea);
+    const target = selectedArea ? rooms.find((r) => r.present && r.areaId === selectedArea) : undefined;
+    if (target && target.floor !== floor) setFloor(target.floor);
+  }
 
   const presentRooms = rooms.filter((r) => r.present);
+  const shownRooms = rooms.filter((r) => r.floor === floor);
+  const shownPresent = shownRooms.filter((r) => r.present);
 
   return (
     <section
@@ -129,7 +150,7 @@ export default function HouseStage() {
         </div>
       ) : (
         <div className="pointer-events-none absolute inset-0">
-          {rooms.map((room) => (
+          {shownRooms.map((room) => (
             <div
               key={room.id}
               ref={(el) => {
@@ -145,7 +166,7 @@ export default function HouseStage() {
       )}
 
       <p className="pointer-events-none absolute left-space-md top-space-md font-mono text-label-caps uppercase text-on-surface-variant">
-        {`LEVEL 01 • ${presentRooms.length} ROOMS`}
+        {`LEVEL 0${floor + 1} • ${shownPresent.length} ROOMS`}
       </p>
 
       <div className="absolute right-space-md top-space-md flex flex-col gap-space-xs">
@@ -161,6 +182,23 @@ export default function HouseStage() {
             {view.label.replace(" view", "").replace("Reset camera", "RESET")}
           </button>
         ))}
+        {DEFAULT_PLAN.floors.length > 1 && (
+          <div role="group" aria-label="Floors" className="flex flex-col gap-space-xs">
+            {DEFAULT_PLAN.floors.map((f) => (
+              <button
+                key={f.index}
+                type="button"
+                aria-pressed={floor === f.index}
+                aria-label={f.label}
+                className={`${buttonClass} ${floor === f.index ? pressedClass : ""}`}
+                disabled={unavailable}
+                onClick={() => setFloor(f.index)}
+              >
+                {`FL 0${f.index + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <p className="pointer-events-none absolute inset-x-0 bottom-space-sm text-center font-mono text-label-caps uppercase text-on-surface-variant">
