@@ -144,7 +144,7 @@ describe("DeviceDetailPage", () => {
     const brightness = within(attributes).getAllByText("brightness").find((el) => el.tagName === "DT")!;
     expect(brightness.nextElementSibling?.textContent).toBe("255");
     expect(attributes.querySelector("time")?.getAttribute("dateTime")).toBe("2026-11-06T08:00:00.000Z");
-    expect(document.title).toBe("Office desk light - Home Control");
+    await waitFor(() => expect(document.title).toBe("Office desk light - Home Control"));
   });
 
   it("a read-only power sensor shows its value, READ ONLY, no controls, and a history chart", async () => {
@@ -203,7 +203,8 @@ describe("DeviceDetailPage", () => {
       .filter((label) => label === "Desk outlet" || label === "Desk outlet power");
     expect(sections).toEqual(["Desk outlet", "Desk outlet power"]);
     expect(screen.getByRole("switch", { name: "Desk outlet power" })).toBeTruthy();
-    expect(document.title).toBe("Desk plug - Home Control");
+    // The title is written by a useEffect that runs after the heading paints; document.title is global, so wait for it.
+    await waitFor(() => expect(document.title).toBe("Desk plug - Home Control"));
   });
 
   it("an old entity link to a member of a multi-entity device redirects to the device key", async () => {
