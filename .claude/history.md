@@ -53,3 +53,4 @@ id|slug|state|role|commit|commit_url
 148|extract-e2e|ENDED|frontend|f986453|https://github.com/hectorrdez/home-control-frontend/commit/f986453
 149|house-plan-from-dwg|ENDED|frontend|48012e2|https://github.com/hectorrdez/home-control-frontend/commit/48012e2
 150|house-whole-view|ENDED|frontend|fecb3b1|https://github.com/hectorrdez/home-control-frontend/commit/fecb3b1
+151|house-cad-export|ENDED|frontend
