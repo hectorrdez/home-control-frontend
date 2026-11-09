@@ -44,9 +44,11 @@ describe("dwg-plan converter", () => {
 
   it("emits the rooms of each floor in the configured order", () => {
     const { floors } = convert(flatten(synthetic));
+    expect(floors.map((f) => f.id)).toEqual(["ground", "upper", "attic"]);
     expect(floors.map((f) => f.rooms.map((r) => r.id))).toEqual([
-      ["salon", "cocina", "bano-pb", "taller", "patio"],
-      ["dormitorio-principal", "bano", "distribuidor", "dormitorio-2", "dormitorio-3", "terraza"],
+      ["salon", "cocina", "despensa", "bano-pb", "taller", "patio"],
+      ["habitacion-papa", "bano", "distribuidor", "habitacion-hector", "habitacion-nuria", "terraza"],
+      ["altillo"],
     ]);
   });
 });

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { HousePlan } from "./plan";
+import { DEFAULT_PLAN } from "./plan";
 import { HouseScene, type SceneCallbacks } from "./HouseScene";
 import { ZONE_TOKENS, zoneColorToken } from "../features/zones/zoneColors";
 
@@ -21,6 +22,7 @@ vi.mock("three", async (importOriginal) => {
     setSize = vi.fn();
     setPixelRatio = vi.fn();
     dispose = vi.fn();
+    localClippingEnabled = false;
     constructor() {
       hoisted.renderers.push(this);
     }
@@ -28,14 +30,17 @@ vi.mock("three", async (importOriginal) => {
   return { ...actual, WebGLRenderer: FakeWebGLRenderer };
 });
 
-// Two stacked floors. The upper "bedroom" sits exactly over the ground "kitchen", so only the shown floor can be picked.
+// Two stacked floors (levels 0 and 1, 5.4 units apart). The upper "bedroom" sits exactly over the ground "kitchen",
+// so only the shown floor can be picked in floor mode. The ground wall is "low" (cut), the upper wall "normal".
 const plan: HousePlan = {
   plate: 22,
   floors: [
     {
       index: 0,
       label: "Planta baja",
-      walls: [{ x: 0, z: -10, w: 20, d: 0.4, h: 2.6 }],
+      level: 0,
+      height: 5.4,
+      walls: [{ x: 0, z: -10, w: 20, d: 0.4, h: 5.4, cut: "low" }],
       glass: [{ x: 0, z: -10, w: 2, d: 0.2, h: 1.2, y: 0.9 }],
       fixtures: [{ x: 5, z: 5, w: 1, d: 1, h: 0.2 }],
       rooms: [
@@ -45,6 +50,7 @@ const plan: HousePlan = {
           areaIds: ["kitchen", "cocina"],
           label: "Kitchen",
           rect: { x: 0, z: 0, w: 20, d: 20, h: 0 },
+          parts: [{ x: 0, z: 0, w: 20, d: 20, h: 0 }],
           hue: "primary-container",
           furniture: [{ x: 1, z: 1, w: 1, d: 1, h: 1 }],
         },
@@ -54,6 +60,7 @@ const plan: HousePlan = {
           areaIds: ["hall"],
           label: "Hall",
           rect: { x: 60, z: 60, w: 2, d: 2, h: 0 },
+          parts: [{ x: 60, z: 60, w: 2, d: 2, h: 0 }],
           hue: "secondary",
           furniture: [],
         },
@@ -62,7 +69,9 @@ const plan: HousePlan = {
     {
       index: 1,
       label: "Planta alta",
-      walls: [],
+      level: 1,
+      height: 5.4,
+      walls: [{ x: 0, z: -10, w: 20, d: 0.4, h: 5.4 }],
       glass: [],
       fixtures: [],
       rooms: [
@@ -72,6 +81,7 @@ const plan: HousePlan = {
           areaIds: ["bedroom"],
           label: "Bedroom",
           rect: { x: 0, z: 0, w: 20, d: 20, h: 0 },
+          parts: [{ x: 0, z: 0, w: 20, d: 20, h: 0 }],
           hue: "secondary",
           furniture: [],
         },
@@ -82,6 +92,7 @@ const plan: HousePlan = {
 
 interface Internals {
   camera: THREE.PerspectiveCamera;
+  controls: { target: THREE.Vector3 };
   floorGroups: THREE.Group[];
   rooms: Map<string, { group: THREE.Group; present: boolean; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
   disposed: boolean;
@@ -111,6 +122,9 @@ function makeContainer(width = 800, height = 600): HTMLElement {
   return container;
 }
 
+// The first child of a floor group is its first wall (walls are built before glass, fixtures and rooms).
+const firstWallMaterial = (group: THREE.Group) => ((group.children[0] as THREE.Group).children[0] as THREE.Mesh).material as THREE.Material;
+
 describe("HouseScene", () => {
   let callbacks: SceneCallbacks;
   let container: HTMLElement;
@@ -131,7 +145,7 @@ describe("HouseScene", () => {
       left: 0, top: 0, width: 100, height: 100, x: 0, y: 0, right: 100, bottom: 100, toJSON: () => ({}),
     } as DOMRect);
     hoisted.renderers.length = 0;
-    callbacks = { onSelect: vi.fn(), onContextLost: vi.fn() };
+    callbacks = { onSelect: vi.fn(), onContextLost: vi.fn(), onFloorPick: vi.fn() };
     container = makeContainer();
   });
 
@@ -163,7 +177,8 @@ describe("HouseScene", () => {
   });
 
   it("selects a present room on a click and ignores drags longer than the click slack", () => {
-    const { canvas } = mountScene();
+    const { scene, canvas } = mountScene();
+    scene.setFloor(0);
 
     pointer(canvas, "pointerdown", 50, 50);
     pointer(canvas, "pointerup", 50, 50);
@@ -175,11 +190,33 @@ describe("HouseScene", () => {
     expect(callbacks.onSelect).not.toHaveBeenCalled();
   });
 
-  it("shows one floor at a time and only picks rooms of the shown floor", () => {
-    const { scene, canvas } = mountScene();
+  it("shows every floor stacked by level in the whole-house view by default", () => {
+    const { scene } = mountScene();
     const groups = internals(scene).floorGroups;
     expect(groups[0].visible).toBe(true);
+    expect(groups[1].visible).toBe(true);
+    expect(groups[0].position.y).toBe(0);
+    expect(groups[1].position.y).toBeCloseTo(5.4);
+    expect(internals(scene).controls.target.y).toBeCloseTo(2.7); // half the stack
+  });
+
+  it("calls onFloorPick with the floor under the pointer in the whole-house view, never onSelect", () => {
+    const { canvas } = mountScene();
+
+    pointer(canvas, "pointerdown", 50, 50);
+    pointer(canvas, "pointerup", 50, 50);
+    expect(callbacks.onFloorPick).toHaveBeenCalledWith(1); // the upper floor is nearest to the camera
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows one floor at its ground level and only picks rooms of the shown floor", () => {
+    const { scene, canvas } = mountScene();
+    const groups = internals(scene).floorGroups;
+
+    scene.setFloor(0);
+    expect(groups[0].visible).toBe(true);
     expect(groups[1].visible).toBe(false);
+    expect(groups[0].position.y).toBe(0);
 
     pointer(canvas, "pointerdown", 50, 50);
     pointer(canvas, "pointerup", 50, 50);
@@ -188,6 +225,7 @@ describe("HouseScene", () => {
     scene.setFloor(1);
     expect(groups[0].visible).toBe(false);
     expect(groups[1].visible).toBe(true);
+    expect(groups[1].position.y).toBe(0);
     pointer(canvas, "pointerdown", 50, 50);
     pointer(canvas, "pointerup", 50, 50);
     expect(callbacks.onSelect).toHaveBeenLastCalledWith("bedroom");
@@ -202,8 +240,37 @@ describe("HouseScene", () => {
     expect(callbacks.onSelect).toHaveBeenCalledWith("kitchen");
   });
 
+  it("clips walls in the isolated floor view (low walls lower) and clears the cut in the whole-house view", () => {
+    const { scene } = mountScene();
+    const groups = internals(scene).floorGroups;
+
+    scene.setFloor(1);
+    expect(firstWallMaterial(groups[1]).clippingPlanes).toHaveLength(1);
+    expect(firstWallMaterial(groups[1]).clippingPlanes![0].constant).toBeCloseTo(2.6);
+
+    scene.setFloor(0);
+    expect(firstWallMaterial(groups[0]).clippingPlanes![0].constant).toBeCloseTo(1.2);
+
+    scene.setMode("house");
+    expect(firstWallMaterial(groups[0]).clippingPlanes).toEqual([]);
+    expect(firstWallMaterial(groups[1]).clippingPlanes).toEqual([]);
+  });
+
+  it("hides the upper-floor slabs when a single floor is isolated", () => {
+    const { scene } = mountScene();
+    // The slab is the group built for the room part, centred 0.05 below the floor line.
+    const slab = internals(scene).floorGroups[1].children.find((c) => Math.abs(c.position.y + 0.05) < 1e-9);
+    expect(slab).toBeDefined();
+
+    scene.setFloor(1);
+    expect(slab!.visible).toBe(false);
+    scene.setMode("house");
+    expect(slab!.visible).toBe(true);
+  });
+
   it("reports the re-bound area after setRooms changes a room areaId", () => {
     const { scene, canvas } = mountScene();
+    scene.setFloor(0);
     scene.setRooms([{ id: "kitchen", areaId: "cocina", present: true }], {});
 
     pointer(canvas, "pointerdown", 50, 50);
@@ -218,6 +285,7 @@ describe("HouseScene", () => {
 
   it("does not select a room that is dimmed as not present", () => {
     const { scene, canvas } = mountScene();
+    scene.setFloor(0);
     scene.setRooms([{ id: "kitchen", areaId: "kitchen", present: false }], {});
 
     pointer(canvas, "pointerdown", 50, 50);
@@ -229,10 +297,12 @@ describe("HouseScene", () => {
     const { canvas } = mountScene();
     pointer(canvas, "pointerup", 50, 50);
     expect(callbacks.onSelect).not.toHaveBeenCalled();
+    expect(callbacks.onFloorPick).not.toHaveBeenCalled();
   });
 
   it("shows a pointer cursor over a present room and clears it elsewhere", () => {
-    const { canvas } = mountScene();
+    const { scene, canvas } = mountScene();
+    scene.setFloor(0);
 
     pointer(canvas, "pointermove", 50, 50);
     expect(canvas.style.cursor).toBe("pointer");
@@ -326,6 +396,7 @@ describe("HouseScene", () => {
   it("moves the camera to the top-down and isometric presets", () => {
     const { scene } = mountScene();
     const camera = internals(scene).camera;
+    scene.setFloor(0); // floor radius; the whole-house radius is larger
 
     scene.setView("top");
     expect(camera.position.y).toBeGreaterThan(30);
@@ -336,7 +407,7 @@ describe("HouseScene", () => {
     expect(camera.position.x).toBeGreaterThan(0);
   });
 
-  it("positions the room labels on screen after each frame, hiding labels of other floors", () => {
+  it("positions the room labels on screen after each frame, hiding labels of other floors and of the whole-house view", () => {
     const { scene } = mountScene();
     const kitchenLabel = document.createElement("div");
     const bedroomLabel = document.createElement("div");
@@ -347,7 +418,11 @@ describe("HouseScene", () => {
       ]),
     );
     flush();
+    expect(kitchenLabel.style.opacity).toBe("0");
+    expect(bedroomLabel.style.opacity).toBe("0");
 
+    scene.setFloor(0);
+    flush();
     expect(kitchenLabel.style.opacity).toBe("1");
     expect(kitchenLabel.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, -100%\)$/);
     expect(bedroomLabel.style.opacity).toBe("0");
@@ -356,6 +431,35 @@ describe("HouseScene", () => {
     flush();
     expect(kitchenLabel.style.opacity).toBe("0");
     expect(bedroomLabel.style.opacity).toBe("1");
+  });
+
+  it("builds the attic roof of the real plan and stacks the three levels", () => {
+    const { scene } = mountScene(DEFAULT_PLAN);
+    const groups = internals(scene).floorGroups;
+    expect(groups.map((g) => g.position.y)).toEqual([0, 5.4, 10.8]);
+    const roof = groups[2].children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh && c.material instanceof THREE.MeshPhongMaterial && c.material.side === THREE.DoubleSide);
+    expect(roof).toBeDefined();
+    expect((roof!.material as THREE.Material).transparent).toBe(true);
+  });
+
+  it("shows the roof only in the whole-house view, hidden in every floor mode", () => {
+    const { scene } = mountScene(DEFAULT_PLAN);
+    const groups = internals(scene).floorGroups;
+    const roofParts = () => groups[2].children.filter((c) => c.name === "roof");
+    expect(roofParts()).toHaveLength(2); // mesh + edges
+    expect(roofParts().every((c) => c.visible)).toBe(true);
+
+    scene.setFloor(2);
+    flush();
+    expect(roofParts().every((c) => !c.visible)).toBe(true);
+
+    scene.setFloor(0);
+    flush();
+    expect(roofParts().every((c) => !c.visible)).toBe(true);
+
+    scene.setMode("house");
+    flush();
+    expect(roofParts().every((c) => c.visible)).toBe(true);
   });
 
   it("follows the container size on resize", () => {

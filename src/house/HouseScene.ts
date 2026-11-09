@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { RoomGlow } from "./glow";
-import { DEFAULT_PLAN, type Box, type HousePlan, type RoomPlan } from "./plan";
+import { DEFAULT_PLAN, type Box, type FloorPlan, type HousePlan, type RoomPlan, type WallCut } from "./plan";
 import { zoneColorToken } from "../features/zones/zoneColors";
 
 // Procedural isometric house (106). Plain three + OrbitControls; render on demand (no idle loop).
 // Colors come from the CSS tokens of index.css, read once at mount. Nothing here is a hex literal.
 
 export type ViewPreset = "iso" | "top" | "reset";
+export type SceneMode = "house" | "floor";
 
 export interface RoomState {
   id: string;
@@ -19,6 +20,7 @@ export interface RoomState {
 export interface SceneCallbacks {
   onSelect: (areaId: string) => void;
   onContextLost: () => void;
+  onFloorPick?: (floorIndex: number) => void; // whole-house mode: a click on a floor isolates it
 }
 
 interface RoomObjects {
@@ -28,8 +30,7 @@ interface RoomObjects {
   group: THREE.Group;
   center: THREE.Vector3;
   present: boolean;
-  hit: THREE.Mesh;
-  outline: THREE.LineSegments;
+  hits: THREE.Mesh[]; // one floor plane per part
   outlineMat: THREE.LineBasicMaterial;
   tintMat: THREE.MeshBasicMaterial;
   markerMat: THREE.MeshStandardMaterial;
@@ -38,27 +39,26 @@ interface RoomObjects {
   zone: THREE.Color; // stable zone color (feature 130): tint, outline and marker
 }
 
+interface ClipTarget {
+  material: THREE.Material;
+  cut: WallCut;
+}
+
 const LABEL_HEIGHT = 3.2;
-const ISO = { azimuth: Math.PI / 4, polar: 0.58, radius: 38 };
-const TOP = { azimuth: 0, polar: 1.35, radius: 38 };
+const LEVEL_UNITS = 2.7 * 2; // 2.7 m per level at 2 units per metre
+const SLAB_THICKNESS = 0.1;
+const CUT_NORMAL = 2.6; // isolated view keeps y < 2.6 for normal walls, furniture and fixtures
+const CUT_LOW = 1.2; // ... and y < 1.2 for "low" walls (facade, right party wall)
+const ISO = { azimuth: Math.PI / 4, polar: 0.58 };
+const TOP = { azimuth: 0, polar: 1.35 };
+const FLOOR_RADIUS = 38;
+const HOUSE_RADIUS = 46;
+const FLOOR_TARGET_Y = 1.5;
 const CLICK_SLACK_PX = 5;
 
 function token(name: string): THREE.Color {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
   return new THREE.Color(raw || undefined);
-}
-
-function boxMesh(box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number): THREE.Group {
-  const geometry = new THREE.BoxGeometry(box.w, box.h, box.d);
-  const group = new THREE.Group();
-  group.position.set(box.x, (box.y ?? 0) + box.h / 2, box.z);
-  group.add(new THREE.Mesh(geometry, material));
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: edgeOpacity }),
-  );
-  group.add(edges);
-  return group;
 }
 
 export class HouseScene {
@@ -70,6 +70,14 @@ export class HouseScene {
   private readonly controls: OrbitControls;
   private readonly rooms = new Map<string, RoomObjects>();
   private readonly floorGroups: THREE.Group[] = []; // one group per floor, indexed by floor.index
+  private readonly levels: number[] = []; // floor.level per group, for the stacked house view
+  private readonly slabs: THREE.Object3D[] = []; // upper floor slabs, shown in the whole-house view only
+  private readonly roofs: THREE.Object3D[] = []; // gable roof mesh + edges, shown in the whole-house view only
+  private readonly clipTargets: ClipTarget[] = [];
+  private readonly normalPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), CUT_NORMAL);
+  private readonly lowPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), CUT_LOW);
+  private houseTop = 0;
+  private mode: SceneMode = "house";
   private activeFloor = 0;
   private readonly labels = new Map<string, HTMLElement>();
   private readonly materials: THREE.Material[] = [];
@@ -98,6 +106,7 @@ export class HouseScene {
     this.camera = new THREE.PerspectiveCamera(40, this.width / this.height, 0.1, 1000);
 
     this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    this.renderer.localClippingEnabled = true; // section cut in the isolated floor view
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(this.width, this.height);
     container.appendChild(this.renderer.domElement);
@@ -109,16 +118,17 @@ export class HouseScene {
     });
 
     this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.target.set(0, 1.5, 0);
     this.controls.enableDamping = false;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
     this.controls.minDistance = 14;
     this.controls.maxDistance = 60;
     this.controls.addEventListener("change", () => this.requestRender());
-    this.setView("iso");
 
     this.buildLights();
     this.buildStage(plan);
+    this.applyMode();
+    this.setView("iso");
+
     this.on(canvas, "pointerdown", (e) => {
       const event = e as PointerEvent;
       this.downAt = { x: event.clientX, y: event.clientY };
@@ -130,20 +140,38 @@ export class HouseScene {
         : Infinity;
       this.downAt = null;
       if (moved > CLICK_SLACK_PX) return;
+      if (this.mode === "house") {
+        const floor = this.pickFloor(event);
+        if (floor !== undefined) this.callbacks.onFloorPick?.(floor);
+        return;
+      }
       const hit = this.pick(event);
       if (hit?.present) this.callbacks.onSelect(hit.areaId);
     });
     this.on(canvas, "pointermove", (e) => {
-      const hit = this.pick(e as PointerEvent);
-      canvas.style.cursor = hit?.present ? "pointer" : "";
+      const event = e as PointerEvent;
+      const over = this.mode === "house" ? this.pickFloor(event) !== undefined : this.pick(event)?.present;
+      canvas.style.cursor = over ? "pointer" : "";
     });
     this.requestRender();
   }
 
-  // Shows only one floor (walls, glass, fixtures, rooms); rooms of hidden floors are not pickable.
+  // Whole house (all floors stacked, click a floor to isolate it) or one isolated floor (rooms pickable).
+  setMode(mode: SceneMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.applyMode();
+    this.setView("iso");
+    this.requestRender();
+  }
+
+  // Isolates one floor (switches to floor mode). The camera keeps its angle when already in floor mode.
   setFloor(index: number): void {
+    const entering = this.mode !== "floor";
+    this.mode = "floor";
     this.activeFloor = index;
-    this.applyFloor();
+    this.applyMode();
+    if (entering) this.setView("iso");
     this.requestRender();
   }
 
@@ -183,13 +211,14 @@ export class HouseScene {
 
   setView(preset: ViewPreset): void {
     const view = preset === "top" ? TOP : ISO;
-    const r = view.radius;
+    const r = this.mode === "house" ? HOUSE_RADIUS : FLOOR_RADIUS;
+    const t = this.controls.target;
     this.camera.position.set(
-      r * Math.cos(view.polar) * Math.sin(view.azimuth),
-      r * Math.sin(view.polar),
-      r * Math.cos(view.polar) * Math.cos(view.azimuth),
+      t.x + r * Math.cos(view.polar) * Math.sin(view.azimuth),
+      t.y + r * Math.sin(view.polar),
+      t.z + r * Math.cos(view.polar) * Math.cos(view.azimuth),
     );
-    this.camera.lookAt(this.controls.target);
+    this.camera.lookAt(t);
     this.controls.update();
     this.requestRender();
   }
@@ -244,6 +273,17 @@ export class HouseScene {
     return g;
   }
 
+  // A material the section cut clips in the floor view (applyMode sets its clippingPlanes).
+  private clipped<T extends THREE.Material>(m: T, cut: WallCut): T {
+    this.clipTargets.push({ material: m, cut });
+    return this.track(m);
+  }
+
+  // One material per cut: a "low" wall needs the lower plane, so it cannot share a material with a normal one.
+  private clippedPair<T extends THREE.Material>(make: () => T): Record<WallCut, T> {
+    return { normal: this.clipped(make(), "normal"), low: this.clipped(make(), "low") };
+  }
+
   private buildLights(): void {
     this.scene.add(new THREE.AmbientLight(token("on-surface-variant"), 1.2));
     const key = new THREE.DirectionalLight(token("primary-container"), 0.6);
@@ -273,27 +313,80 @@ export class HouseScene {
     this.scene.add(edge);
 
     for (const floor of plan.floors) {
-      const group = new THREE.Group();
-      this.floorGroups[floor.index] = group;
-      this.scene.add(group);
-      const wallMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.35 }));
-      for (const wall of floor.walls) group.add(boxMesh(wall, wallMat, token("secondary"), 0.8));
-      const glassMat = this.track(new THREE.MeshPhongMaterial({ color: token("primary-container"), transparent: true, opacity: 0.25 }));
-      for (const pane of floor.glass) group.add(boxMesh(pane, glassMat, token("primary-container"), 0.6));
-      const fixtureMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }));
-      for (const box of floor.fixtures) group.add(boxMesh(box, fixtureMat, token("secondary"), 0.7));
-      for (const room of floor.rooms) this.buildRoom(room, floor.index, group);
+      this.houseTop = Math.max(this.houseTop, floor.level * LEVEL_UNITS + (floor.roof?.ridge ?? 0));
+      this.buildFloor(floor);
     }
-    this.applyFloor();
   }
 
-  private applyFloor(): void {
-    this.floorGroups.forEach((group, i) => {
-      group.visible = i === this.activeFloor;
-    });
+  private buildFloor(floor: FloorPlan): void {
+    const group = new THREE.Group();
+    this.floorGroups[floor.index] = group;
+    this.levels[floor.index] = floor.level;
+    this.scene.add(group);
+
+    const wallMats = this.clippedPair(() => new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.35 }));
+    for (const wall of floor.walls) this.addBox(group, wall, wallMats[wall.cut ?? "normal"], token("secondary"), 0.8);
+    const glassMats = this.clippedPair(() => new THREE.MeshPhongMaterial({ color: token("primary-container"), transparent: true, opacity: 0.25 }));
+    for (const pane of floor.glass) this.addBox(group, pane, glassMats[pane.cut ?? "normal"], token("primary-container"), 0.6);
+    const fixtureMat = this.clipped(
+      new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }),
+      "normal",
+    );
+    for (const box of floor.fixtures) this.addBox(group, box, fixtureMat, token("secondary"), 0.7);
+    if (floor.roof) this.buildRoof(floor.roof, group);
+    // Upper levels: a thin slab under each room part (the void and the stairwell stay open).
+    if (floor.level > 0) {
+      for (const room of floor.rooms) {
+        for (const part of room.parts) {
+          this.slabs.push(this.addBox(group, { ...part, y: -SLAB_THICKNESS, h: SLAB_THICKNESS }, wallMats.normal, token("secondary"), 0.8));
+        }
+      }
+    }
+    const furnitureMat = this.clipped(
+      new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }),
+      "normal",
+    );
+    for (const room of floor.rooms) this.buildRoom(room, floor.index, group, furnitureMat);
   }
 
-  private buildRoom(plan: RoomPlan, floor: number, parent: THREE.Group): void {
+  // Gable roof: a pentagonal profile (knee walls to the eaves, then two slopes to the ridge) extruded along x.
+  private buildRoof(roof: NonNullable<FloorPlan["roof"]>, parent: THREE.Group): void {
+    const { box, knee, ridge } = roof;
+    const zFront = box.z + box.d / 2; // facade side
+    const zBack = box.z - box.d / 2;
+    const profile = new THREE.Shape();
+    profile.moveTo(zFront, 0);
+    profile.lineTo(zBack, 0);
+    profile.lineTo(zBack, knee);
+    profile.lineTo(box.z, ridge);
+    profile.lineTo(zFront, knee);
+    profile.closePath();
+    // Shape x = world z, shape y = world y; the extrusion is turned onto world x and centred on the box.
+    const geometry = this.trackGeometry(new THREE.ExtrudeGeometry(profile, { depth: box.w, bevelEnabled: false }));
+    geometry.rotateY(-Math.PI / 2);
+    geometry.translate(box.x + box.w / 2, 0, 0);
+    const roofMat = this.clipped(
+      new THREE.MeshPhongMaterial({
+        color: token("surface-container-highest"),
+        transparent: true,
+        opacity: 0.25,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+      "normal",
+    );
+    const edges = new THREE.LineSegments(
+      this.trackGeometry(new THREE.EdgesGeometry(geometry)),
+      this.clipped(new THREE.LineBasicMaterial({ color: token("secondary"), transparent: true, opacity: 0.7 }), "normal"),
+    );
+    const mesh = new THREE.Mesh(geometry, roofMat);
+    mesh.name = "roof";
+    edges.name = "roof";
+    this.roofs.push(mesh, edges);
+    parent.add(mesh, edges);
+  }
+
+  private buildRoom(plan: RoomPlan, floor: number, parent: THREE.Group, furnitureMat: THREE.Material): void {
     const { rect } = plan;
     const center = new THREE.Vector3(rect.x, LABEL_HEIGHT, rect.z);
     const hue = token(plan.hue);
@@ -301,19 +394,24 @@ export class HouseScene {
     const group = new THREE.Group();
 
     const tintMat = this.track(new THREE.MeshBasicMaterial({ color: zone, transparent: true, opacity: 0.04, side: THREE.DoubleSide }));
-    const floorGeo = this.trackGeometry(new THREE.PlaneGeometry(rect.w, rect.d));
-    const hit = new THREE.Mesh(floorGeo, tintMat);
-    hit.rotation.x = -Math.PI / 2;
-    hit.position.set(rect.x, 0.01, rect.z);
-    group.add(hit);
-
     const outlineMat = this.track(new THREE.LineBasicMaterial({ color: zone, transparent: true, opacity: 0.5 }));
-    const outline = new THREE.LineSegments(this.trackGeometry(new THREE.EdgesGeometry(new THREE.BoxGeometry(rect.w, 0.02, rect.d))), outlineMat);
-    outline.position.set(rect.x, 0.02, rect.z);
-    group.add(outline);
+    const hits: THREE.Mesh[] = [];
+    for (const part of plan.parts) {
+      const hit = new THREE.Mesh(this.trackGeometry(new THREE.PlaneGeometry(part.w, part.d)), tintMat);
+      hit.rotation.x = -Math.PI / 2;
+      hit.position.set(part.x, 0.01, part.z);
+      group.add(hit);
+      hits.push(hit);
 
-    const furnitureMat = this.track(new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }));
-    for (const box of plan.furniture) group.add(boxMesh(box, furnitureMat, hue, 0.7));
+      const outline = new THREE.LineSegments(
+        this.trackGeometry(new THREE.EdgesGeometry(this.trackGeometry(new THREE.BoxGeometry(part.w, 0.02, part.d)))),
+        outlineMat,
+      );
+      outline.position.set(part.x, 0.02, part.z);
+      group.add(outline);
+    }
+
+    for (const box of plan.furniture) this.addBox(group, box, furnitureMat, hue, 0.7);
 
     const markerMat = this.track(new THREE.MeshStandardMaterial({ color: zone, emissive: zone, emissiveIntensity: 0.8 }));
     const marker = new THREE.Mesh(this.trackGeometry(new THREE.SphereGeometry(0.3, 16, 16)), markerMat);
@@ -333,8 +431,7 @@ export class HouseScene {
       group,
       center,
       present: true,
-      hit,
-      outline,
+      hits,
       outlineMat,
       tintMat,
       markerMat,
@@ -342,6 +439,36 @@ export class HouseScene {
       hue,
       zone,
     });
+  }
+
+  // A box mesh with its edge lines (the edges follow the box's cut). Returns the group it created under `parent`.
+  private addBox(parent: THREE.Object3D, box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number): THREE.Group {
+    const geometry = this.trackGeometry(new THREE.BoxGeometry(box.w, box.h, box.d));
+    const group = new THREE.Group();
+    group.position.set(box.x, (box.y ?? 0) + box.h / 2, box.z);
+    group.add(new THREE.Mesh(geometry, material));
+    const edges = new THREE.LineSegments(
+      this.trackGeometry(new THREE.EdgesGeometry(geometry)),
+      this.clipped(new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: edgeOpacity }), box.cut ?? "normal"),
+    );
+    group.add(edges);
+    parent.add(group);
+    return group;
+  }
+
+  // Whole house: every floor shown at its level. Floor: only the active floor at ground level, sectioned.
+  private applyMode(): void {
+    const floorMode = this.mode === "floor";
+    this.controls.target.set(0, floorMode ? FLOOR_TARGET_Y : this.houseTop / 2, 0);
+    this.floorGroups.forEach((group, i) => {
+      group.visible = !floorMode || i === this.activeFloor;
+      group.position.y = floorMode ? 0 : (this.levels[i] ?? 0) * LEVEL_UNITS;
+    });
+    for (const slab of this.slabs) slab.visible = !floorMode;
+    for (const roof of this.roofs) roof.visible = !floorMode;
+    for (const target of this.clipTargets) {
+      target.material.clippingPlanes = floorMode ? [target.cut === "low" ? this.lowPlane : this.normalPlane] : [];
+    }
   }
 
   // Dimmed rooms: every material of the room group keeps its ratio but drops to a quarter opacity.
@@ -364,14 +491,37 @@ export class HouseScene {
     }
   }
 
-  private pick(event: PointerEvent): RoomObjects | undefined {
+  private setPointer(event: PointerEvent): void {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    // Matrices are only refreshed on render; the camera and floor groups may have moved since the last frame.
+    this.scene.updateMatrixWorld();
+    this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.pointer, this.camera);
+  }
+
+  // Floor mode: the room under the pointer (shown floor only).
+  private pick(event: PointerEvent): RoomObjects | undefined {
+    this.setPointer(event);
     const rooms = [...this.rooms.values()].filter((r) => r.floor === this.activeFloor);
-    const hits = this.raycaster.intersectObjects(rooms.map((r) => r.hit), false);
+    const hits = this.raycaster.intersectObjects(rooms.flatMap((r) => r.hits), false);
     if (hits.length === 0) return undefined;
-    return rooms.find((r) => r.hit === hits[0].object);
+    return rooms.find((r) => r.hits.includes(hits[0].object as THREE.Mesh));
+  }
+
+  // Whole-house mode: the floor of the nearest mesh under the pointer. Lines are skipped (their pick threshold is wide).
+  private pickFloor(event: PointerEvent): number | undefined {
+    this.setPointer(event);
+    const hits = this.raycaster.intersectObjects(this.floorGroups, true);
+    for (const hit of hits) {
+      if (!(hit.object instanceof THREE.Mesh)) continue;
+      const index = this.floorGroups.findIndex((group) => {
+        for (let node: THREE.Object3D | null = hit.object; node; node = node.parent) if (node === group) return true;
+        return false;
+      });
+      if (index >= 0) return index;
+    }
+    return undefined;
   }
 
   private requestRender(): void {
@@ -390,7 +540,7 @@ export class HouseScene {
       const obj = this.rooms.get(id);
       if (!obj) continue;
       v.copy(obj.center).project(this.camera);
-      const visible = v.z < 1 && obj.floor === this.activeFloor;
+      const visible = this.mode === "floor" && v.z < 1 && obj.floor === this.activeFloor;
       el.style.opacity = visible ? "1" : "0";
       el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, -100%)`;
     }

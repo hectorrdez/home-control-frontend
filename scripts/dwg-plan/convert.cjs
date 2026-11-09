@@ -22,13 +22,19 @@ const FLOORS = [
   {
     id: "ground",
     label: "Planta baja",
+    level: 0,
     x0: 1968.95,
     x1: 1973.94,
-    stairs: [{ x0: 1968.9, y0: 1432.4, x1: 1969.8, y1: 1434.7 }],
+    // first flight (rises from the salon towards the back); its treads are drawn on this floor
+    stairs: [{ x0: 1968.9, y0: 1432.4, x1: 1969.8, y1: 1434.7, flight: "A" }],
+    // loose carpinteria frames that are doors, not windows (user: the pantry is entered from the taller)
+    doors: [{ x0: 1969.7, y0: 1435.5, x1: 1970, y1: 1436 }],
     ignore: [], // regions whose tabiqueria lines are not walls
     rooms: [
       { id: "salon", label: "Salón", areaIds: ["living_room", "salon", "sala_de_estar"], hue: "primary-container", r: [1968.95, 1429.13, 1973.81, 1432.4] },
       { id: "cocina", label: "Cocina-comedor", areaIds: ["kitchen", "cocina", "comedor"], hue: "tertiary-fixed-dim", r: [1971.61, 1432.4, 1973.94, 1435.58] },
+      // under the whole first flight (user): straight rectangle, entered from the taller through the back wall
+      { id: "despensa", label: "Despensa", areaIds: ["despensa", "pantry"], hue: "secondary", r: [1968.95, 1432.4, 1969.75, 1435.59] },
       { id: "bano-pb", label: "Baño planta baja", areaIds: ["aseo", "bano_planta_baja", "bathroom_ground"], hue: "secondary", r: [1969.84, 1432.91, 1971.5, 1435.59] },
       // back zone: the partition at x=1970.26 (door p72 from the patio) encloses a 1.3 m strip = taller (workshop, under the terrace)
       { id: "taller", label: "Taller", areaIds: ["taller", "workshop"], hue: "tertiary-fixed-dim", r: [1968.95, 1435.88, 1970.23, 1438.96] },
@@ -38,21 +44,49 @@ const FLOORS = [
   {
     id: "upper",
     label: "Planta alta",
+    level: 1,
     x0: 1976.58,
     x1: 1981.57,
-    stairs: [{ x0: 1976.5, y0: 1432.5, x1: 1978.3, y1: 1434.8 }],
+    // left flight = first flight seen from above (dropped); right flight = second flight, back -> front, arriving here
+    stairs: [
+      { x0: 1976.5, y0: 1432.5, x1: 1977.4, y1: 1434.8, flight: null },
+      { x0: 1977.4, y0: 1432.5, x1: 1978.3, y1: 1434.8, flight: "B" },
+    ],
+    doors: [],
+    houseBackY: 1435.88, // back face of the house; beyond it the terrace (party walls become parapets)
+    // terrace = L of tiles (user); the top-right rectangle without tiles is a void over the patio
+    terrace: { strip: [1976.58, 1435.88, 1978.21, 1438.96], band: [1978.21, 1435.88, 1981.57, 1437.86] },
     ignore: [{ x0: 1976.5, y0: 1435.86, x1: 1981.6, y1: 1439, keepY: 1435.88 }], // tile grid of the terrace (keeps the back wall line)
     rooms: [
-      { id: "dormitorio-principal", label: "Dormitorio principal", areaIds: ["bedroom", "dormitorio_principal", "master_bedroom", "dormitorio"], hue: "secondary", r: [1978.32, 1432.9, 1981.57, 1435.33] },
+      { id: "habitacion-papa", label: "Habitación papá", areaIds: ["bedroom", "habitacion_papa", "dormitorio_principal", "dormitorio"], hue: "secondary", r: [1978.32, 1432.9, 1981.57, 1435.33] },
       { id: "bano", label: "Baño", areaIds: ["bathroom", "bano", "aseo_planta_alta"], hue: "primary-container", r: [1980.19, 1431.98, 1981.51, 1432.84] },
       { id: "distribuidor", label: "Distribuidor", areaIds: ["hallway", "pasillo", "distribuidor"], hue: "primary-container", r: [1977.44, 1431.98, 1980.13, 1432.84] },
-      { id: "dormitorio-2", label: "Dormitorio 2", areaIds: ["office", "dormitorio_2", "despacho", "bedroom_2"], hue: "primary-container", r: [1976.58, 1429.13, 1979.04, 1431.92] },
-      { id: "dormitorio-3", label: "Dormitorio 3", areaIds: ["dormitorio_3", "bedroom_3"], hue: "secondary", r: [1979.11, 1429.13, 1981.57, 1431.92] },
-      { id: "terraza", label: "Terraza", areaIds: ["terraza", "terrace", "cubierta"], hue: "tertiary-fixed-dim", r: [1976.58, 1435.88, 1981.57, 1438.96], outdoor: true },
+      { id: "habitacion-hector", label: "Habitación Héctor", areaIds: ["office", "habitacion_hector", "dormitorio_hector"], hue: "primary-container", r: [1976.58, 1429.13, 1979.04, 1431.92] },
+      { id: "habitacion-nuria", label: "Habitación Nuria", areaIds: ["habitacion_nuria", "dormitorio_nuria"], hue: "secondary", r: [1979.11, 1429.13, 1981.57, 1431.92] },
+      {
+        id: "terraza",
+        label: "Terraza",
+        areaIds: ["terraza", "terrace"],
+        hue: "tertiary-fixed-dim",
+        r: [1978.21, 1435.88, 1981.57, 1437.86],
+        parts: [
+          [1976.58, 1435.88, 1978.21, 1438.96],
+          [1978.21, 1435.88, 1981.57, 1437.86],
+        ],
+        outdoor: true,
+      },
     ],
   },
 ];
 
+const LEVEL_H = 2.7; // floor-to-floor height (m), assumed
+const PARAPET_H = 1.0; // terrace parapets / void railing (m), assumed
+const TREAD = 0.18; // tread slab thickness (m)
+// Altillo (attic): the whole roof space over the upper floor, reached from Habitacion papa (user). Not in the DWG:
+// gable roof (ridge parallel to the facade) over the house part; knee and ridge heights are assumptions.
+// Altillo walls: uniform and very low (user guess: one or two bricks). Tweak here and re-run the converter.
+const ALTILLO_WALL_H = 0.2;
+const ATTIC = { id: "attic", label: "Altillo", level: 2, knee: ALTILLO_WALL_H, ridge: 2.4, room: { id: "altillo", label: "Altillo", areaIds: ["altillo", "attic"], hue: "primary-container" } };
 const PARTY_WALL = 0.12; // party walls are single lines in the DWG; modelled inwards with this thickness
 const MIN_GAP = 0.03;
 const MAX_GAP = 0.62;
@@ -161,32 +195,42 @@ function convert(flat) {
       if (!axis) continue;
       const inStair = F.stairs.find((s) => inside(p, s) && inside(q, s));
       if (inStair && axis === "h") {
-        treads.push({ y: p[1], a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0]) });
+        if (inStair.flight) treads.push({ flight: inStair.flight, y: p[1], a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0]) });
         continue;
       }
       if (F.ignore.some((s) => inside(p, s) && inside(q, s) && !(axis === "h" && Math.abs(p[1] - s.keepY) < 0.005))) continue;
       lines.push({ axis, p, q });
     }
-    const walls = pairWalls(lines).map((w) => ({ ...rect(w), kind: "wall" }));
-    // single-line party walls (left/right) and the back boundary of the patio / terrace
-    walls.push({ ...rect([F.x0, Y0, F.x0 + PARTY_WALL, Y1]), kind: "party" });
-    walls.push({ ...rect([F.x1 - PARTY_WALL, Y0, F.x1, Y1]), kind: "party" });
-    walls.push({ ...rect([F.x0, Y1 - PARTY_WALL, F.x1, Y1]), kind: "boundary" });
-
-    // stair treads: consecutive treads of a flight rise by one step each
-    treads.sort((t1, t2) => t1.a - t2.a || t1.y - t2.y);
-    const steps = [];
-    const flights = new Map();
-    for (const t of treads) {
-      const key = `${round(t.a)}|${round(t.b)}`;
-      if (!flights.has(key)) flights.set(key, []);
-      flights.get(key).push(t);
+    const walls = pairWalls(lines).map((w) => ({ ...rect(w), h: LEVEL_H, kind: "wall" }));
+    if (!F.terrace) {
+      // single-line party walls (left/right) and the patio back wall, which rises to the ground-floor height (user)
+      walls.push({ ...rect([F.x0, Y0, F.x0 + PARTY_WALL, Y1]), h: LEVEL_H, kind: "party" });
+      walls.push({ ...rect([F.x1 - PARTY_WALL, Y0, F.x1, Y1]), h: LEVEL_H, kind: "party" });
+      walls.push({ ...rect([F.x0, Y1 - PARTY_WALL, F.x1, Y1]), h: LEVEL_H, kind: "boundary" });
+    } else {
+      const { strip, band } = F.terrace;
+      walls.push({ ...rect([F.x0, Y0, F.x0 + PARTY_WALL, F.houseBackY]), h: LEVEL_H, kind: "party" });
+      walls.push({ ...rect([F.x1 - PARTY_WALL, Y0, F.x1, F.houseBackY]), h: LEVEL_H, kind: "party" });
+      // terrace parapets around the L, and the railing along the void over the patio
+      walls.push({ ...rect([F.x0, F.houseBackY, F.x0 + PARTY_WALL, Y1]), h: PARAPET_H, kind: "parapet" });
+      walls.push({ ...rect([strip[0], Y1 - PARTY_WALL, strip[2], Y1]), h: PARAPET_H, kind: "parapet" });
+      walls.push({ ...rect([strip[2] - 0.1, band[3], strip[2], Y1]), h: PARAPET_H, kind: "parapet" });
+      walls.push({ ...rect([band[0], band[3] - 0.1, band[2], band[3]]), h: PARAPET_H, kind: "parapet" });
+      walls.push({ ...rect([F.x1 - PARTY_WALL, F.houseBackY, F.x1, band[3]]), h: PARAPET_H, kind: "parapet" });
+      // user: all terrace walls are the same half-height walls
+      const backFace = F.houseBackY - Y0;
+      for (const w of walls) if (w.y >= backFace - EPS && w.h > PARAPET_H) Object.assign(w, { h: PARAPET_H, kind: "parapet" });
     }
-    for (const list of flights.values()) {
-      list.sort((t1, t2) => t1.y - t2.y);
-      for (let i = 0; i < list.length - 1; i++) {
-        steps.push({ ...rect([list[i].a, list[i].y, list[i].b, list[i + 1].y]), h: round(0.18 * (i + 1)) });
-      }
+
+    // stair treads as local strips (one per gap between consecutive tread lines of the same flight)
+    const flights = {};
+    for (const t of treads) (flights[t.flight] ||= []).push(t);
+    const strips = {};
+    for (const [name, list] of Object.entries(flights)) {
+      const a = Math.min(...list.map((t) => t.a));
+      const b = Math.max(...list.map((t) => t.b));
+      const ys = [...new Set(list.filter((t) => Math.abs(t.a - a) < 0.05 && Math.abs(t.b - b) < 0.05).map((t) => round(t.y)))].sort((m, n) => m - n);
+      strips[name] = ys.slice(0, -1).map((y, i) => rect([a, y, b, ys[i + 1]]));
     }
 
     // openings and furniture from block inserts; loose fixture lines grouped by connectivity
@@ -223,8 +267,10 @@ function convert(flat) {
       const r = rect(g.b);
       if (r.w < 0.15 && r.d < 0.15) continue;
       if (g.layer === "carpinteria") {
-        // loose window frames drawn without a block (back wall of the ground floor)
-        openings.push({ kind: "window", width: round(Math.max(r.w, r.d)), ...r });
+        // loose frames drawn without a block (back walls): windows, unless the config says door
+        const c = [(g.b[0] + g.b[2]) / 2, (g.b[1] + g.b[3]) / 2];
+        const kind = F.doors.some((d) => inside(c, d)) ? "door" : "window";
+        openings.push({ kind, width: round(Math.max(r.w, r.d)), ...r });
         continue;
       }
       furniture.push({ ...r, h: HEIGHTS[g.layer], layer: g.layer });
@@ -258,14 +304,72 @@ function convert(flat) {
     return {
       id: F.id,
       label: F.label,
+      level: F.level,
+      height: LEVEL_H,
       width: round(F.x1 - F.x0),
       depth: round(Y1 - Y0),
-      rooms: F.rooms.map((room) => ({ id: room.id, label: room.label, areaIds: room.areaIds, hue: room.hue, outdoor: Boolean(room.outdoor), ...rect(room.r) })),
+      rooms: F.rooms.map((room) => ({
+        id: room.id,
+        label: room.label,
+        areaIds: room.areaIds,
+        hue: room.hue,
+        outdoor: Boolean(room.outdoor),
+        ...rect(room.r),
+        parts: (room.parts ?? [room.r]).map(rect),
+      })),
       walls,
       openings,
-      steps,
+      steps: [],
       furniture,
+      strips,
+      houseDepth: round((F.houseBackY ?? 1435.88) - Y0),
     };
+  });
+
+  // Staircase (user: it starts on the left to go up). Flight A (ground plan) rises front -> back, landing at the back,
+  // flight B (upper plan, right) rises back -> front and arrives at the upper floor. All steps live on the ground floor
+  // with absolute elevations (base + slab thickness h), so the whole-house view shows one continuous stair.
+  const ground = floors[0];
+  const A = floors.flatMap((f) => f.strips.A ?? []);
+  const B = floors.flatMap((f) => f.strips.B ?? []).sort((m, n) => n.y - m.y);
+  const risers = A.length + 1 + B.length + 1;
+  const rise = LEVEL_H / risers;
+  const slab = (r, top) => ({ ...r, base: round(Math.max(0, top - TREAD)), h: round(Math.min(TREAD, top)) });
+  A.forEach((r, i) => ground.steps.push(slab(r, (i + 1) * rise)));
+  if (A.length && B.length) {
+    const x = Math.min(A[0].x, ...B.map((r) => r.x));
+    const x2 = Math.max(A[0].x + A[0].w, ...B.map((r) => r.x + r.w));
+    const y = round(A[A.length - 1].y + A[A.length - 1].d);
+    const backInner = round(1435.59 - Y0); // inner face of the ground-floor back wall
+    ground.steps.push(slab({ x: round(x), y, w: round(x2 - x), d: round(backInner - y) }, (A.length + 1) * rise));
+  }
+  B.forEach((r, k) => ground.steps.push(slab(r, (A.length + 2 + k) * rise)));
+  for (const f of floors) delete f.strips;
+
+  // Altillo: third level, the roof space over the house part of the upper floor (no DWG geometry)
+  const up = floors[floors.length - 1];
+  const hd = up.houseDepth;
+  floors.push({
+    id: ATTIC.id,
+    label: ATTIC.label,
+    level: ATTIC.level,
+    height: ATTIC.ridge,
+    wallHeight: ALTILLO_WALL_H,
+    width: up.width,
+    depth: up.depth,
+    rooms: [{ ...ATTIC.room, outdoor: false, x: 0, y: 0, w: up.width, d: hd, parts: [{ x: 0, y: 0, w: up.width, d: hd }] }],
+    // altillo walls: uniform low walls on all four sides (ALTILLO_WALL_H); the roof starts on them
+    walls: [
+      { x: 0, y: 0, w: up.width, d: 0.25, h: ATTIC.knee, kind: "attic" },
+      { x: 0, y: round(hd - 0.25), w: up.width, d: 0.25, h: ATTIC.knee, kind: "attic" },
+      { x: 0, y: 0, w: PARTY_WALL, d: hd, h: ATTIC.knee, kind: "attic" },
+      { x: round(up.width - PARTY_WALL), y: 0, w: PARTY_WALL, d: hd, h: ATTIC.knee, kind: "attic" },
+    ],
+    openings: [],
+    steps: [],
+    furniture: [],
+    roof: { x: 0, y: 0, w: up.width, d: hd, knee: ATTIC.knee, ridge: ATTIC.ridge, ridgeAxis: "x" },
+    houseDepth: hd,
   });
   return {
     source: "planos casa reforma revisar.dwg (AC1032 / AutoCAD 2018), read with LibreDWG 0.14 dwgread -O JSON",
