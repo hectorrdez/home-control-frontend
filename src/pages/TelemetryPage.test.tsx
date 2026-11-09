@@ -271,3 +271,30 @@ describe("TelemetryPage fixed panels (feature 125)", () => {
     expect(screen.queryByRole("list", { name: "Fixed panel toggles" })).toBeNull();
   });
 });
+
+// Feature 158: one climate card per metric, shown only when the house has a sensor of that metric.
+describe("TelemetryPage climate cards (feature 158)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("a house with temperature sensors only renders just the TEMPERATURE card", async () => {
+    const tempOnly = [
+      ent("sensor.kitchen_temperature", "21.5", sensorAttrs("temperature", "°C")),
+      ent("sensor.balcony_pm25", "12", sensorAttrs("pm25", "µg/m³")),
+    ];
+    renderPage({ areas: areasOf(tempOnly) });
+    expect(await screen.findByRole("heading", { name: "TEMPERATURE" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "HUMIDITY" })).toBeNull();
+  });
+
+  it("a house with humidity sensors only renders just the HUMIDITY card", async () => {
+    const humOnly = [
+      ent("sensor.kitchen_humidity", "48", sensorAttrs("humidity", "%")),
+      ent("sensor.balcony_pm25", "12", sensorAttrs("pm25", "µg/m³")),
+    ];
+    renderPage({ areas: areasOf(humOnly) });
+    expect(await screen.findByRole("heading", { name: "HUMIDITY" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "TEMPERATURE" })).toBeNull();
+  });
+});
