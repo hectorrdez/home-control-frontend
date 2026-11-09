@@ -11,13 +11,15 @@ export const KIND_LABEL: Record<WidgetKind, string> = {
   gauge: "GAUGE",
 };
 
-// Feature 146: the three width modes, in pill order.
+// Feature 146: the width modes, in pill order. Feature 160 adds 75% and 25%.
 export const SIZE_LABEL: Record<WidgetSize, string> = {
   full: "FULL",
+  threeQuarters: "75%",
   half: "HALF",
   third: "THIRD",
+  quarter: "25%",
 };
-export const SIZES: readonly WidgetSize[] = ["full", "half", "third"];
+export const SIZES: readonly WidgetSize[] = ["full", "threeQuarters", "half", "third", "quarter"];
 
 // Gauge is 0..100 only, so it is offered for "%" sensors and nothing else.
 export function validKinds(entity: Entity): WidgetKind[] {

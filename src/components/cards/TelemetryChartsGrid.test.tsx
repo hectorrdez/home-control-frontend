@@ -379,25 +379,45 @@ describe("TelemetryChartsGrid edit mode (feature 114)", () => {
     expect(saved()[0].kind).toBe("line");
   });
 
-  it("width selector offers exactly FULL, HALF, THIRD (default THIRD) and sets the column span", () => {
+  it("width selector offers exactly FULL, 75%, HALF, THIRD, 25% (default THIRD) and sets the column span", () => {
     renderGrid([sensor("living"), sensor("bed")]);
     fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
     const group = () => screen.getAllByRole("group", { name: /^Width for / })[0];
-    expect(within(group()).getAllByRole("button").map((b) => b.textContent)).toEqual(["FULL", "HALF", "THIRD"]);
+    expect(within(group()).getAllByRole("button").map((b) => b.textContent)).toEqual(["FULL", "75%", "HALF", "THIRD", "25%"]);
     expect(within(group()).getByRole("button", { name: "THIRD" }).getAttribute("aria-pressed")).toBe("true");
-    expect(listItems()[0].className).toContain("xl:col-span-2");
+    expect(listItems()[0].className).toContain("xl:col-span-4");
 
     fireEvent.click(within(group()).getByRole("button", { name: "FULL" }));
     expect(listItems()[0].className).toContain("md:max-xl:col-span-2");
-    expect(listItems()[0].className).toContain("xl:col-span-6");
+    expect(listItems()[0].className).toContain("xl:col-span-12");
     expect(within(group()).getByRole("button", { name: "FULL" }).getAttribute("aria-pressed")).toBe("true");
     expect(saved()[0].size).toBe("full");
 
+    fireEvent.click(within(group()).getByRole("button", { name: "75%" }));
+    expect(listItems()[0].className).toContain("md:max-xl:col-span-2");
+    expect(listItems()[0].className).toContain("xl:col-span-9");
+    expect(saved()[0].size).toBe("threeQuarters");
+
     fireEvent.click(within(group()).getByRole("button", { name: "HALF" }));
-    expect(listItems()[0].className).toContain("xl:col-span-3");
+    expect(listItems()[0].className).toContain("xl:col-span-6");
     expect(listItems()[0].className).not.toContain("md:max-xl:col-span-2");
     expect(saved()[0].size).toBe("half");
+
+    fireEvent.click(within(group()).getByRole("button", { name: "25%" }));
+    expect(listItems()[0].className).toContain("xl:col-span-3");
+    expect(listItems()[0].className).not.toContain("md:max-xl:col-span-2");
+    expect(within(group()).getByRole("button", { name: "25%" }).getAttribute("aria-pressed")).toBe("true");
+    expect(saved()[0].size).toBe("quarter");
+    expect(screen.getByRole("list", { name: "Live charts" }).className).toContain("xl:grid-cols-12");
     expect(screen.queryByRole("button", { name: /^Wide / })).toBeNull();
+  });
+
+  it("announces the chosen width in the live region", () => {
+    renderGrid([sensor("living"), sensor("bed")]);
+    fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
+    const group = screen.getAllByRole("group", { name: /^Width for / })[0];
+    fireEvent.click(within(group).getByRole("button", { name: "25%" }));
+    expect(screen.getByRole("status", { name: "Layout changes" }).textContent).toBe("bed sensor width 25%");
   });
 
   it("RESET LAYOUT: cancel keeps the layout, confirm restores the defaults", () => {

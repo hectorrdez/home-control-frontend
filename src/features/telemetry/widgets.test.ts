@@ -156,7 +156,7 @@ describe("size field (feature 146)", () => {
     expect(parseWidgets(layout([{ ...base, size: "full", wide: true }]))).toEqual([{ ...base, size: "full" }]);
   });
 
-  it.each(["full", "half", "third"])("accepts size %s", (size) => {
+  it.each(["full", "threeQuarters", "half", "third", "quarter"])("accepts size %s", (size) => {
     expect(parseWidgets(layout([{ ...base, size }]))).toEqual([{ ...base, size }]);
   });
 

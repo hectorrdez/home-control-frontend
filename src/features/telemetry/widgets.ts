@@ -5,8 +5,9 @@ import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "
 
 export type WidgetKind = "line" | "area" | "bar" | "gauge";
 
-// Feature 146: width of a chart on the 6-column grid (xl). Absent on a Widget = "third".
-export type WidgetSize = "full" | "half" | "third";
+// Feature 146: width of a chart on the 12-column grid (xl). Absent on a Widget = "third".
+// Feature 160: adds quarter (25%) and threeQuarters (75%).
+export type WidgetSize = "full" | "threeQuarters" | "half" | "third" | "quarter";
 
 export interface Widget {
   id: string;
@@ -23,7 +24,7 @@ export interface Widget {
 export const WIDGET_STORAGE_KEY = "hc.telemetry.widgets.v1";
 const SCHEMA_VERSION = 1;
 const KINDS: readonly WidgetKind[] = ["line", "area", "bar", "gauge"];
-export const WIDGET_SIZES: readonly WidgetSize[] = ["full", "half", "third"];
+export const WIDGET_SIZES: readonly WidgetSize[] = ["full", "threeQuarters", "half", "third", "quarter"];
 const NUMERIC_CLASSES = new Set([
   "temperature",
   "humidity",

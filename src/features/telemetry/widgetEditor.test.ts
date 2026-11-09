@@ -145,8 +145,8 @@ describe("setVisible / setKind / setSize", () => {
   });
 
   it("exposes the three width modes in FULL, HALF, THIRD order", () => {
-    expect(SIZES).toEqual(["full", "half", "third"]);
-    expect(SIZES.map((s) => SIZE_LABEL[s])).toEqual(["FULL", "HALF", "THIRD"]);
+    expect(SIZES).toEqual(["full", "threeQuarters", "half", "third", "quarter"]);
+    expect(SIZES.map((s) => SIZE_LABEL[s])).toEqual(["FULL", "75%", "HALF", "THIRD", "25%"]);
   });
 
   it("does not mutate the input and returns a new array", () => {
@@ -171,6 +171,11 @@ describe("resetWidgets", () => {
     expect(result).toEqual(deriveWidgets(sensors));
     expect(result.every((x) => x.visible)).toBe(true);
     expect(result.every((x) => x.size === undefined)).toBe(true);
+  });
+
+  it("setSize accepts the 75% and 25% sizes", () => {
+    expect(setSize(sample(), "a", "threeQuarters").find((x) => x.id === "a")?.size).toBe("threeQuarters");
+    expect(setSize(sample(), "a", "quarter").find((x) => x.id === "a")?.size).toBe("quarter");
   });
 
   it("clears a chosen size", () => {

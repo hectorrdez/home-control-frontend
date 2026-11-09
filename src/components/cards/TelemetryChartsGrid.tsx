@@ -41,12 +41,15 @@ import ChartEditBar from "./ChartEditBar";
 
 const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
 
-// Feature 146: column span of a chart on the 6-column xl grid (2 md columns). Literal class strings so Tailwind generates them.
-// md is bounded with max-xl: Tailwind emits the xl media query before md, so an unbounded md:col-span-2 would override xl:col-span-6.
+// Feature 146: column span of a chart on the xl grid. Feature 160: 12 columns, so 25% = 3 and 75% = 9.
+// Literal class strings so Tailwind generates them. md is bounded with max-xl: Tailwind emits the xl media query
+// before md, so an unbounded md:col-span-2 would override xl:col-span-12. The list grid (md:max-xl:grid-cols-2) is bounded the same way.
 function sizeClass(size: WidgetSize): string {
-  if (size === "full") return "md:max-xl:col-span-2 xl:col-span-6";
-  if (size === "half") return "xl:col-span-3";
-  return "xl:col-span-2";
+  if (size === "full") return "md:max-xl:col-span-2 xl:col-span-12";
+  if (size === "threeQuarters") return "md:max-xl:col-span-2 xl:col-span-9";
+  if (size === "half") return "xl:col-span-6";
+  if (size === "quarter") return "xl:col-span-3";
+  return "xl:col-span-4";
 }
 
 // Feature 113: live chart grid for every visible numeric sensor. Renders inside the telemetry "Climate history" region.
@@ -336,7 +339,7 @@ export default function TelemetryChartsGrid({
         </>
       ) : (
         <>
-          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:max-xl:grid-cols-2 xl:grid-cols-6">
+          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:max-xl:grid-cols-2 xl:grid-cols-12">
             {visible.slice(0, limit).map((w) => {
               const entity = byId.get(w.entityId);
               if (!entity) return null;
