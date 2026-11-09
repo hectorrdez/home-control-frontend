@@ -131,7 +131,7 @@ describe("DevicePanel", () => {
     await waitFor(() => expect(h.getAreas).toHaveBeenCalledTimes(2));
   });
 
-  it("reports ATTENTION with the unavailable count and hides unavailable devices and rooms", async () => {
+  it("reports ATTENTION with the unavailable count and shows unavailable devices as grey tiles", async () => {
     renderPanel();
     expect(await screen.findByText("ATTENTION // 2 UNAVAILABLE")).toBeTruthy();
     expect(screen.getByText("4 ZONES MONITORED • 7 LIVE ACTUATORS", { exact: false })).toBeTruthy();
@@ -139,15 +139,19 @@ describe("DevicePanel", () => {
 
     const list = screen.getByRole("list", { name: "Devices" });
     const names = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
-    expect(names.some((n) => n.includes("Kitchen lamp"))).toBe(false);
-    expect(names.some((n) => n.includes("Ghost light"))).toBe(false);
     expect(names.some((n) => n.includes("Ceiling"))).toBe(true);
-    expect(names.some((n) => n.includes("Kettle power"))).toBe(false);
-    const kettle = within(list).getByRole("article", { name: "Kettle" });
-    expect(kettle.textContent).toContain("42 W");
+    expect(names.some((n) => n.includes("Kettle power"))).toBe(false); // read-only sensors have no tile
+    const ghost = within(list).getByRole("button", { name: /Ghost/i });
+    expect(ghost.getAttribute("data-state")).toBe("unavailable");
+    const lamp = within(list).getByRole("button", { name: "Kitchen lamp" });
+    expect(lamp.getAttribute("data-state")).toBe("unavailable");
+    expect(lamp.getAttribute("aria-disabled")).toBe("true");
+    const kettle = within(list).getByRole("button", { name: "Kettle" });
+    expect(kettle.textContent).toContain("KITCHEN");
+    expect(kettle.textContent).not.toContain("42 W"); // feature 155: the compact tile has no draw line
 
     const rooms = screen.getByRole("group", { name: "Rooms" });
-    expect(within(rooms).queryByRole("button", { name: /GHOST/ })).toBeNull();
+    expect(within(rooms).getByRole("button", { name: /GHOST/ })).toBeTruthy();
     expect(within(rooms).getByRole("button", { name: /KITCHEN/ })).toBeTruthy();
     expect(within(rooms).getByRole("button", { name: /UNASSIGNED/ })).toBeTruthy();
   });

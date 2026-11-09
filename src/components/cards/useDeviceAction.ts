@@ -41,14 +41,16 @@ export function useDeviceAction(entity: Entity) {
     if (outcome.current !== false) flash("success");
   }, [pending, flash]);
 
-  const send = (intent: Intent) => {
+  // Resolves true on success, false after a rollback (feature 157 reads it to confirm a stop).
+  const send = (intent: Intent): Promise<boolean> => {
     outcome.current = null;
-    void sendIntent(entity, intent).then((ok) => {
+    return sendIntent(entity, intent).then((ok) => {
       outcome.current = ok;
       if (!ok) {
         flash("error");
         toast.show(`Could not update ${names.displayName(entity)}`);
       }
+      return ok;
     });
   };
 
