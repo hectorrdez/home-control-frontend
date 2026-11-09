@@ -16,8 +16,7 @@
           "label": "Salón",
           "areaIds": [
             "living_room",
-            "salon",
-            "sala_de_estar"
+            "salon"
           ],
           "hue": "primary-container",
           "outdoor": false,
@@ -39,8 +38,7 @@
           "label": "Cocina-comedor",
           "areaIds": [
             "kitchen",
-            "cocina",
-            "comedor"
+            "cocina"
           ],
           "hue": "tertiary-fixed-dim",
           "outdoor": false,
@@ -61,8 +59,7 @@
           "id": "despensa",
           "label": "Despensa",
           "areaIds": [
-            "despensa",
-            "pantry"
+            "despensa"
           ],
           "hue": "secondary",
           "outdoor": false,
@@ -83,9 +80,8 @@
           "id": "bano-pb",
           "label": "Baño planta baja",
           "areaIds": [
-            "aseo",
-            "bano_planta_baja",
-            "bathroom_ground"
+            "bano",
+            "aseo"
           ],
           "hue": "secondary",
           "outdoor": false,
@@ -106,8 +102,7 @@
           "id": "taller",
           "label": "Taller",
           "areaIds": [
-            "taller",
-            "workshop"
+            "taller"
           ],
           "hue": "tertiary-fixed-dim",
           "outdoor": false,
@@ -128,9 +123,7 @@
           "id": "patio",
           "label": "Patio",
           "areaIds": [
-            "patio",
-            "jardin",
-            "garden"
+            "patio"
           ],
           "hue": "primary-container",
           "outdoor": true,
@@ -643,9 +636,7 @@
           "label": "Habitación papá",
           "areaIds": [
             "bedroom",
-            "habitacion_papa",
-            "dormitorio_principal",
-            "dormitorio"
+            "dormitorio_papa"
           ],
           "hue": "secondary",
           "outdoor": false,
@@ -666,9 +657,7 @@
           "id": "bano",
           "label": "Baño",
           "areaIds": [
-            "bathroom",
-            "bano",
-            "aseo_planta_alta"
+            "bano_arriba"
           ],
           "hue": "primary-container",
           "outdoor": false,
@@ -689,9 +678,8 @@
           "id": "distribuidor",
           "label": "Distribuidor",
           "areaIds": [
-            "hallway",
             "pasillo",
-            "distribuidor"
+            "hallway"
           ],
           "hue": "primary-container",
           "outdoor": false,
@@ -713,7 +701,6 @@
           "label": "Habitación Héctor",
           "areaIds": [
             "office",
-            "habitacion_hector",
             "dormitorio_hector"
           ],
           "hue": "primary-container",
@@ -735,7 +722,6 @@
           "id": "habitacion-nuria",
           "label": "Habitación Nuria",
           "areaIds": [
-            "habitacion_nuria",
             "dormitorio_nuria"
           ],
           "hue": "secondary",
@@ -757,8 +743,7 @@
           "id": "terraza",
           "label": "Terraza",
           "areaIds": [
-            "terraza",
-            "terrace"
+            "terraza"
           ],
           "hue": "tertiary-fixed-dim",
           "outdoor": true,
@@ -1263,9 +1248,27 @@
           "kind": "attic"
         }
       ],
-      "openings": [],
+      "openings": [
+        {
+          "kind": "hatch",
+          "width": 0.82,
+          "x": 1.84,
+          "y": 4.35,
+          "w": 0.82,
+          "d": 0.72
+        }
+      ],
       "steps": [],
-      "furniture": [],
+      "furniture": [
+        {
+          "x": 1.84,
+          "y": 4.35,
+          "w": 0.82,
+          "d": 0.72,
+          "h": 0.05,
+          "layer": "hatch"
+        }
+      ],
       "roof": {
         "x": 0,
         "y": 0,

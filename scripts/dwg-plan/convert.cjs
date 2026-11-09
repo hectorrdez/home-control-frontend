@@ -18,6 +18,8 @@ const path = require("path");
 const Y0 = 1428.55; // facade (front) line, both floors
 const Y1 = 1438.96; // back boundary of patio / terrace
 
+// Real HA area ids (area registry, 2026-11-09): salon, cocina, bano, despensa, taller, patio, dormitorio_papa,
+// bano_arriba, pasillo, dormitorio_hector, dormitorio_nuria, terraza, altillo. First candidate = mock area id when it has one.
 const FLOORS = [
   {
     id: "ground",
@@ -31,14 +33,14 @@ const FLOORS = [
     doors: [{ x0: 1969.7, y0: 1435.5, x1: 1970, y1: 1436 }],
     ignore: [], // regions whose tabiqueria lines are not walls
     rooms: [
-      { id: "salon", label: "Salón", areaIds: ["living_room", "salon", "sala_de_estar"], hue: "primary-container", r: [1968.95, 1429.13, 1973.81, 1432.4] },
-      { id: "cocina", label: "Cocina-comedor", areaIds: ["kitchen", "cocina", "comedor"], hue: "tertiary-fixed-dim", r: [1971.61, 1432.4, 1973.94, 1435.58] },
+      { id: "salon", label: "Salón", areaIds: ["living_room", "salon"], hue: "primary-container", r: [1968.95, 1429.13, 1973.81, 1432.4] },
+      { id: "cocina", label: "Cocina-comedor", areaIds: ["kitchen", "cocina"], hue: "tertiary-fixed-dim", r: [1971.61, 1432.4, 1973.94, 1435.58] },
       // under the whole first flight (user): straight rectangle, entered from the taller through the back wall
-      { id: "despensa", label: "Despensa", areaIds: ["despensa", "pantry"], hue: "secondary", r: [1968.95, 1432.4, 1969.75, 1435.59] },
-      { id: "bano-pb", label: "Baño planta baja", areaIds: ["aseo", "bano_planta_baja", "bathroom_ground"], hue: "secondary", r: [1969.84, 1432.91, 1971.5, 1435.59] },
+      { id: "despensa", label: "Despensa", areaIds: ["despensa"], hue: "secondary", r: [1968.95, 1432.4, 1969.75, 1435.59] },
+      { id: "bano-pb", label: "Baño planta baja", areaIds: ["bano", "aseo"], hue: "secondary", r: [1969.84, 1432.91, 1971.5, 1435.59] },
       // back zone: the partition at x=1970.26 (door p72 from the patio) encloses a 1.3 m strip = taller (workshop, under the terrace)
-      { id: "taller", label: "Taller", areaIds: ["taller", "workshop"], hue: "tertiary-fixed-dim", r: [1968.95, 1435.88, 1970.23, 1438.96] },
-      { id: "patio", label: "Patio", areaIds: ["patio", "jardin", "garden"], hue: "primary-container", r: [1970.29, 1435.88, 1973.94, 1438.96], outdoor: true },
+      { id: "taller", label: "Taller", areaIds: ["taller"], hue: "tertiary-fixed-dim", r: [1968.95, 1435.88, 1970.23, 1438.96] },
+      { id: "patio", label: "Patio", areaIds: ["patio"], hue: "primary-container", r: [1970.29, 1435.88, 1973.94, 1438.96], outdoor: true },
     ],
   },
   {
@@ -58,15 +60,15 @@ const FLOORS = [
     terrace: { strip: [1976.58, 1435.88, 1978.21, 1438.96], band: [1978.21, 1435.88, 1981.57, 1437.86] },
     ignore: [{ x0: 1976.5, y0: 1435.86, x1: 1981.6, y1: 1439, keepY: 1435.88 }], // tile grid of the terrace (keeps the back wall line)
     rooms: [
-      { id: "habitacion-papa", label: "Habitación papá", areaIds: ["bedroom", "habitacion_papa", "dormitorio_principal", "dormitorio"], hue: "secondary", r: [1978.32, 1432.9, 1981.57, 1435.33] },
-      { id: "bano", label: "Baño", areaIds: ["bathroom", "bano", "aseo_planta_alta"], hue: "primary-container", r: [1980.19, 1431.98, 1981.51, 1432.84] },
-      { id: "distribuidor", label: "Distribuidor", areaIds: ["hallway", "pasillo", "distribuidor"], hue: "primary-container", r: [1977.44, 1431.98, 1980.13, 1432.84] },
-      { id: "habitacion-hector", label: "Habitación Héctor", areaIds: ["office", "habitacion_hector", "dormitorio_hector"], hue: "primary-container", r: [1976.58, 1429.13, 1979.04, 1431.92] },
-      { id: "habitacion-nuria", label: "Habitación Nuria", areaIds: ["habitacion_nuria", "dormitorio_nuria"], hue: "secondary", r: [1979.11, 1429.13, 1981.57, 1431.92] },
+      { id: "habitacion-papa", label: "Habitación papá", areaIds: ["bedroom", "dormitorio_papa"], hue: "secondary", r: [1978.32, 1432.9, 1981.57, 1435.33] },
+      { id: "bano", label: "Baño", areaIds: ["bano_arriba"], hue: "primary-container", r: [1980.19, 1431.98, 1981.51, 1432.84] },
+      { id: "distribuidor", label: "Distribuidor", areaIds: ["pasillo", "hallway"], hue: "primary-container", r: [1977.44, 1431.98, 1980.13, 1432.84] },
+      { id: "habitacion-hector", label: "Habitación Héctor", areaIds: ["office", "dormitorio_hector"], hue: "primary-container", r: [1976.58, 1429.13, 1979.04, 1431.92] },
+      { id: "habitacion-nuria", label: "Habitación Nuria", areaIds: ["dormitorio_nuria"], hue: "secondary", r: [1979.11, 1429.13, 1981.57, 1431.92] },
       {
         id: "terraza",
         label: "Terraza",
-        areaIds: ["terraza", "terrace"],
+        areaIds: ["terraza"],
         hue: "tertiary-fixed-dim",
         r: [1978.21, 1435.88, 1981.57, 1437.86],
         parts: [
@@ -86,6 +88,7 @@ const TREAD = 0.18; // tread slab thickness (m)
 // gable roof (ridge parallel to the facade) over the house part; knee and ridge heights are assumptions.
 // Altillo walls: uniform and very low (user guess: one or two bricks). Tweak here and re-run the converter.
 const ALTILLO_WALL_H = 0.2;
+const HATCH = [1978.42, 1432.9, 1979.24, 1433.62]; // DWG rect of the papa door (p72) swing side, upper floor
 const ATTIC = { id: "attic", label: "Altillo", level: 2, knee: ALTILLO_WALL_H, ridge: 2.4, room: { id: "altillo", label: "Altillo", areaIds: ["altillo", "attic"], hue: "primary-container" } };
 const PARTY_WALL = 0.12; // party walls are single lines in the DWG; modelled inwards with this thickness
 const MIN_GAP = 0.03;
@@ -349,6 +352,14 @@ function convert(flat) {
   // Altillo: third level, the roof space over the house part of the upper floor (no DWG geometry)
   const up = floors[floors.length - 1];
   const hd = up.houseDepth;
+  // trampilla (hatch) in the ceiling right above the interior door of Habitacion papa (user)
+  const upperCfg = FLOORS[FLOORS.length - 1];
+  const hatch = {
+    x: round(HATCH[0] - upperCfg.x0),
+    y: round(HATCH[1] - Y0),
+    w: round(HATCH[2] - HATCH[0]),
+    d: round(HATCH[3] - HATCH[1]),
+  };
   floors.push({
     id: ATTIC.id,
     label: ATTIC.label,
@@ -365,9 +376,9 @@ function convert(flat) {
       { x: 0, y: 0, w: PARTY_WALL, d: hd, h: ATTIC.knee, kind: "attic" },
       { x: round(up.width - PARTY_WALL), y: 0, w: PARTY_WALL, d: hd, h: ATTIC.knee, kind: "attic" },
     ],
-    openings: [],
+    openings: [{ kind: "hatch", width: hatch.w, ...hatch }],
     steps: [],
-    furniture: [],
+    furniture: [{ ...hatch, h: 0.05, layer: "hatch" }],
     roof: { x: 0, y: 0, w: up.width, d: hd, knee: ATTIC.knee, ridge: ATTIC.ridge, ridgeAxis: "x" },
     houseDepth: hd,
   });

@@ -137,3 +137,42 @@ describe("bindRooms", () => {
     expect(allRooms().every((r) => !("present" in r) && !("floor" in r))).toBe(true);
   });
 });
+
+describe("real HA areas (feature 152)", () => {
+  const REAL_AREAS = [
+    "salon",
+    "cocina",
+    "bano",
+    "despensa",
+    "taller",
+    "patio",
+    "dormitorio_papa",
+    "bano_arriba",
+    "pasillo",
+    "dormitorio_hector",
+    "dormitorio_nuria",
+    "terraza",
+    "altillo",
+  ];
+
+  it("binds all 13 rooms to the real HA areas", () => {
+    const bound = bindRooms(DEFAULT_PLAN, REAL_AREAS);
+    expect(bound).toHaveLength(13);
+    expect(bound.every((r) => r.present === true)).toBe(true);
+    expect(bound.map((r) => r.areaId).sort()).toEqual([...REAL_AREAS].sort());
+  });
+
+  it("resolves the mock area ids for the ground and upper rooms", () => {
+    const bound = bindRooms(DEFAULT_PLAN, ["living_room", "kitchen", "bedroom", "office"]);
+    expect(bound.find((r) => r.id === "salon")).toMatchObject({ present: true, areaId: "living_room" });
+    expect(bound.find((r) => r.id === "cocina")).toMatchObject({ present: true, areaId: "kitchen" });
+    expect(bound.find((r) => r.id === "habitacion-papa")).toMatchObject({ present: true, areaId: "bedroom" });
+    expect(bound.find((r) => r.id === "habitacion-hector")).toMatchObject({ present: true, areaId: "office" });
+  });
+
+  it("has the attic hatch as a 0.05 m box (0.1 units) on the attic floor", () => {
+    const attic = DEFAULT_PLAN.floors[2];
+    const boxes = [...attic.fixtures, ...attic.rooms.flatMap((r) => r.furniture)];
+    expect(boxes.some((box) => Math.abs(box.h - 0.05 * S) < 1e-6)).toBe(true);
+  });
+});
