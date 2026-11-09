@@ -39,6 +39,8 @@ v1: three roles in **one session**, not subagents.
 
 ## Playwright E2E architecture
 
+> **E2E moved (feature 148).** Playwright specs live in the sibling repo `home-control-frontend-testing` (`../home-control-frontend-testing`), not here. `test.cjs` step 5 runs `npm --prefix ../home-control-frontend-testing test` in mock mode with `FRONTEND_DIR` set to this repo. Add or change journey specs in that repo; this repo keeps unit/component tests only. The layout below describes that suite.
+
 `[frontend]` Keep E2E suites feature/journey-oriented and make UI knowledge reusable. Follow the project's existing Playwright `testDir` and layout; in a new suite, the logical shape is:
 
 ```text
@@ -262,7 +264,7 @@ All under `.claude/scripts/`, run as `node .claude/scripts/<name>.cjs [args]` (N
 - `write-handoff.cjs <reason>` — Stamps `.claude/handoff.md`'s header for a relay handoff (`reason`: `near-limit`|`budget`|`manual`|`blocked`|`error`). You fill the body sections. Run before stopping on an `IN_PROCESS` feature.
 - `start-feature.cjs <id>` — Marks a feature `IN_PROCESS`.
 - `set-state.cjs <id> <state>` — Engine: rewrites a feature's state (also used for `TESTING`).
-- `test.cjs` — Runs the repo test (build+typecheck+lint+E2E for frontend, Bruno for backend). Exit 0 = pass.
+- `test.cjs` — Runs the repo test (typecheck+lint+build+unit, then E2E from `../home-control-frontend-testing` in mock mode). Exit 0 = pass.
 - `mark-ended.cjs <id>` — Runs `test.cjs`; marks `ENDED` only on pass. Deletes `.claude/handoff.md` on success (nothing in flight).
 - `set-commit.cjs <id> <hash>` — Records a feature's commit hash (+ web URL from `origin`, if resolvable) into `history.md`.
 - `add-note.cjs "text"` — Appends to `notes.md`.

@@ -1,15 +1,15 @@
 # Home Control (frontend)
 
 Private home panel for the home-control stack: a 3D house view with device control and telemetry.
-Built with React 19, Vite, Tailwind 4 and Playwright.
+Built with React 19, Vite and Tailwind 4. E2E (Playwright) lives in the sibling repo `home-control-frontend-testing`.
 
 ## Scripts
 
 - `npm run dev` - Vite dev server.
 - `npm run build` - typecheck and production build.
 - `npm run lint` - oxlint.
-- `npx playwright test` - E2E specs (`e2e/specs`), served on port 5174.
-- `node .claude/scripts/test.cjs` - full gate (typecheck, lint, build, E2E).
+- E2E specs live in `../home-control-frontend-testing` (feature 148). Run them in mock mode with `npm --prefix ../home-control-frontend-testing test` (`FRONTEND_DIR` = this repo); PRO smoke with `BASE_URL=... npm run test:pro` there.
+- `node .claude/scripts/test.cjs` - full gate (typecheck, lint, build, unit, E2E in the sibling repo).
 
 ## Environment variables
 
