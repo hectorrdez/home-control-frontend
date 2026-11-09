@@ -94,7 +94,7 @@ interface Internals {
   camera: THREE.PerspectiveCamera;
   controls: { target: THREE.Vector3 };
   floorGroups: THREE.Group[];
-  rooms: Map<string, { group: THREE.Group; present: boolean; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
+  rooms: Map<string, { group: THREE.Group; present: boolean; marker: THREE.Mesh; outlineMat: THREE.LineBasicMaterial; tintMat: THREE.MeshBasicMaterial; light: THREE.PointLight }>;
   disposed: boolean;
 }
 const internals = (scene: HouseScene) => scene as unknown as Internals;
@@ -187,6 +187,51 @@ describe("HouseScene", () => {
     vi.mocked(callbacks.onSelect).mockClear();
     pointer(canvas, "pointerdown", 50, 50);
     pointer(canvas, "pointerup", 80, 50);
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
+  // Screen pixel (100x100 test screen) where a world point projects, through the scene's own camera.
+  const toScreen = (scene: HouseScene, object: THREE.Object3D) => {
+    const v = object.getWorldPosition(new THREE.Vector3()).project(internals(scene).camera);
+    return { x: ((v.x + 1) / 2) * 100, y: ((1 - v.y) / 2) * 100 };
+  };
+
+  it("selects the room when its zone marker ball is clicked (feature 154)", () => {
+    const { scene, canvas } = mountScene();
+    scene.setFloor(0);
+    const marker = internals(scene).rooms.get("kitchen")!.marker;
+    const { x, y } = toScreen(scene, marker);
+
+    pointer(canvas, "pointerdown", x, y);
+    pointer(canvas, "pointerup", x, y);
+    expect(callbacks.onSelect).toHaveBeenCalledTimes(1);
+    expect(callbacks.onSelect).toHaveBeenCalledWith("kitchen");
+  });
+
+  it("does not select from a marker drag beyond the click slack, nor a dimmed room's marker (feature 154)", () => {
+    const { scene, canvas } = mountScene();
+    scene.setFloor(0);
+    const marker = internals(scene).rooms.get("kitchen")!.marker;
+    const { x, y } = toScreen(scene, marker);
+
+    pointer(canvas, "pointerdown", x, y);
+    pointer(canvas, "pointerup", x + 30, y);
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+
+    scene.setRooms([{ id: "kitchen", areaId: "kitchen", present: false }], {});
+    pointer(canvas, "pointerdown", x, y);
+    pointer(canvas, "pointerup", x, y);
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("keeps the whole-house view on floor pick for a marker click, never onSelect (feature 154)", () => {
+    const { scene, canvas } = mountScene();
+    const marker = internals(scene).rooms.get("bedroom")!.marker;
+    const { x, y } = toScreen(scene, marker);
+
+    pointer(canvas, "pointerdown", x, y);
+    pointer(canvas, "pointerup", x, y);
+    expect(callbacks.onFloorPick).toHaveBeenCalledWith(1);
     expect(callbacks.onSelect).not.toHaveBeenCalled();
   });
 

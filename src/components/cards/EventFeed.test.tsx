@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
@@ -110,5 +110,82 @@ describe("EventFeed", () => {
     const item = screen.getByRole("listitem");
     expect(item.getAttribute("data-alert")).toBe("high");
     expect(item.textContent).toContain("ALERT HIGH · Kitchen");
+  });
+});
+
+describe("EventFeed expand (feature 153)", () => {
+  afterEach(() => {
+    cleanup();
+    document.body.style.overflow = "";
+  });
+
+  const sample = [event("light.kitchen_ceiling", "on", "kitchen", "2026-11-06T10:05:00.000Z")];
+
+  it("opens a dialog with the list and collapses with the close button, restoring focus", () => {
+    render(
+      <Providers>
+        <EventFeed events={sample} areaName={areaName} />
+      </Providers>,
+    );
+    const trigger = screen.getByRole("button", { name: "Expand event feed" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Event feed" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(within(dialog).getByRole("list", { name: "Event feed items" })).toBeTruthy();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const close = within(dialog).getByRole("button", { name: "Close expanded event feed" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.click(close);
+    expect(screen.queryByRole("dialog", { name: "Event feed" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("collapses on Escape and does not let the key reach other window listeners (SideDrawer)", () => {
+    const outer = vi.fn();
+    window.addEventListener("keydown", outer);
+    render(
+      <Providers>
+        <EventFeed events={sample} areaName={areaName} />
+      </Providers>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand event feed" }));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Event feed" })).toBeNull();
+    expect(outer).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", outer);
+  });
+
+  it("locks body scroll while expanded and restores it on collapse", () => {
+    document.body.style.overflow = "auto";
+    render(
+      <Providers>
+        <EventFeed events={sample} areaName={areaName} />
+      </Providers>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand event feed" }));
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.body.style.overflow).toBe("auto");
+  });
+
+  it("keeps the list live while expanded and shows a placeholder in the inline card", () => {
+    const { rerender } = render(
+      <Providers>
+        <EventFeed events={sample} areaName={areaName} />
+      </Providers>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand event feed" }));
+    expect(screen.getByText("SHOWN IN EXPANDED VIEW")).toBeTruthy();
+    rerender(
+      <Providers>
+        <EventFeed
+          events={[event("lock.front_door", "locked", null, "2026-11-06T11:00:00.000Z"), ...sample]}
+          areaName={areaName}
+        />
+      </Providers>,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Event feed" });
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
   });
 });

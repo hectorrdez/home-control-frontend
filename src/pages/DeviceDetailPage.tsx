@@ -14,6 +14,7 @@ import EditableName from "@components/controls/EditableName";
 import StatusChip from "@components/controls/StatusChip";
 import Card from "@components/cards/Card";
 import DeviceControls from "@components/cards/DeviceControls";
+import TileIconPicker from "@components/cards/TileIconPicker";
 import EntityHistoryCard from "@components/cards/EntityHistoryCard";
 import CoverCalibrationPanel from "@components/cards/CoverCalibrationPanel";
 import AlertRulesPanel from "@components/cards/AlertRulesPanel";
@@ -128,6 +129,8 @@ function EntityBody({ entity }: { entity: Entity }) {
           ) : (
             <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">READ ONLY</p>
           )}
+          {/* Feature 155: the icon the actuator tile on the Home 3D page shows (tiles exist for controllable devices only). */}
+          {interactive && <TileIconPicker entity={entity} />}
           {entity.domain === "cover" && (
             <CoverCalibrationPanel
               entity={entity}
