@@ -31,6 +31,7 @@ interface RoomObjects {
   center: THREE.Vector3;
   present: boolean;
   hits: THREE.Mesh[]; // one floor plane per part
+  marker: THREE.Mesh; // zone ball: picks the room like its floor plane (feature 154)
   outlineMat: THREE.LineBasicMaterial;
   tintMat: THREE.MeshBasicMaterial;
   markerMat: THREE.MeshStandardMaterial;
@@ -432,6 +433,7 @@ export class HouseScene {
       center,
       present: true,
       hits,
+      marker,
       outlineMat,
       tintMat,
       markerMat,
@@ -500,13 +502,15 @@ export class HouseScene {
     this.raycaster.setFromCamera(this.pointer, this.camera);
   }
 
-  // Floor mode: the room under the pointer (shown floor only).
+  // Floor mode: the room under the pointer (shown floor only). Its floor plane or its zone marker ball (feature 154).
   private pick(event: PointerEvent): RoomObjects | undefined {
     this.setPointer(event);
     const rooms = [...this.rooms.values()].filter((r) => r.floor === this.activeFloor);
-    const hits = this.raycaster.intersectObjects(rooms.flatMap((r) => r.hits), false);
+    const targets = rooms.flatMap((r) => [...r.hits, r.marker]);
+    const hits = this.raycaster.intersectObjects(targets, false);
     if (hits.length === 0) return undefined;
-    return rooms.find((r) => r.hits.includes(hits[0].object as THREE.Mesh));
+    const object = hits[0].object;
+    return rooms.find((r) => r.marker === object || r.hits.includes(object as THREE.Mesh));
   }
 
   // Whole-house mode: the floor of the nearest mesh under the pointer. Lines are skipped (their pick threshold is wide).
