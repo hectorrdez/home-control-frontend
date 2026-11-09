@@ -60,3 +60,6 @@ id|slug|state|role|commit|commit_url
 155|actuator-tile-compact|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
 156|actuator-long-press-menu|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
 157|cover-tap-toggle-logic|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
+158|climate-history-split-cards|IN_PROCESS|frontend
+159|climate-history-cards-editable|PENDING|frontend
+160|chart-size-quarter|PENDING|frontend
