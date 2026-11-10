@@ -17,8 +17,8 @@ interface EntitiesContextValue {
   setSelectedArea: (areaId: string | null) => void;
   selectedGroup: DomainFilter;
   setSelectedGroup: (group: DomainFilter) => void;
-  // Re-fetch the areas (feature 164 reuses it after a reload; a call within 1 s of the last request is skipped).
-  refreshAreas: () => void;
+  // Re-fetch the areas (feature 164). Coalesced: concurrent calls share one request plus at most one follow-up.
+  refreshAreas: () => Promise<void>;
   // Optimistic action (104). Resolves true on success, false after a rollback.
   sendIntent: (entity: Entity, intent: Intent) => Promise<boolean>;
   // Live stream state (105): "open" or "reconnecting". Values keep their last known state meanwhile.
@@ -29,8 +29,6 @@ interface EntitiesContextValue {
 
 const EntitiesContext = createContext<EntitiesContextValue | null>(null);
 
-// Feature 164: window in which a second areas refresh is not sent.
-const AREAS_DEDUP_MS = 1000;
 
 export function EntitiesProvider({ children }: { children: ReactNode }) {
   const api = useApi();
@@ -70,16 +68,33 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
   }, [loadEvents]);
 
   // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
-  // Feature 164: a refresh asked within AREAS_DEDUP_MS of the previous areas request is skipped (no double fetch).
-  const lastAreasRequest = useRef(0);
-  const refreshAreas = useCallback(() => {
-    const now = Date.now();
-    if (now - lastAreasRequest.current < AREAS_DEDUP_MS) return;
-    lastAreasRequest.current = now;
-    void api.getAreas().then(
-      (areas) => dispatch({ type: "areasRefreshed", areas }),
-      () => undefined,
-    );
+  // Feature 164: coalesced. While a refresh is in flight, callers share its promise and mark one follow-up;
+  // the follow-up runs once when the in-flight request ends, so the latest state is never lost.
+  const areasInFlight = useRef<Promise<void> | null>(null);
+  const areasFollowUp = useRef(false);
+  const refreshAreas = useCallback((): Promise<void> => {
+    if (areasInFlight.current) {
+      areasFollowUp.current = true;
+      return areasInFlight.current;
+    }
+    const start = (): Promise<void> => {
+      const request = api
+        .getAreas()
+        .then(
+          (areas) => dispatch({ type: "areasRefreshed", areas }),
+          () => undefined,
+        )
+        .finally(() => {
+          areasInFlight.current = null;
+          if (areasFollowUp.current) {
+            areasFollowUp.current = false;
+            start();
+          }
+        });
+      areasInFlight.current = request;
+      return request;
+    };
+    return start();
   }, [api]);
 
   // One app-level subscription (105): stream events merge into the store; a reconnect re-fetches the areas once.

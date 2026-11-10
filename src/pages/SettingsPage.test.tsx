@@ -109,6 +109,39 @@ describe("SettingsPage Integrations section", () => {
     expect(screen.getByText("Tuya cloud: timeout")).toBeTruthy();
   });
 
+  it("strips URLs, host:port and bearer-like tokens from a server error before showing it", async () => {
+    renderPage({
+      entries: [
+        {
+          entryId: "a",
+          domain: "tuya",
+          title: "Tuya",
+          ok: false,
+          error: "Failed at https://ha.local:8123/api with Bearer abcdefghijklmnopqrstuvwxyz0123456789",
+        },
+      ],
+      entities: { before: 1, after: 1 },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "RELOAD DEVICES" }));
+    const line = await screen.findByText(/^Tuya: /);
+    expect(line.textContent).toBe("Tuya: Failed at with Bearer");
+    expect(status().textContent).not.toMatch(/ha\.local|8123|abcdefghijklmnop|https?:/);
+  });
+
+  it("falls back to Reload failed when nothing is left, and caps long text to 120 characters", async () => {
+    renderPage({
+      entries: [
+        { entryId: "a", domain: "tuya", title: "Tuya", ok: false, error: "https://ha.local:8123/x abcdefghijklmnopqrstuvwxyz0123456789" },
+        { entryId: "b", domain: "tuya", title: "Cloud", ok: false, error: "word ".repeat(60) },
+      ],
+      entities: { before: 1, after: 1 },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "RELOAD DEVICES" }));
+    expect(await screen.findByText("Tuya: Reload failed")).toBeTruthy();
+    const capped = screen.getByText(/^Cloud: /).textContent ?? "";
+    expect(capped.length).toBeLessThanOrEqual("Cloud: ".length + 120);
+  });
+
   it("shows NOT AVAILABLE and hides the button when the backend has no reload endpoint (404)", async () => {
     renderPage(new ApiError("not_found", "not_found", 404));
     fireEvent.click(screen.getByRole("button", { name: "RELOAD DEVICES" }));

@@ -113,6 +113,20 @@ export default function SettingsPage() {
   );
 }
 
+// The server's per-entry error text is not trusted as-is: URLs, host:port pairs and token-like strings are removed,
+// whitespace is collapsed and the result is capped to 120 characters. Nothing left -> "Reload failed".
+function sanitizeReloadError(raw: string | undefined): string {
+  const text = (raw ?? "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\b[\w.-]+:\d{1,5}\b(?:\/\S*)?/g, " ")
+    .replace(/[A-Za-z0-9_\-.=]{20,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120)
+    .trim();
+  return text || "Reload failed";
+}
+
 function ReloadSummary({ result }: { result: ReloadResult }) {
   if (result.entries.length === 0) {
     return <p className="text-on-surface-variant">No integrations to reload</p>;
@@ -127,7 +141,7 @@ function ReloadSummary({ result }: { result: ReloadResult }) {
       </p>
       {failed.map((entry) => (
         <p key={entry.entryId} className="text-error">
-          {`${entry.title}: ${entry.error ?? "failed"}`}
+          {`${entry.title}: ${sanitizeReloadError(entry.error)}`}
         </p>
       ))}
     </>
