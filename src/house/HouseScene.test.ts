@@ -478,6 +478,50 @@ describe("HouseScene", () => {
     expect(bedroomLabel.style.opacity).toBe("1");
   });
 
+  it("positions the zone chips over the marker in both views and hides them on the other floor (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    const bedroomChip = document.createElement("div");
+    scene.setChipElements(
+      new Map([
+        ["kitchen", kitchenChip],
+        ["bedroom", bedroomChip],
+      ]),
+    );
+    flush();
+    // Whole-house view: every floor is stacked, so both chips are shown.
+    expect(kitchenChip.style.opacity).toBe("1");
+    expect(bedroomChip.style.opacity).toBe("1");
+    expect(kitchenChip.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, calc\(-100% - 10px\)\)$/);
+
+    scene.setFloor(0);
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+    expect(bedroomChip.style.opacity).toBe("0");
+
+    scene.setFloor(1);
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+    expect(bedroomChip.style.opacity).toBe("1");
+  });
+
+  it("hides a zone chip whose marker is behind the camera (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+
+    // Camera north of the house looking further north: the kitchen marker sits behind it.
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 10, 200);
+    camera.updateMatrixWorld(); // the fake renderer does not refresh the camera matrices
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+  });
+
   it("builds the attic roof of the real plan and stacks the three levels", () => {
     const { scene } = mountScene(DEFAULT_PLAN);
     const groups = internals(scene).floorGroups;

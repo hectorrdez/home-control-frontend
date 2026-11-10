@@ -81,6 +81,7 @@ export class HouseScene {
   private mode: SceneMode = "house";
   private activeFloor = 0;
   private readonly labels = new Map<string, HTMLElement>();
+  private readonly chips = new Map<string, HTMLElement>(); // zone point chips (feature 161), shown in both views
   private readonly materials: THREE.Material[] = [];
   private readonly zoneOf: (areaId: string) => string; // feature 147: assigned zone token per area (130 hash as fallback)
   private readonly geometries: THREE.BufferGeometry[] = [];
@@ -231,6 +232,13 @@ export class HouseScene {
     this.requestRender();
   }
 
+  // Zone point chip elements per room id (feature 161). Positioned over the zone marker ball; React owns the text.
+  setChipElements(elements: Map<string, HTMLElement>): void {
+    this.chips.clear();
+    for (const [id, el] of elements) this.chips.set(id, el);
+    this.requestRender();
+  }
+
   resize(): void {
     if (this.disposed) return;
     this.width = Math.max(1, this.container.clientWidth);
@@ -257,6 +265,7 @@ export class HouseScene {
     this.renderer.domElement.remove();
     this.rooms.clear();
     this.labels.clear();
+    this.chips.clear();
   }
 
   private on(target: EventTarget, type: string, fn: (event: Event) => void): void {
@@ -547,6 +556,17 @@ export class HouseScene {
       const visible = this.mode === "floor" && v.z < 1 && obj.floor === this.activeFloor;
       el.style.opacity = visible ? "1" : "0";
       el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, -100%)`;
+    }
+    const ball = new THREE.Vector3();
+    for (const [id, el] of this.chips) {
+      const obj = this.rooms.get(id);
+      if (!obj) continue;
+      obj.marker.getWorldPosition(ball);
+      v.copy(ball).project(this.camera);
+      const visible = v.z < 1 && (this.mode === "house" || obj.floor === this.activeFloor);
+      el.style.opacity = visible ? "1" : "0";
+      // Sits just above the ball: its bottom edge is 10px over the ball centre.
+      el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, calc(-100% - 10px))`;
     }
   }
 }
