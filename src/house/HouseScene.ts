@@ -351,7 +351,7 @@ export class HouseScene {
     if (floor.level > 0) {
       for (const room of floor.rooms) {
         for (const part of room.parts) {
-          this.slabs.push(this.addBox(group, { ...part, y: -SLAB_THICKNESS, h: SLAB_THICKNESS }, wallMats.normal, token("secondary"), 0.8, true));
+          this.slabs.push(this.addBox(group, { ...part, y: -SLAB_THICKNESS, h: SLAB_THICKNESS }, wallMats.normal, token("secondary"), 0.8));
         }
       }
     }
@@ -456,7 +456,7 @@ export class HouseScene {
   }
 
   // A box mesh with its edge lines (the edges follow the box's cut). Returns the group it created under `parent`.
-  // `occluder`: the mesh can hide a zone chip behind it (walls, slabs, fixtures, furniture; not glass or the roof).
+  // `occluder`: the mesh can hide a zone chip behind it (walls, fixtures, furniture; not slabs, glass or the roof).
   private addBox(parent: THREE.Object3D, box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number, occluder = false): THREE.Group {
     const geometry = this.trackGeometry(new THREE.BoxGeometry(box.w, box.h, box.d));
     const group = new THREE.Group();

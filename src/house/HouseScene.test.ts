@@ -488,14 +488,8 @@ describe("HouseScene", () => {
         ["bedroom", bedroomChip],
       ]),
     );
-    // Open-side camera: the upper slab sits between a high default camera and the ground-floor ball (occluded).
-    const { camera } = internals(scene);
-    camera.position.set(0, 10, 100);
-    camera.lookAt(0, 3.2, 0);
-    camera.updateMatrixWorld();
-    scene.resize();
     flush();
-    // Whole-house view: every floor is stacked, so both chips are shown.
+    // Whole-house view: every floor is stacked, so both chips are shown (the upper slab does not hide the ground floor).
     expect(kitchenChip.style.opacity).toBe("1");
     expect(bedroomChip.style.opacity).toBe("1");
     expect(kitchenChip.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, calc\(-100% - 10px\)\)$/);
@@ -515,21 +509,26 @@ describe("HouseScene", () => {
     const { scene } = mountScene();
     const kitchenChip = document.createElement("div");
     scene.setChipElements(new Map([["kitchen", kitchenChip]]));
-    const { camera } = internals(scene);
-    camera.position.set(0, 10, 100);
-    camera.lookAt(0, 3.2, 0);
-    camera.updateMatrixWorld();
-    scene.resize();
     flush();
     expect(kitchenChip.style.opacity).toBe("1");
 
     // Camera north of the house looking further north: the kitchen marker sits behind it.
+    const { camera } = internals(scene);
     camera.position.set(0, 10, 100);
     camera.lookAt(0, 10, 200);
     camera.updateMatrixWorld(); // the fake renderer does not refresh the camera matrices
     scene.resize();
     flush();
     expect(kitchenChip.style.opacity).toBe("0");
+  });
+
+  it("keeps a ground-floor chip visible under the upper-floor slab in the whole-house view (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    // Default high iso camera: the upper slab (y = 5.4) lies between it and the ground-floor ball, but slabs do not occlude.
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
   });
 
   it("hides a zone chip whose ball is occluded by a wall in the whole-house view, and shows it on a clear line (feature 161)", () => {
