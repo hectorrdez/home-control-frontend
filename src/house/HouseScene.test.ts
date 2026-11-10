@@ -488,6 +488,12 @@ describe("HouseScene", () => {
         ["bedroom", bedroomChip],
       ]),
     );
+    // Open-side camera: the upper slab sits between a high default camera and the ground-floor ball (occluded).
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
     flush();
     // Whole-house view: every floor is stacked, so both chips are shown.
     expect(kitchenChip.style.opacity).toBe("1");
@@ -509,17 +515,68 @@ describe("HouseScene", () => {
     const { scene } = mountScene();
     const kitchenChip = document.createElement("div");
     scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
     flush();
     expect(kitchenChip.style.opacity).toBe("1");
 
     // Camera north of the house looking further north: the kitchen marker sits behind it.
-    const { camera } = internals(scene);
     camera.position.set(0, 10, 100);
     camera.lookAt(0, 10, 200);
     camera.updateMatrixWorld(); // the fake renderer does not refresh the camera matrices
     scene.resize();
     flush();
     expect(kitchenChip.style.opacity).toBe("0");
+  });
+
+  it("hides a zone chip whose ball is occluded by a wall in the whole-house view, and shows it on a clear line (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+
+    // Camera behind the ground wall (z = -10) looking at the kitchen ball: the wall hides it.
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, -100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+
+    // Camera on the open side of the house: nothing between it and the ball.
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+  });
+
+  it("applies the same occlusion in the isolated floor view, ignoring walls cut away by the section (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    scene.setFloor(0);
+    const { camera } = internals(scene);
+
+    // Ray from low behind the ground wall passes through its kept part (below the low cut at y = 1.2): occluded.
+    camera.position.set(0, 0, -12);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+
+    // From high behind the wall the same ray crosses the wall above the cut: clipped, so the chip is visible.
+    camera.position.set(0, 10, -100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
   });
 
   it("builds the attic roof of the real plan and stacks the three levels", () => {

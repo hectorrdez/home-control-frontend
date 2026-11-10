@@ -56,6 +56,7 @@ const FLOOR_RADIUS = 38;
 const HOUSE_RADIUS = 46;
 const FLOOR_TARGET_Y = 1.5;
 const CLICK_SLACK_PX = 5;
+const MARKER_RADIUS = 0.3; // zone ball radius (buildRoom); an occluder must sit in front of its near surface
 
 function token(name: string): THREE.Color {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
@@ -73,6 +74,8 @@ export class HouseScene {
   private readonly floorGroups: THREE.Group[] = []; // one group per floor, indexed by floor.index
   private readonly levels: number[] = []; // floor.level per group, for the stacked house view
   private readonly slabs: THREE.Object3D[] = []; // upper floor slabs, shown in the whole-house view only
+  private readonly occluders: THREE.Mesh[] = []; // walls, slabs, fixtures and furniture: they hide a zone chip behind them (feature 161)
+  private readonly occlusionRay = new THREE.Raycaster();
   private readonly roofs: THREE.Object3D[] = []; // gable roof mesh + edges, shown in the whole-house view only
   private readonly clipTargets: ClipTarget[] = [];
   private readonly normalPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), CUT_NORMAL);
@@ -335,20 +338,20 @@ export class HouseScene {
     this.scene.add(group);
 
     const wallMats = this.clippedPair(() => new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.35 }));
-    for (const wall of floor.walls) this.addBox(group, wall, wallMats[wall.cut ?? "normal"], token("secondary"), 0.8);
+    for (const wall of floor.walls) this.addBox(group, wall, wallMats[wall.cut ?? "normal"], token("secondary"), 0.8, true);
     const glassMats = this.clippedPair(() => new THREE.MeshPhongMaterial({ color: token("primary-container"), transparent: true, opacity: 0.25 }));
     for (const pane of floor.glass) this.addBox(group, pane, glassMats[pane.cut ?? "normal"], token("primary-container"), 0.6);
     const fixtureMat = this.clipped(
       new THREE.MeshPhongMaterial({ color: token("surface-container-highest"), transparent: true, opacity: 0.6 }),
       "normal",
     );
-    for (const box of floor.fixtures) this.addBox(group, box, fixtureMat, token("secondary"), 0.7);
+    for (const box of floor.fixtures) this.addBox(group, box, fixtureMat, token("secondary"), 0.7, true);
     if (floor.roof) this.buildRoof(floor.roof, group);
     // Upper levels: a thin slab under each room part (the void and the stairwell stay open).
     if (floor.level > 0) {
       for (const room of floor.rooms) {
         for (const part of room.parts) {
-          this.slabs.push(this.addBox(group, { ...part, y: -SLAB_THICKNESS, h: SLAB_THICKNESS }, wallMats.normal, token("secondary"), 0.8));
+          this.slabs.push(this.addBox(group, { ...part, y: -SLAB_THICKNESS, h: SLAB_THICKNESS }, wallMats.normal, token("secondary"), 0.8, true));
         }
       }
     }
@@ -421,7 +424,7 @@ export class HouseScene {
       group.add(outline);
     }
 
-    for (const box of plan.furniture) this.addBox(group, box, furnitureMat, hue, 0.7);
+    for (const box of plan.furniture) this.addBox(group, box, furnitureMat, hue, 0.7, true);
 
     const markerMat = this.track(new THREE.MeshStandardMaterial({ color: zone, emissive: zone, emissiveIntensity: 0.8 }));
     const marker = new THREE.Mesh(this.trackGeometry(new THREE.SphereGeometry(0.3, 16, 16)), markerMat);
@@ -453,11 +456,14 @@ export class HouseScene {
   }
 
   // A box mesh with its edge lines (the edges follow the box's cut). Returns the group it created under `parent`.
-  private addBox(parent: THREE.Object3D, box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number): THREE.Group {
+  // `occluder`: the mesh can hide a zone chip behind it (walls, slabs, fixtures, furniture; not glass or the roof).
+  private addBox(parent: THREE.Object3D, box: Box, material: THREE.Material, edge: THREE.Color, edgeOpacity: number, occluder = false): THREE.Group {
     const geometry = this.trackGeometry(new THREE.BoxGeometry(box.w, box.h, box.d));
     const group = new THREE.Group();
     group.position.set(box.x, (box.y ?? 0) + box.h / 2, box.z);
-    group.add(new THREE.Mesh(geometry, material));
+    const mesh = new THREE.Mesh(geometry, material);
+    if (occluder) this.occluders.push(mesh);
+    group.add(mesh);
     const edges = new THREE.LineSegments(
       this.trackGeometry(new THREE.EdgesGeometry(geometry)),
       this.clipped(new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: edgeOpacity }), box.cut ?? "normal"),
@@ -537,6 +543,28 @@ export class HouseScene {
     return undefined;
   }
 
+  // True when the object and all its ancestors are visible (hidden floor groups and the slabs of the isolated view).
+  private isShown(object: THREE.Object3D): boolean {
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
+    return true;
+  }
+
+  // Ray from the camera to the zone ball: true when a wall/slab/fixture/furniture mesh is hit in front of it.
+  // The isolated view cuts walls: a hit on a clipped part (outside the section) does not count.
+  private occludedFromCamera(ball: THREE.Vector3, candidates: THREE.Mesh[]): boolean {
+    this.scene.updateMatrixWorld();
+    const origin = this.camera.position;
+    const direction = ball.clone().sub(origin);
+    const distance = direction.length();
+    this.occlusionRay.set(origin, direction.normalize());
+    const hits = this.occlusionRay.intersectObjects(candidates, false);
+    return hits.some((hit) => {
+      if (hit.distance >= distance - MARKER_RADIUS) return false;
+      const material = (hit.object as THREE.Mesh).material as THREE.Material;
+      return !(material.clippingPlanes ?? []).some((plane) => plane.distanceToPoint(hit.point) < 0);
+    });
+  }
+
   private requestRender(): void {
     if (this.disposed || this.frame) return;
     this.frame = requestAnimationFrame(() => {
@@ -558,12 +586,15 @@ export class HouseScene {
       el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, -100%)`;
     }
     const ball = new THREE.Vector3();
+    // Occluders of the current view only: the hidden floors and slabs/roof of the isolated view are skipped.
+    const shown = this.occluders.filter((m) => this.isShown(m));
     for (const [id, el] of this.chips) {
       const obj = this.rooms.get(id);
       if (!obj) continue;
       obj.marker.getWorldPosition(ball);
       v.copy(ball).project(this.camera);
-      const visible = v.z < 1 && (this.mode === "house" || obj.floor === this.activeFloor);
+      const inView = v.z < 1 && (this.mode === "house" || obj.floor === this.activeFloor);
+      const visible = inView && !this.occludedFromCamera(ball, shown);
       el.style.opacity = visible ? "1" : "0";
       // Sits just above the ball: its bottom edge is 10px over the ball centre.
       el.style.transform = `translate(${((v.x + 1) / 2) * this.width}px, ${((1 - v.y) / 2) * this.height}px) translate(-50%, calc(-100% - 10px))`;
