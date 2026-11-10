@@ -1,31 +1,28 @@
-import { useState, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { useEntities } from "@/state/EntitiesProvider";
-import {
-  DOMAIN_GROUPS,
-  deckSections,
-  groupCounts,
-  summarize,
-  isInteractive,
-  formatPower,
-  type DomainFilter,
-  type PillGroup,
-} from "@/state/selectors";
+import { summarize, formatPower } from "@/state/selectors";
 import { useHaStatus } from "@/api/useHaStatus";
 import Button from "@components/controls/Button";
-import ButtonLink from "@components/controls/ButtonLink";
-import FilterPill from "@components/controls/FilterPill";
+import Switch from "@components/controls/Switch";
+import SideDrawer from "@components/panels/SideDrawer";
 import StatusChip from "@components/controls/StatusChip";
 import ActuatorTile from "@components/cards/ActuatorTile";
 import ActuatorMenu from "@components/cards/ActuatorMenu";
 import { UNASSIGNED } from "@/state/entities";
-
-const GROUP_LABEL: Record<PillGroup, string> = {
-  lights: "LIGHTS",
-  climate: "CLIMATE",
-  security: "SECURITY",
-  plugs: "PLUGS",
-};
+import {
+  ALL_VISIBLE,
+  PANEL_TYPES,
+  hideAllListed,
+  panelRoomCounts,
+  panelTypeCounts,
+  panelTypeLabel,
+  setRoomShown,
+  setTypeShown,
+  switchedOffCount,
+  visibleDeckSections,
+  type PanelVisibility,
+} from "@/features/devices/deviceFilters";
 
 function SkeletonDeck() {
   return (
@@ -45,11 +42,14 @@ function emptyMessage(areaCount: number, selectedArea: string | null): string {
 }
 
 export default function DevicePanel() {
-  const { state, reload, selectedArea, setSelectedArea, selectedGroup, setSelectedGroup } = useEntities();
+  const { state, reload, selectedArea, setSelectedArea } = useEntities();
   const ha = useHaStatus();
-  const [filtersShown, setFiltersShown] = useState(true);
   // Feature 156: the long-press menu is open for this entity (one at a time).
   const [menuId, setMenuId] = useState<string | null>(null);
+  // Feature 162: FILTERS drawer. Visibility is session state only (resets on load); closing the drawer keeps it.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [visibility, setVisibility] = useState<PanelVisibility>(ALL_VISIBLE);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
 
   if (state.status === "error") {
     return (
@@ -74,27 +74,16 @@ export default function DevicePanel() {
     );
   }
 
-  const counts = groupCounts(state);
   const summary = summarize(state);
   const synchronized = ha.state === "online" && summary.unavailable === 0;
-  const sections = deckSections(state, selectedArea, selectedGroup);
+  const sections = visibleDeckSections(state, selectedArea, visibility);
   const shown = sections.reduce((n, s) => n + s.entities.length, 0);
-  // A room chip needs at least one interactive device (read-only rooms have no chip).
-  const rooms = state.areas.filter((a) =>
-    a.entityIds.some((id) => {
-      const e = state.entities[id];
-      return e !== undefined && isInteractive(e);
-    }),
-  );
-
-  // Hiding the filters also clears them, so the list shows every device again.
-  const toggleFilters = () => {
-    if (filtersShown) {
-      setSelectedGroup("all");
-      setSelectedArea(null);
-    }
-    setFiltersShown(!filtersShown);
-  };
+  // Feature 162: only types and rooms that have devices are listed in the drawer.
+  const typeCounts = panelTypeCounts(state);
+  const types = PANEL_TYPES.filter((t) => typeCounts[t] > 0);
+  const rooms = panelRoomCounts(state);
+  const roomIds = rooms.map((r) => r.areaId);
+  const offCount = switchedOffCount(visibility, types, roomIds);
 
   return (
     <section aria-label="Device panel" className="col-span-12 flex min-h-0 flex-col gap-space-md xl:col-span-4">
@@ -109,19 +98,11 @@ export default function DevicePanel() {
               {`ATTENTION // ${summary.unavailable > 0 ? `${summary.unavailable} UNAVAILABLE` : "HA OFFLINE"}`}
             </StatusChip>
           )}
-          <div className="flex items-center gap-space-xs">
-            <FilterPill
-              aria-label="Toggle filters"
-              className="px-space-sm"
-              selected={filtersShown}
-              icon={<SlidersHorizontal aria-hidden="true" className="size-4" />}
-              onClick={toggleFilters}
-            />
-            {/* Feature 121: deferred link to the full device list. */}
-            <ButtonLink to="devices">
-              All devices
-            </ButtonLink>
-          </div>
+          {/* Feature 162: filters live in a left drawer (like CHARTS in telemetry). */}
+          <Button variant="secondary" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            {offCount > 0 ? `FILTERS · ${offCount}` : "FILTERS"}
+          </Button>
         </div>
         <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
           <span className="font-label-caps text-label-caps uppercase text-on-surface">
@@ -134,41 +115,6 @@ export default function DevicePanel() {
           )}
         </div>
       </div>
-
-      {filtersShown && (
-        <div role="group" aria-label="Device filters" className="flex gap-space-xs overflow-x-auto pb-space-xs">
-          <FilterPill selected={selectedGroup === "all"} count={counts.all} onClick={() => setSelectedGroup("all")}>
-            ALL
-          </FilterPill>
-          {DOMAIN_GROUPS.filter((g) => counts[g] > 0).map((g) => (
-            <FilterPill
-              key={g}
-              selected={selectedGroup === g}
-              count={counts[g]}
-              onClick={() => setSelectedGroup(g as DomainFilter)}
-            >
-              {GROUP_LABEL[g]}
-            </FilterPill>
-          ))}
-        </div>
-      )}
-
-      {filtersShown && rooms.length > 0 && (
-        <div role="group" aria-label="Rooms" className="flex gap-space-xs overflow-x-auto pb-space-xs">
-          <FilterPill selected={selectedArea === null} onClick={() => setSelectedArea(null)}>
-            ALL ROOMS
-          </FilterPill>
-          {rooms.map((room) => (
-            <FilterPill
-              key={room.areaId}
-              selected={selectedArea === room.areaId}
-              onClick={() => setSelectedArea(room.areaId)}
-            >
-              {room.areaId === UNASSIGNED ? "UNASSIGNED" : room.name.toUpperCase()}
-            </FilterPill>
-          ))}
-        </div>
-      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         {shown === 0 ? (
@@ -194,6 +140,78 @@ export default function DevicePanel() {
           </ul>
         )}
       </div>
+      <SideDrawer side="left" title="Filters" open={filtersOpen} onClose={closeFilters}>
+        <div className="flex flex-col gap-space-sm">
+          <div className="flex gap-space-xs">
+            {/* ALL also clears a room picked on the 3D stage, so every room is listed as shown. */}
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setVisibility(ALL_VISIBLE);
+                setSelectedArea(null);
+              }}
+            >
+              ALL
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setVisibility(hideAllListed(types, roomIds))}>
+              NONE
+            </Button>
+          </div>
+          {types.length > 0 && (
+            <div className="flex flex-col gap-space-xs">
+              <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">ACTUATOR TYPES</p>
+              <ul aria-label="Actuator types" className="flex flex-col gap-space-xs">
+                {types.map((type) => {
+                  const label = panelTypeLabel(type);
+                  return (
+                    <li
+                      key={type}
+                      className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                    >
+                      <span className="min-w-0 truncate font-sans text-body-md text-on-surface">
+                        {label}
+                        <span className="font-mono text-label-caps uppercase text-on-surface-variant"> · {typeCounts[type]}</span>
+                      </span>
+                      <Switch
+                        aria-label={`Show ${label}`}
+                        checked={!visibility.hiddenTypes.has(type)}
+                        onCheckedChange={(on) => setVisibility((v) => setTypeShown(v, type, on))}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+          {rooms.length > 0 && (
+            <div className="flex flex-col gap-space-xs">
+              <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">ROOMS</p>
+              <ul aria-label="Rooms" className="flex flex-col gap-space-xs">
+                {rooms.map((room) => {
+                  const label = room.areaId === UNASSIGNED ? "UNASSIGNED" : room.name.toUpperCase();
+                  return (
+                    <li
+                      key={room.areaId}
+                      className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                    >
+                      <span className="min-w-0 truncate font-sans text-body-md text-on-surface">
+                        {label}
+                        <span className="font-mono text-label-caps uppercase text-on-surface-variant"> · {room.count}</span>
+                      </span>
+                      <Switch
+                        aria-label={`Show ${label}`}
+                        checked={!visibility.hiddenRooms.has(room.areaId)}
+                        onCheckedChange={(on) => setVisibility((v) => setRoomShown(v, room.areaId, on))}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      </SideDrawer>
       {menuId !== null && state.entities[menuId] && (
         <ActuatorMenu entity={state.entities[menuId]} onClose={() => setMenuId(null)} />
       )}

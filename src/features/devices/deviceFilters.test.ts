@@ -2,8 +2,19 @@ import { describe, expect, it } from "vitest";
 import type { Area, Entity } from "@/api/types";
 import { createFixtureEntities, FIXTURE_AREAS } from "@/api/mock/fixtures";
 import { entitiesReducer, initialEntitiesState, UNASSIGNED, type EntitiesState } from "@/state/entities";
+import { isInteractive } from "@/state/selectors";
 import {
+  ALL_VISIBLE,
   deviceRowKeyIn,
+  hideAllListed,
+  panelRoomCounts,
+  panelTypeCounts,
+  panelTypeLabel,
+  setRoomShown,
+  setTypeShown,
+  switchedOffCount,
+  visibleDeckSections,
+  PANEL_TYPES,
   EMPTY_DEVICE_FILTERS,
   buildDeviceRows,
   deviceFacets,
@@ -325,5 +336,95 @@ describe("deviceRowKeyIn (feature 129)", () => {
     const device = { entityId: "switch.office_desk", domain: "switch", name: "Desk", state: "on", attributes: {}, area: "office", lastChanged: "", deviceName: "Desk plug" } as Entity;
     expect(deviceRowKeyIn("office", device)).toBe("office~desk_plug");
     expect(deviceRowKeyIn("office", { ...device, deviceName: null })).toBe("switch.office_desk");
+  });
+});
+
+// Feature 162: multi-visibility (type switch AND room switch) for the Device panel drawer.
+describe("panel multi-visibility", () => {
+  const house = () => stateOf(createFixtureEntities());
+  const interactiveCount = (state: EntitiesState) => Object.values(state.entities).filter(isInteractive).length;
+  const flatIds = (state: EntitiesState, v: Parameters<typeof visibleDeckSections>[2], selected: string | null = null) =>
+    visibleDeckSections(state, selected, v).flatMap((s) => s.entities.map((e) => e.entityId));
+
+  it("shows every interactive device when nothing is switched off", () => {
+    const state = house();
+    expect(flatIds(state, ALL_VISIBLE)).toHaveLength(interactiveCount(state));
+  });
+
+  it("counts interactive devices per type and per room, summing to the total", () => {
+    const state = house();
+    const total = interactiveCount(state);
+    const types = panelTypeCounts(state);
+    expect(Object.values(types).reduce((n, c) => n + c, 0)).toBe(total);
+    const rooms = panelRoomCounts(state);
+    expect(rooms.every((r) => r.count > 0)).toBe(true);
+    expect(rooms.reduce((n, r) => n + r.count, 0)).toBe(total);
+  });
+
+  it("hides the devices of a switched-off type and leaves the others", () => {
+    const state = house();
+    const lights = Object.values(state.entities).filter((e) => isInteractive(e) && e.domain === "light").length;
+    const v = setTypeShown(ALL_VISIBLE, "lights", false);
+    const ids = flatIds(state, v);
+    expect(ids).toHaveLength(interactiveCount(state) - lights);
+    expect(ids.every((id) => !id.startsWith("light."))).toBe(true);
+  });
+
+  it("hides the devices of a switched-off room", () => {
+    const state = house();
+    const room = panelRoomCounts(state)[0];
+    const v = setRoomShown(ALL_VISIBLE, room.areaId, false);
+    expect(visibleDeckSections(state, null, v).some((s) => s.area.areaId === room.areaId)).toBe(false);
+    expect(flatIds(state, v)).toHaveLength(interactiveCount(state) - room.count);
+  });
+
+  it("shows a device only when its type AND its room are on", () => {
+    const state = house();
+    const room = panelRoomCounts(state)[0].areaId;
+    const v = setRoomShown(setTypeShown(ALL_VISIBLE, "lights", false), room, false);
+    const lightsInRoom = Object.values(state.entities).filter(
+      (e) => isInteractive(e) && e.domain === "light" && e.area === room,
+    ).length;
+    const inRoom = panelRoomCounts(state)[0].count;
+    const lights = Object.values(state.entities).filter((e) => isInteractive(e) && e.domain === "light").length;
+    // Removed = lights (type off) + room devices (room off) - lights already removed in that room (both off).
+    expect(flatIds(state, v)).toHaveLength(interactiveCount(state) - lights - inRoom + lightsInRoom);
+  });
+
+  it("does not mutate the previous visibility when toggling", () => {
+    const off = setTypeShown(ALL_VISIBLE, "climate", false);
+    expect(ALL_VISIBLE.hiddenTypes.size).toBe(0);
+    expect(off.hiddenTypes.has("climate")).toBe(true);
+    expect(setTypeShown(off, "climate", true).hiddenTypes.size).toBe(0);
+    expect(setRoomShown(ALL_VISIBLE, "kitchen", false).hiddenRooms.has("kitchen")).toBe(true);
+  });
+
+  it("NONE hides every listed type and room, so no device is left", () => {
+    const state = house();
+    const rooms = panelRoomCounts(state).map((r) => r.areaId);
+    const v = hideAllListed(PANEL_TYPES, rooms);
+    expect(flatIds(state, v)).toEqual([]);
+    expect(switchedOffCount(v, PANEL_TYPES, rooms)).toBe(PANEL_TYPES.length + rooms.length);
+  });
+
+  it("counts only the listed types and rooms as switched off", () => {
+    const v = setRoomShown(setTypeShown(ALL_VISIBLE, "plugs", false), "unknown_room", false);
+    expect(switchedOffCount(v, PANEL_TYPES, ["kitchen"])).toBe(1);
+    // Hidden ids that are not in the listed arrays (e.g. a room that lost its devices) do not count.
+    expect(switchedOffCount(v, ["lights"], ["kitchen"])).toBe(0);
+  });
+
+  it("keeps the 3D stage room focus: a selected room narrows the deck even with every switch on", () => {
+    const state = house();
+    const room = panelRoomCounts(state)[0].areaId;
+    const sections = visibleDeckSections(state, room, ALL_VISIBLE);
+    expect(sections.length).toBeGreaterThan(0);
+    expect(sections.every((s) => s.area.areaId === room)).toBe(true);
+  });
+
+  it("labels the types, with OTHER for the types without a pill", () => {
+    expect(panelTypeLabel("lights")).toBe("LIGHTS");
+    expect(panelTypeLabel("other")).toBe("OTHER");
+    expect(PANEL_TYPES).toContain("other");
   });
 });

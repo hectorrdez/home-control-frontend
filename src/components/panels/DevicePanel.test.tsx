@@ -108,12 +108,21 @@ function renderPanel(setup: Setup = {}, extra?: ReactNode) {
   return h;
 }
 
+// Feature 162: the FILTERS drawer (left SideDrawer) holds the type and room switches.
+function openFilters() {
+  fireEvent.click(screen.getByRole("button", { name: /^FILTERS/ }));
+}
+
 describe("DevicePanel", () => {
   afterEach(cleanup);
 
-  it("links to the full device list with the All devices link (feature 121)", async () => {
+  it("has no All devices link and no filter rows until FILTERS is pressed (feature 162)", async () => {
     renderPanel();
-    expect((await screen.findByRole("link", { name: "All devices" })).getAttribute("href")).toBe("/devices");
+    await screen.findByRole("list", { name: "Devices" });
+    expect(screen.queryByRole("link", { name: "All devices" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Device filters" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Rooms" })).toBeNull();
+    expect(screen.getByRole("button", { name: "FILTERS" }).getAttribute("aria-expanded")).toBe("false");
   });
 
   it("shows the loading skeleton while the devices load", () => {
@@ -150,17 +159,19 @@ describe("DevicePanel", () => {
     expect(kettle.textContent).toContain("KITCHEN");
     expect(kettle.textContent).not.toContain("42 W"); // feature 155: the compact tile has no draw line
 
-    const rooms = screen.getByRole("group", { name: "Rooms" });
-    expect(within(rooms).getByRole("button", { name: /GHOST/ })).toBeTruthy();
-    expect(within(rooms).getByRole("button", { name: /KITCHEN/ })).toBeTruthy();
-    expect(within(rooms).getByRole("button", { name: /UNASSIGNED/ })).toBeTruthy();
+    openFilters();
+    const rooms = screen.getByRole("list", { name: "Rooms" });
+    expect(within(rooms).getByText(/GHOST/)).toBeTruthy();
+    expect(within(rooms).getByText(/KITCHEN/)).toBeTruthy();
+    expect(within(rooms).getByText(/UNASSIGNED/)).toBeTruthy();
   });
 
   it("reports ALL SYSTEMS SYNCHRONIZED when online with nothing unavailable", async () => {
     const clean = [areaOf("kitchen", "Kitchen", [kitchen[0], kitchen[2]])];
     renderPanel({ areas: clean });
     expect(await screen.findByText("ALL SYSTEMS SYNCHRONIZED")).toBeTruthy();
-    expect(screen.queryByRole("group", { name: "Rooms" })).not.toBeNull();
+    openFilters();
+    expect(screen.getByRole("list", { name: "Rooms" })).not.toBeNull();
   });
 
   it("reports HA OFFLINE when the status check fails", async () => {
@@ -168,68 +179,97 @@ describe("DevicePanel", () => {
     expect(await screen.findByText("ATTENTION // HA OFFLINE")).toBeTruthy();
   });
 
-  it("filters by domain group and by room", async () => {
+  it("switching a type off hides its devices, and switching it back on shows them again", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Devices" });
+    const deviceCount = () => within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").length;
+    const before = deviceCount();
 
-    fireEvent.click(screen.getByRole("button", { name: /^SECURITY/ }));
-    let names = within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem");
-    expect(names).toHaveLength(1);
-    expect(names[0].textContent).toContain("Front door");
+    openFilters();
+    fireEvent.click(screen.getByRole("switch", { name: "Show SECURITY" }));
+    expect(screen.getByRole("button", { name: "FILTERS · 1" })).toBeTruthy();
+    expect(deviceCount()).toBe(before - 1);
+    expect(within(screen.getByRole("list", { name: "Devices" })).queryByText(/Front door/)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /^ALL\d*$/ }));
-    fireEvent.click(screen.getByRole("button", { name: /KITCHEN/ }));
-    names = within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem");
-    expect(names.every((li) => li.textContent?.includes("KITCHEN"))).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: /^ALL ROOMS/ }));
-    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").length).toBeGreaterThan(2);
+    fireEvent.click(screen.getByRole("switch", { name: "Show SECURITY" }));
+    expect(screen.getByRole("button", { name: "FILTERS" })).toBeTruthy();
+    expect(deviceCount()).toBe(before);
   });
 
-  it("hides the group and room rows with the filter toggle and clears the selection when hiding", async () => {
+  it("switching a room off hides its devices and the room list keeps the switch state", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Devices" });
-    const toggle = screen.getByRole("button", { name: "Toggle filters" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(screen.getByRole("button", { name: /^LIGHTS/ }));
-    fireEvent.click(screen.getByRole("button", { name: /KITCHEN/ }));
-    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").every((li) => li.textContent?.includes("KITCHEN"))).toBe(true);
-
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByRole("group", { name: "Device filters" })).toBeNull();
-    expect(screen.queryByRole("group", { name: "Rooms" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^LIGHTS/ })).toBeNull();
-    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").length).toBeGreaterThan(2);
-
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: /^ALL\d*$/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: /^ALL ROOMS/ }).getAttribute("aria-pressed")).toBe("true");
+    openFilters();
+    fireEvent.click(screen.getByRole("switch", { name: "Show KITCHEN" }));
+    expect(screen.getByRole("switch", { name: "Show KITCHEN" }).getAttribute("aria-checked")).toBe("false");
+    const names = within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem");
+    expect(names.some((li) => li.textContent?.includes("KITCHEN"))).toBe(false);
+    expect(screen.getByRole("button", { name: "FILTERS · 1" })).toBeTruthy();
   });
 
-  it("shows an empty-zone message when the selected room has no devices in the filter", async () => {
+  it("NONE switches everything off and shows the empty state, ALL turns everything back on", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Devices" });
-    fireEvent.click(screen.getByRole("button", { name: /^SECURITY/ }));
-    fireEvent.click(screen.getByRole("button", { name: /KITCHEN/ }));
-    expect(screen.getByText("NO CONTROLLABLE DEVICES IN THIS ZONE")).toBeTruthy();
+    openFilters();
+    fireEvent.click(screen.getByRole("button", { name: "NONE" }));
+    expect(screen.getByRole("switch", { name: "Show LIGHTS" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("switch", { name: "Show KITCHEN" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("NO CONTROLLABLE DEVICES")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Devices" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "ALL" }));
+    expect(screen.getByRole("switch", { name: "Show LIGHTS" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "FILTERS" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Devices" })).toBeTruthy();
+  });
+
+  it("keeps the switches after closing the drawer", async () => {
+    renderPanel();
+    await screen.findByRole("list", { name: "Devices" });
+    openFilters();
+    fireEvent.click(screen.getByRole("switch", { name: "Show LIGHTS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close Filters" }));
+    expect(screen.getByRole("button", { name: "FILTERS · 1" }).getAttribute("aria-expanded")).toBe("false");
+    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem").every((li) => !li.textContent?.includes("Kitchen ceiling"))).toBe(true);
+
+    openFilters();
+    expect(screen.getByRole("switch", { name: "Show LIGHTS" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("closes with ESC", async () => {
+    renderPanel();
+    await screen.findByRole("list", { name: "Devices" });
+    openFilters();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "FILTERS" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows the empty-zone message when the selected room has no devices in the filter", async () => {
+    renderPanel();
+    await screen.findByRole("list", { name: "Devices" });
+    openFilters();
+    fireEvent.click(screen.getByRole("switch", { name: "Show SECURITY" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show LIGHTS" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show CLIMATE" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show PLUGS" }));
+    expect(screen.getByText("NO CONTROLLABLE DEVICES")).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Devices" })).toBeNull();
   });
 
-  it("hides the Kettle power sensor from the list and shows PLUGS with 1", async () => {
+  it("lists PLUGS with 1 and never lists the Kettle power sensor as a device", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Devices" });
-    expect(screen.getByRole("button", { name: /^PLUGS/ }).textContent).toContain("1");
+    openFilters();
+    const plugs = screen.getByRole("switch", { name: "Show PLUGS" }).closest("li");
+    expect(plugs?.textContent).toContain("1");
     expect(screen.queryByRole("article", { name: "Kettle power" })).toBeNull();
   });
 
-  it("gives no room chip to an area with only sensors", async () => {
+  it("gives no room switch to an area with only sensors", async () => {
     renderPanel({ areas: [...houseAreas(), garden] });
     await screen.findByRole("list", { name: "Devices" });
-    const rooms = screen.getByRole("group", { name: "Rooms" });
-    expect(within(rooms).queryByRole("button", { name: /GARDEN/ })).toBeNull();
+    openFilters();
+    expect(screen.queryByRole("switch", { name: "Show GARDEN" })).toBeNull();
   });
 
   it("shows the zone message when a room with only sensors is selected from the stage", async () => {
@@ -245,13 +285,15 @@ describe("DevicePanel", () => {
     renderPanel({ areas: [garden] });
     const message = await screen.findByText("NO CONTROLLABLE DEVICES");
     expect(message.getAttribute("role")).toBe("status");
-    expect(screen.queryByRole("group", { name: "Rooms" })).toBeNull();
-    expect(screen.getByRole("button", { name: /^ALL\d*$/ }).textContent).toContain("0");
+    openFilters();
+    expect(screen.queryByRole("list", { name: "Rooms" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Actuator types" })).toBeNull();
   });
 
   it("shows NO DEVICES when the house has no areas", async () => {
     renderPanel({ areas: [] });
     expect(await screen.findByText("NO DEVICES")).toBeTruthy();
-    expect(screen.queryByRole("group", { name: "Rooms" })).toBeNull();
+    openFilters();
+    expect(screen.queryByRole("list", { name: "Rooms" })).toBeNull();
   });
 });

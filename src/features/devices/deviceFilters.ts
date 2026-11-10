@@ -1,6 +1,16 @@
 import type { Entity } from "@/api/types";
 import { UNASSIGNED, type EntitiesState } from "@/state/entities";
-import { INTERACTIVE_DOMAINS, isInteractive } from "@/state/selectors";
+import {
+  DOMAIN_GROUPS,
+  INTERACTIVE_DOMAINS,
+  allEntities,
+  deckSections,
+  domainGroupOf,
+  isInteractive,
+  plugPowerSensorIds,
+  type DeckSection,
+  type DomainGroup,
+} from "@/state/selectors";
 import { isUnavailable } from "@/state/availability";
 import { normalize } from "@/features/telemetry/widgetFilters";
 import { cleanName, displayName } from "@/features/names/displayName";
@@ -199,4 +209,80 @@ export function deviceFacets(rows: DeviceRow[]): DeviceFacets {
     .map(([id, count]) => ({ id, label: domainLabel(id), count }))
     .sort((a, b) => a.label.localeCompare(b.label));
   return { areas: areaList, domains: domainList };
+}
+
+// Feature 162: multi-visibility for the Device panel drawer. Each switch is on by default; a device is shown when its
+// type switch AND its room switch are on. Empty sets = everything visible. Pure: the panel owns the state.
+export interface PanelVisibility {
+  hiddenTypes: ReadonlySet<DomainGroup>;
+  hiddenRooms: ReadonlySet<string>;
+}
+
+export const ALL_VISIBLE: PanelVisibility = { hiddenTypes: new Set(), hiddenRooms: new Set() };
+
+// Every actuator type the drawer can list: the pill groups plus "other" (fans, covers, scenes, scripts), so NONE hides everything.
+export const PANEL_TYPES: readonly DomainGroup[] = [...DOMAIN_GROUPS, "other"];
+
+export function panelTypeLabel(type: DomainGroup): string {
+  return type === "other" ? "OTHER" : type.toUpperCase();
+}
+
+// Interactive device count per actuator type over the whole house (same basis as groupCounts).
+export function panelTypeCounts(state: EntitiesState): Record<DomainGroup, number> {
+  const plugs = plugPowerSensorIds(allEntities(state));
+  const counts: Record<DomainGroup, number> = { lights: 0, climate: 0, security: 0, plugs: 0, other: 0 };
+  for (const entity of allEntities(state)) {
+    if (isInteractive(entity)) counts[domainGroupOf(entity, plugs)] += 1;
+  }
+  return counts;
+}
+
+// Rooms that hold at least one interactive device, in state order, with their interactive device count.
+export function panelRoomCounts(state: EntitiesState): { areaId: string; name: string; count: number }[] {
+  const rooms: { areaId: string; name: string; count: number }[] = [];
+  for (const area of state.areas) {
+    const count = area.entityIds.filter((id) => {
+      const e = state.entities[id];
+      return e !== undefined && isInteractive(e);
+    }).length;
+    if (count > 0) rooms.push({ areaId: area.areaId, name: area.name, count });
+  }
+  return rooms;
+}
+
+// Deck sections after the multi-visibility filter. selectedArea (3D stage focus) still narrows the deck to one room when set.
+export function visibleDeckSections(state: EntitiesState, selectedArea: string | null, v: PanelVisibility): DeckSection[] {
+  const plugs = plugPowerSensorIds(allEntities(state));
+  return deckSections(state, selectedArea, "all")
+    .map((section) => ({
+      ...section,
+      entities: section.entities.filter(
+        (e) => !v.hiddenRooms.has(section.area.areaId) && !v.hiddenTypes.has(domainGroupOf(e, plugs)),
+      ),
+    }))
+    .filter((section) => section.entities.length > 0 || selectedArea !== null);
+}
+
+export function setTypeShown(v: PanelVisibility, type: DomainGroup, shown: boolean): PanelVisibility {
+  const hiddenTypes = new Set(v.hiddenTypes);
+  if (shown) hiddenTypes.delete(type);
+  else hiddenTypes.add(type);
+  return { ...v, hiddenTypes };
+}
+
+export function setRoomShown(v: PanelVisibility, areaId: string, shown: boolean): PanelVisibility {
+  const hiddenRooms = new Set(v.hiddenRooms);
+  if (shown) hiddenRooms.delete(areaId);
+  else hiddenRooms.add(areaId);
+  return { ...v, hiddenRooms };
+}
+
+// NONE: hide every listed type and room.
+export function hideAllListed(types: readonly DomainGroup[], rooms: readonly string[]): PanelVisibility {
+  return { hiddenTypes: new Set(types), hiddenRooms: new Set(rooms) };
+}
+
+// Switched-off entries among the listed types and rooms (drives the FILTERS · n label).
+export function switchedOffCount(v: PanelVisibility, types: readonly DomainGroup[], rooms: readonly string[]): number {
+  return types.filter((t) => v.hiddenTypes.has(t)).length + rooms.filter((r) => v.hiddenRooms.has(r)).length;
 }
