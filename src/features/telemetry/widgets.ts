@@ -1,12 +1,14 @@
 import type { Entity } from "@/api/types";
 import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "@/features/settings/syncedSetting";
+import { numericState } from "./telemetry";
 
 // Feature 113: widget model for the live dashboard. Feature 114 (editor) edits the same model.
 
 export type WidgetKind = "line" | "area" | "bar" | "gauge";
 
-// Feature 146: width of a chart on the 6-column grid (xl). Absent on a Widget = "third".
-export type WidgetSize = "full" | "half" | "third";
+// Feature 146: width of a chart on the 12-column grid (xl). Absent on a Widget = "third".
+// Feature 160: adds quarter (25%) and threeQuarters (75%).
+export type WidgetSize = "full" | "threeQuarters" | "half" | "third" | "quarter";
 
 export interface Widget {
   id: string;
@@ -23,7 +25,7 @@ export interface Widget {
 export const WIDGET_STORAGE_KEY = "hc.telemetry.widgets.v1";
 const SCHEMA_VERSION = 1;
 const KINDS: readonly WidgetKind[] = ["line", "area", "bar", "gauge"];
-export const WIDGET_SIZES: readonly WidgetSize[] = ["full", "half", "third"];
+export const WIDGET_SIZES: readonly WidgetSize[] = ["full", "threeQuarters", "half", "third", "quarter"];
 const NUMERIC_CLASSES = new Set([
   "temperature",
   "humidity",
@@ -62,17 +64,75 @@ function widgetId(entityId: string): string {
   return `widget.${entityId}`;
 }
 
-// Default layout: every numeric sensor, visible, ordered by area then name.
-export function deriveWidgets(sensors: Entity[]): Widget[] {
-  return numericSensors(sensors)
+// Feature 159: the two climate history cards are synthetic widgets (id = entityId = `climate:<metric>`, kind "area",
+// size half). They exist only while the house has a sensor of that metric and are never shown in the kind selector.
+export type ClimateMetric = "temperature" | "humidity";
+export const CLIMATE_METRICS: readonly ClimateMetric[] = ["temperature", "humidity"];
+export const CLIMATE_LABEL: Record<ClimateMetric, string> = {
+  temperature: "Climate temperature",
+  humidity: "Climate humidity",
+};
+
+export function climateWidgetId(metric: ClimateMetric): string {
+  return `climate:${metric}`;
+}
+
+// The metric of a synthetic climate widget, or null for a sensor widget.
+export function climateMetricOf(w: Widget): ClimateMetric | null {
+  return CLIMATE_METRICS.find((m) => w.id === climateWidgetId(m)) ?? null;
+}
+
+export function isClimateWidget(w: Widget): boolean {
+  return climateMetricOf(w) !== null;
+}
+
+// Metrics the house has a numeric sensor for (same rule as the telemetry page's climate cards).
+export function climateMetrics(entities: Entity[]): ClimateMetric[] {
+  return CLIMATE_METRICS.filter((m) =>
+    entities.some((e) => e.domain === "sensor" && e.attributes.device_class === m && numericState(e) !== null),
+  );
+}
+
+export interface ClimateOptions {
+  metrics: ClimateMetric[];
+  // Metrics whose card starts hidden (migrated from the 125/158 fixed-panel toggles). Only read when a card is created.
+  hiddenByDefault?: ClimateMetric[];
+}
+
+function climateWidget(metric: ClimateMetric, order: number, climate: ClimateOptions): Widget {
+  const id = climateWidgetId(metric);
+  return {
+    id,
+    entityId: id,
+    kind: "area",
+    visible: !(climate.hiddenByDefault ?? []).includes(metric),
+    order,
+    size: "half",
+  };
+}
+
+const NO_CLIMATE: ClimateOptions = { metrics: [] };
+
+// Default layout: the climate cards first, then every numeric sensor, visible, ordered by area then name.
+export function deriveWidgets(sensors: Entity[], climate: ClimateOptions = NO_CLIMATE): Widget[] {
+  const climateWidgets = climate.metrics.map((m, order) => climateWidget(m, order, climate));
+  const sensorWidgets = numericSensors(sensors)
     .sort((a, b) => (a.area ?? "").localeCompare(b.area ?? "") || a.name.localeCompare(b.name))
-    .map((e, order) => ({ id: widgetId(e.entityId), entityId: e.entityId, kind: kindFor(e), visible: true, order }));
+    .map((e, i) => ({
+      id: widgetId(e.entityId),
+      entityId: e.entityId,
+      kind: kindFor(e),
+      visible: true,
+      order: climateWidgets.length + i,
+    }));
+  return [...climateWidgets, ...sensorWidgets];
 }
 
 // Merges a saved layout with the current sensors: removed sensors are dropped, new ones appended visible.
-// No saved layout (or none usable) -> the defaults.
-export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[]): Widget[] {
-  if (saved === null) return deriveWidgets(sensors);
+// Climate cards: a saved one is kept only while its metric is present; a missing one for a present metric is
+// PREPENDED (hiddenByDefault applies). No saved layout (or none usable) -> the defaults.
+export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[], climate: ClimateOptions = NO_CLIMATE): Widget[] {
+  if (saved === null) return deriveWidgets(sensors, climate);
   const savedById = new Map(saved.map((w) => [w.entityId, w]));
   const current = numericSensors(sensors);
   const known: Widget[] = [];
@@ -82,6 +142,11 @@ export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[]): Wid
     if (prev) known.push(prev);
     else added.push(sensor);
   }
+  const keptClimate = saved.filter((w) => {
+    const m = climateMetricOf(w);
+    return m !== null && climate.metrics.includes(m);
+  });
+  const missingClimate = climate.metrics.filter((m) => !keptClimate.some((w) => climateMetricOf(w) === m));
   const base = known.length > 0 ? Math.max(...known.map((w) => w.order)) + 1 : 0;
   const appended = added.map((e, i) => ({
     id: widgetId(e.entityId),
@@ -90,7 +155,12 @@ export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[]): Wid
     visible: true,
     order: base + i,
   }));
-  return [...known, ...appended]
+  const existingOrders = [...known, ...keptClimate].map((w) => w.order);
+  const firstOrder = existingOrders.length > 0 ? Math.min(...existingOrders) : 0;
+  const prepended = missingClimate.map((m, i) =>
+    climateWidget(m, firstOrder - (missingClimate.length - i), climate),
+  );
+  return [...prepended, ...keptClimate, ...known, ...appended]
     .sort((a, b) => a.order - b.order)
     .map((w, order) => ({ ...w, order }));
 }

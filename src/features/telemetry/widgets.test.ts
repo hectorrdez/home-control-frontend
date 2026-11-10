@@ -9,6 +9,7 @@ import {
   parseStoredWidgets,
   parseWidgets,
   reconcileWidgets,
+  climateMetrics,
   saveWidgets,
   type Widget,
 } from "./widgets";
@@ -156,7 +157,7 @@ describe("size field (feature 146)", () => {
     expect(parseWidgets(layout([{ ...base, size: "full", wide: true }]))).toEqual([{ ...base, size: "full" }]);
   });
 
-  it.each(["full", "half", "third"])("accepts size %s", (size) => {
+  it.each(["full", "threeQuarters", "half", "third", "quarter"])("accepts size %s", (size) => {
     expect(parseWidgets(layout([{ ...base, size }]))).toEqual([{ ...base, size }]);
   });
 
@@ -231,5 +232,69 @@ describe("shared layout (feature 135)", () => {
     const set = vi.spyOn(widgetsSetting, "set");
     reconcileWidgets(loadWidgets(), [temp, { ...temp, entityId: "sensor.new", attributes: temp.attributes, name: "New" }]);
     expect(set).not.toHaveBeenCalled();
+  });
+});
+
+describe("climate cards (feature 159)", () => {
+  const climateOpts = { metrics: ["temperature", "humidity"] as const };
+
+  it("climateMetrics needs a numeric sensor of the metric", () => {
+    const unavailable = { ...temp, entityId: "sensor.x", state: "unavailable" };
+    expect(climateMetrics([temp, humidity, power])).toEqual(["temperature", "humidity"]);
+    expect(climateMetrics([unavailable])).toEqual([]);
+    expect(climateMetrics([power])).toEqual([]);
+  });
+
+  it("deriveWidgets puts the climate cards first, half wide and visible by default", () => {
+    const widgets = deriveWidgets([temp, power], { metrics: [...climateOpts.metrics] });
+    expect(widgets.slice(0, 2).map((w) => [w.id, w.kind, w.size, w.visible, w.order])).toEqual([
+      ["climate:temperature", "area", "half", true, 0],
+      ["climate:humidity", "area", "half", true, 1],
+    ]);
+    expect(widgets.slice(2).map((w) => w.order)).toEqual([2, 3]);
+  });
+
+  it("deriveWidgets honours hiddenByDefault for the climate cards only", () => {
+    const widgets = deriveWidgets([temp], { metrics: ["temperature", "humidity"], hiddenByDefault: ["humidity"] });
+    expect(widgets.find((w) => w.id === "climate:humidity")?.visible).toBe(false);
+    expect(widgets.find((w) => w.id === "climate:temperature")?.visible).toBe(true);
+  });
+
+  it("reconcile keeps a saved climate card and its layout", () => {
+    const saved: Widget[] = [
+      { id: "climate:humidity", entityId: "climate:humidity", kind: "area", visible: false, order: 0, size: "full" },
+      { id: "climate:temperature", entityId: "climate:temperature", kind: "area", visible: true, order: 1, size: "half" },
+      { id: "widget.sensor.kitchen_temp", entityId: "sensor.kitchen_temp", kind: "area", visible: true, order: 2 },
+    ];
+    const result = reconcileWidgets(saved, [temp], { metrics: ["temperature", "humidity"] });
+    expect(result.map((w) => [w.id, w.visible, w.size, w.order])).toEqual([
+      ["climate:humidity", false, "full", 0],
+      ["climate:temperature", true, "half", 1],
+      ["widget.sensor.kitchen_temp", true, undefined, 2],
+    ]);
+  });
+
+  it("reconcile drops a saved climate card when the house no longer has that metric", () => {
+    const saved: Widget[] = [
+      { id: "climate:humidity", entityId: "climate:humidity", kind: "area", visible: true, order: 0, size: "half" },
+      { id: "widget.sensor.kitchen_temp", entityId: "sensor.kitchen_temp", kind: "area", visible: true, order: 1 },
+    ];
+    const result = reconcileWidgets(saved, [temp], { metrics: ["temperature"] });
+    // humidity is dropped; temperature (present, not saved) is prepended.
+    expect(result.map((w) => w.id)).toEqual(["climate:temperature", "widget.sensor.kitchen_temp"]);
+  });
+
+  it("a legacy layout without climate cards gets both prepended, half, with the migrated hidden flag", () => {
+    const legacy: Widget[] = [{ id: "widget.sensor.kitchen_temp", entityId: "sensor.kitchen_temp", kind: "area", visible: true, order: 0 }];
+    const result = reconcileWidgets(legacy, [temp], { metrics: ["temperature", "humidity"], hiddenByDefault: ["humidity"] });
+    expect(result.map((w) => [w.id, w.visible, w.size, w.order])).toEqual([
+      ["climate:temperature", true, "half", 0],
+      ["climate:humidity", false, "half", 1],
+      ["widget.sensor.kitchen_temp", true, undefined, 2],
+    ]);
+  });
+
+  it("reconcile without climate metrics leaves the sensor-only behaviour unchanged", () => {
+    expect(reconcileWidgets(null, [temp])).toEqual(deriveWidgets([temp]));
   });
 });

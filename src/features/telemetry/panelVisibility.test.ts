@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EMPTY_PANEL_STATE,
+  type PanelState,
   panelsSetting,
   gaugePanelId,
   hideNewBatteryGauges,
@@ -61,6 +62,16 @@ describe("panelVisibility", () => {
     panelsSetting.forget();
     window.localStorage.setItem(CACHE_KEY, "{not json");
     expect(loadPanelState()).toEqual(EMPTY_PANEL_STATE);
+  });
+
+  // Feature 158: the legacy single climate panel hides both new cards; each card toggles on its own afterwards.
+  it("a stored hidden history:climate hides both climate cards, and they toggle independently", () => {
+    const parsed = parsePanelState(JSON.stringify({ v: 1, hidden: ["history:climate", "kpi:air"], seen: [] }));
+    expect([...(parsed?.hidden ?? [])].sort()).toEqual(["history:climate-hum", "history:climate-temp", "kpi:air"]);
+    const temp = setPanelHidden(parsed as PanelState, "history:climate-temp", false);
+    expect(isHidden("history:climate-temp", temp.hidden)).toBe(false);
+    expect(isHidden("history:climate-hum", temp.hidden)).toBe(true);
+    expect(isHidden("history:climate", temp.hidden)).toBe(false);
   });
 
   it("works when storage throws on read and write", () => {

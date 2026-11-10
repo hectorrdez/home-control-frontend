@@ -55,3 +55,11 @@ id|slug|state|role|commit|commit_url
 150|house-whole-view|ENDED|frontend|fecb3b1|https://github.com/hectorrdez/home-control-frontend/commit/fecb3b1
 151|house-cad-export|ENDED|frontend|887fc87|https://github.com/hectorrdez/home-control-frontend/commit/887fc87
 152|house-ha-areas-hatch|ENDED|frontend|22e7728|https://github.com/hectorrdez/home-control-frontend/commit/22e7728
+153|events-panel-expand|ENDED|frontend|ecab524|https://github.com/hectorrdez/home-control-frontend/commit/ecab524
+154|home3d-select-zone-on-marker|ENDED|frontend|4051630|https://github.com/hectorrdez/home-control-frontend/commit/4051630
+155|actuator-tile-compact|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
+156|actuator-long-press-menu|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
+157|cover-tap-toggle-logic|ENDED|frontend|a8bece8|https://github.com/hectorrdez/home-control-frontend/commit/a8bece8
+158|climate-history-split-cards|ENDED|frontend|845040d|https://github.com/hectorrdez/home-control-frontend/commit/845040d
+159|climate-history-cards-editable|ENDED|frontend|91c7e56|https://github.com/hectorrdez/home-control-frontend/commit/91c7e56
+160|chart-size-quarter|ENDED|frontend|8473546|https://github.com/hectorrdez/home-control-frontend/commit/8473546

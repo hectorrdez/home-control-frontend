@@ -56,9 +56,9 @@ export function allEntities(state: EntitiesState): Entity[] {
   return Object.values(state.entities);
 }
 
-// Counts for ALL and each group, over the available interactive entities in the house.
+// Counts for ALL and each group, over the interactive entities in the house (the tiles shown, unavailable included).
 export function groupCounts(state: EntitiesState): Record<DomainFilter, number> {
-  const all = allEntities(state).filter((e) => !isUnavailable(e) && isInteractive(e));
+  const all = allEntities(state).filter(isInteractive);
   const plugs = plugPowerSensorIds(allEntities(state));
   const counts: Record<DomainFilter, number> = { all: all.length, lights: 0, climate: 0, security: 0, plugs: 0 };
   for (const e of all) {
@@ -85,7 +85,8 @@ export function deckSections(
     if (selectedArea !== null && area.areaId !== selectedArea) continue;
     const entities = area.entityIds
       .map((id) => state.entities[id])
-      .filter((e): e is Entity => e !== undefined && !isUnavailable(e) && isInteractive(e))
+      // Unavailable devices stay in the deck (grey tile, feature 155); only read-only entities are left out.
+      .filter((e): e is Entity => e !== undefined && isInteractive(e))
       .filter((e) => filter === "all" || domainGroupOf(e, plugs) === filter)
       .sort((a, b) => {
         const rank = GROUP_RANK[domainGroupOf(a, plugs)] - GROUP_RANK[domainGroupOf(b, plugs)];

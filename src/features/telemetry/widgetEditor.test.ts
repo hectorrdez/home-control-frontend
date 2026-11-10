@@ -145,8 +145,8 @@ describe("setVisible / setKind / setSize", () => {
   });
 
   it("exposes the three width modes in FULL, HALF, THIRD order", () => {
-    expect(SIZES).toEqual(["full", "half", "third"]);
-    expect(SIZES.map((s) => SIZE_LABEL[s])).toEqual(["FULL", "HALF", "THIRD"]);
+    expect(SIZES).toEqual(["full", "threeQuarters", "half", "third", "quarter"]);
+    expect(SIZES.map((s) => SIZE_LABEL[s])).toEqual(["FULL", "75%", "HALF", "THIRD", "25%"]);
   });
 
   it("does not mutate the input and returns a new array", () => {
@@ -173,10 +173,28 @@ describe("resetWidgets", () => {
     expect(result.every((x) => x.size === undefined)).toBe(true);
   });
 
+  it("setSize accepts the 75% and 25% sizes", () => {
+    expect(setSize(sample(), "a", "threeQuarters").find((x) => x.id === "a")?.size).toBe("threeQuarters");
+    expect(setSize(sample(), "a", "quarter").find((x) => x.id === "a")?.size).toBe("quarter");
+  });
+
   it("clears a chosen size", () => {
     const sensors = [humidity];
     const changed = setSize(deriveWidgets(sensors), "widget.sensor.kitchen_humidity", "full");
     expect(resetWidgets(sensors)[0].size).toBeUndefined();
     expect(changed[0].size).toBe("full");
+  });
+});
+
+describe("resetWidgets with climate cards (feature 159)", () => {
+  it("restores the climate cards first, half and visible, even after they were hidden", () => {
+    const sensors = [temp, humidity];
+    const changed = setVisible(setSize(resetWidgets(sensors, ["temperature", "humidity"]), "climate:temperature", "full"), "climate:temperature", false);
+    const restored = resetWidgets(sensors, ["temperature", "humidity"]);
+    expect(restored.slice(0, 2).map((w) => [w.id, w.size, w.visible])).toEqual([
+      ["climate:temperature", "half", true],
+      ["climate:humidity", "half", true],
+    ]);
+    expect(changed).not.toEqual(restored);
   });
 });

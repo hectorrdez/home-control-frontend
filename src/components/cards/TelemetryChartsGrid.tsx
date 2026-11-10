@@ -8,10 +8,15 @@ import Switch from "@components/controls/Switch";
 import type { ConnectionState, Entity } from "@/api/types";
 import { useLiveBuffers } from "@/features/telemetry/useLiveBuffers";
 import {
+  CLIMATE_LABEL,
+  climateMetricOf,
+  climateMetrics,
+  isClimateWidget,
   numericSensors,
   reconcileWidgets,
   saveWidgets,
   widgetsSetting,
+  type ClimateMetric,
   type Widget,
   type WidgetSize,
 } from "@/features/telemetry/widgets";
@@ -36,17 +41,22 @@ import {
 import { useChartFilters } from "@/features/telemetry/useChartFilters";
 import Button from "@components/controls/Button";
 import SensorChartCard from "./SensorChartCard";
+import ClimateMetricCard from "./ClimateMetricCard";
+import Card from "./Card";
 import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
 import ChartEditBar from "./ChartEditBar";
 
 const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
 
-// Feature 146: column span of a chart on the 6-column xl grid (2 md columns). Literal class strings so Tailwind generates them.
-// md is bounded with max-xl: Tailwind emits the xl media query before md, so an unbounded md:col-span-2 would override xl:col-span-6.
+// Feature 146: column span of a chart on the xl grid. Feature 160: 12 columns, so 25% = 3 and 75% = 9.
+// Literal class strings so Tailwind generates them. md is bounded with max-xl: Tailwind emits the xl media query
+// before md, so an unbounded md:col-span-2 would override xl:col-span-12. The list grid (md:max-xl:grid-cols-2) is bounded the same way.
 function sizeClass(size: WidgetSize): string {
-  if (size === "full") return "md:max-xl:col-span-2 xl:col-span-6";
-  if (size === "half") return "xl:col-span-3";
-  return "xl:col-span-2";
+  if (size === "full") return "md:max-xl:col-span-2 xl:col-span-12";
+  if (size === "threeQuarters") return "md:max-xl:col-span-2 xl:col-span-9";
+  if (size === "half") return "xl:col-span-6";
+  if (size === "quarter") return "xl:col-span-3";
+  return "xl:col-span-4";
 }
 
 // Feature 113: live chart grid for every visible numeric sensor. Renders inside the telemetry "Climate history" region.
@@ -77,6 +87,8 @@ interface TelemetryChartsGridProps {
   connection: ConnectionState;
   fixedPanels?: FixedPanel[];
   onFixedPanelChange?: (id: string, visible: boolean) => void;
+  // Feature 159: climate cards whose old fixed-panel toggle was hidden (read once, only when a card is created).
+  climateHiddenByDefault?: ClimateMetric[];
 }
 
 export default function TelemetryChartsGrid({
@@ -85,8 +97,10 @@ export default function TelemetryChartsGrid({
   connection,
   fixedPanels = [],
   onFixedPanelChange,
+  climateHiddenByDefault,
 }: TelemetryChartsGridProps) {
   const numeric = useMemo(() => numericSensors(sensors), [sensors]);
+  const climateList = useMemo(() => climateMetrics(sensors), [sensors]);
   // Feature 135: the layout comes from the shared setting, so another device's change re-renders this grid.
   const [stored] = useSyncedSetting(widgetsSetting);
   const saved = stored?.widgets ?? null;
@@ -94,7 +108,10 @@ export default function TelemetryChartsGrid({
   const names = useEntityName();
   const zoneOf = useZoneTokenResolver();
   const closePanel = useCallback(() => setPanelOpen(false), []);
-  const widgets = useMemo(() => reconcileWidgets(saved, numeric), [saved, numeric]);
+  const widgets = useMemo(
+    () => reconcileWidgets(saved, numeric, { metrics: climateList, hiddenByDefault: climateHiddenByDefault }),
+    [saved, numeric, climateList, climateHiddenByDefault],
+  );
   const buffers = useLiveBuffers(numeric);
   const [limit, setLimit] = useState(PAGE_SIZE);
 
@@ -136,7 +153,13 @@ export default function TelemetryChartsGrid({
     const ids = new Set(filtered.map((r) => r.entity.entityId));
     persist(widgets.map((w) => (ids.has(w.entityId) ? { ...w, visible: on } : w)));
   };
-  const visible = widgets.filter((w) => w.visible && byId.has(w.entityId));
+  // Feature 159: climate cards are never in `rows`, so filters, facets and ALL/NONE stay chart-only.
+  const isShown = (w: Widget) => w.visible && (isClimateWidget(w) || byId.has(w.entityId));
+  const visible = widgets.filter(isShown);
+  const chartCount = visible.filter((w) => !isClimateWidget(w)).length;
+  const climateShown = widgets.filter(
+    (w) => isClimateWidget(w) && normalize(CLIMATE_LABEL[climateMetricOf(w)!]).includes(normalize(filters.query)),
+  );
   // Feature 125: the search query filters the fixed panels too; ALL/NONE stay chart-only.
   const fixedShown = fixedPanels.filter((p) => normalize(p.label).includes(normalize(filters.query)));
 
@@ -178,8 +201,14 @@ export default function TelemetryChartsGrid({
   }, [resetOpen]);
 
   const labelOf = (entity: Entity) => names.displayName(entity);
-  const visibleOf = (ws: Widget[]) =>
-    ws.filter((w) => w.visible && byId.has(w.entityId)).sort((a, b) => a.order - b.order);
+  // Feature 159: the title used by the live region (climate cards use their fixed title).
+  const labelFor = (w: Widget): string => {
+    const metric = climateMetricOf(w);
+    if (metric) return CLIMATE_LABEL[metric];
+    const entity = byId.get(w.entityId);
+    return entity ? labelOf(entity) : w.entityId;
+  };
+  const visibleOf = (ws: Widget[]) => ws.filter(isShown).sort((a, b) => a.order - b.order);
 
   const move = (w: Widget, dir: -1 | 1) => {
     const next = moveWidget(widgets, w.id, dir);
@@ -189,13 +218,13 @@ export default function TelemetryChartsGrid({
     const position = shown.findIndex((x) => x.id === w.id) + 1;
     // Reveal the moved chart before focus is restored: a move past the rendered slice would otherwise leave no node to focus.
     if (position > limit) setLimit(Math.ceil(position / PAGE_SIZE) * PAGE_SIZE);
-    setAnnouncement(`Moved ${labelOf(byId.get(w.entityId)!)} to position ${position} of ${shown.length}`);
+    setAnnouncement(`Moved ${labelFor(w)} to position ${position} of ${shown.length}`);
     pendingFocus.current = { id: w.id, dir: side(canMove(next, w.id, dir) ? dir : (-dir as -1 | 1)) };
   };
 
   const hide = (w: Widget) => {
     persist(setVisible(widgets, w.id, false));
-    setAnnouncement(`${labelOf(byId.get(w.entityId)!)} hidden`);
+    setAnnouncement(`${labelFor(w)} hidden`);
     editRef.current?.focus();
   };
 
@@ -205,7 +234,7 @@ export default function TelemetryChartsGrid({
   };
 
   const confirmReset = () => {
-    persist(resetWidgets(numeric));
+    persist(resetWidgets(numeric, climateList));
     setResetOpen(false);
     setAnnouncement("Layout reset");
     resetReturnFocus.current = true;
@@ -225,7 +254,7 @@ export default function TelemetryChartsGrid({
       <div className="flex items-center justify-between gap-space-xs">
         <p className="flex items-center gap-space-xs font-label-caps text-label-caps uppercase">
           <span className={TEXT[connection]} role="status" aria-label="Chart connection">
-            {`${LABEL[connection]} • ${visible.length} CHARTS`}
+            {`${LABEL[connection]} • ${chartCount} CHARTS`}
           </span>
         </p>
         <div className="flex items-center gap-space-xs">
@@ -280,6 +309,26 @@ export default function TelemetryChartsGrid({
               NONE
             </Button>
           </div>
+          {climateShown.length > 0 && (
+            <ul aria-label="Climate card toggles" className="flex flex-col gap-space-xs">
+              {climateShown.map((w) => {
+                const label = labelFor(w);
+                return (
+                  <li
+                    key={w.id}
+                    className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                  >
+                    <span className="min-w-0 truncate font-sans text-body-md text-on-surface">{label}</span>
+                    <Switch
+                      aria-label={`Show ${label}`}
+                      checked={w.visible}
+                      onCheckedChange={(on) => persist(setVisible(widgets, w.id, on))}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {filtered.length === 0 ? (
             <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">NO MATCHES</p>
           ) : (
@@ -336,11 +385,35 @@ export default function TelemetryChartsGrid({
         </>
       ) : (
         <>
-          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:max-xl:grid-cols-2 xl:grid-cols-6">
+          <div ref={listRef} role="list" aria-label="Live charts" className="grid grid-cols-1 gap-space-md md:max-xl:grid-cols-2 xl:grid-cols-12">
             {visible.slice(0, limit).map((w) => {
+              const size = w.size ?? "third";
+              const metric = climateMetricOf(w);
+              if (metric) {
+                return (
+                  <div key={w.id} role="listitem" data-widget-id={w.id} className={sizeClass(size)}>
+                    <Card role="region" aria-label={CLIMATE_LABEL[metric]} className="flex flex-col gap-space-xs border-t-2">
+                      <ClimateMetricCard metric={metric} entities={sensors} areaName={areaName} />
+                    </Card>
+                    {editing && (
+                      <ChartEditBar
+                        label={CLIMATE_LABEL[metric]}
+                        size={size}
+                        canUp={canMove(widgets, w.id, -1)}
+                        canDown={canMove(widgets, w.id, 1)}
+                        onMove={(dir) => move(w, dir)}
+                        onSize={(next) => {
+                          persist(setSize(widgets, w.id, next));
+                          setAnnouncement(`${CLIMATE_LABEL[metric]} width ${SIZE_LABEL[next]}`);
+                        }}
+                        onHide={() => hide(w)}
+                      />
+                    )}
+                  </div>
+                );
+              }
               const entity = byId.get(w.entityId);
               if (!entity) return null;
-              const size = w.size ?? "third";
               return (
                 <div
                   key={w.id}
@@ -368,7 +441,7 @@ export default function TelemetryChartsGrid({
                       onKind={(kind) => persist(setKind(widgets, w.id, kind))}
                       onSize={(next) => {
                         persist(setSize(widgets, w.id, next));
-                        setAnnouncement(`${labelOf(entity)} width ${SIZE_LABEL[next]}`);
+                        setAnnouncement(`${labelFor(w)} width ${SIZE_LABEL[next]}`);
                       }}
                       onHide={() => hide(w)}
                     />

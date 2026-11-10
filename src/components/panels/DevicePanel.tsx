@@ -6,11 +6,8 @@ import {
   deckSections,
   groupCounts,
   summarize,
-  allEntities,
   isInteractive,
-  isUnavailable,
   formatPower,
-  plugDrawBySwitch,
   type DomainFilter,
   type PillGroup,
 } from "@/state/selectors";
@@ -19,7 +16,8 @@ import Button from "@components/controls/Button";
 import ButtonLink from "@components/controls/ButtonLink";
 import FilterPill from "@components/controls/FilterPill";
 import StatusChip from "@components/controls/StatusChip";
-import DeviceModule from "@components/cards/DeviceModule";
+import ActuatorTile from "@components/cards/ActuatorTile";
+import ActuatorMenu from "@components/cards/ActuatorMenu";
 import { UNASSIGNED } from "@/state/entities";
 
 const GROUP_LABEL: Record<PillGroup, string> = {
@@ -46,16 +44,12 @@ function emptyMessage(areaCount: number, selectedArea: string | null): string {
   return "NO CONTROLLABLE DEVICES";
 }
 
-function drawLabel(sensor: { state: string; attributes: Record<string, unknown> } | undefined): string | undefined {
-  if (!sensor) return undefined;
-  const unit = typeof sensor.attributes.unit_of_measurement === "string" ? sensor.attributes.unit_of_measurement : "W";
-  return `${sensor.state} ${unit}`;
-}
-
 export default function DevicePanel() {
   const { state, reload, selectedArea, setSelectedArea, selectedGroup, setSelectedGroup } = useEntities();
   const ha = useHaStatus();
   const [filtersShown, setFiltersShown] = useState(true);
+  // Feature 156: the long-press menu is open for this entity (one at a time).
+  const [menuId, setMenuId] = useState<string | null>(null);
 
   if (state.status === "error") {
     return (
@@ -85,14 +79,13 @@ export default function DevicePanel() {
   const synchronized = ha.state === "online" && summary.unavailable === 0;
   const sections = deckSections(state, selectedArea, selectedGroup);
   const shown = sections.reduce((n, s) => n + s.entities.length, 0);
-  // A room chip needs at least one available, interactive device (read-only rooms have no chip).
+  // A room chip needs at least one interactive device (read-only rooms have no chip).
   const rooms = state.areas.filter((a) =>
     a.entityIds.some((id) => {
       const e = state.entities[id];
-      return e !== undefined && !isUnavailable(e) && isInteractive(e);
+      return e !== undefined && isInteractive(e);
     }),
   );
-  const draws = plugDrawBySwitch(allEntities(state));
 
   // Hiding the filters also clears them, so the list shows every device again.
   const toggleFilters = () => {
@@ -186,22 +179,24 @@ export default function DevicePanel() {
             {emptyMessage(state.areas.length, selectedArea)}
           </p>
         ) : (
-          <ul aria-label="Devices" className="flex min-h-0 flex-1 flex-col gap-space-sm overflow-y-auto pr-space-xs">
+          <ul aria-label="Devices" className="grid min-h-0 flex-1 grid-cols-2 content-start gap-space-sm overflow-y-auto pr-space-xs md:grid-cols-3">
             {sections
               .flatMap((section) => section.entities.map((entity) => ({ entity, section })))
               .map(({ entity, section }, index) => (
                 <li key={entity.entityId} style={{ "--i": index } as CSSProperties}>
-                  <DeviceModule
+                  <ActuatorTile
                     entity={entity}
                     areaName={section.area.areaId === UNASSIGNED ? "UNASSIGNED" : section.area.name.toUpperCase()}
-                    drawText={drawLabel(draws.get(entity.entityId))}
-                    presetModes
+                    onLongPress={(target) => setMenuId(target.entityId)}
                   />
                 </li>
               ))}
           </ul>
         )}
       </div>
+      {menuId !== null && state.entities[menuId] && (
+        <ActuatorMenu entity={state.entities[menuId]} onClose={() => setMenuId(null)} />
+      )}
     </section>
   );
 }

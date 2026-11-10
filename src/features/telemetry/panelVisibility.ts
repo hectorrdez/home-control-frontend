@@ -15,7 +15,12 @@ export interface PanelState {
 export const EMPTY_PANEL_STATE: PanelState = { hidden: [], seen: [] };
 
 export const kpiPanelId = (kpi: "climate" | "air" | "power" | "nodes") => `kpi:${kpi}`;
-export const historyPanelId = (history: "climate" | "power") => `history:${history}`;
+// Feature 158: the climate history is two cards; the old single id is only read by the migration below.
+// Feature 159: history:climate-temp / history:climate-hum are no longer fixed-panel toggles. The page reads them
+// (never writes) once, as the default visible flag of the climate widgets (widgets.ts) that do not exist yet.
+export type HistoryPanel = "climate-temp" | "climate-hum" | "power";
+export const historyPanelId = (history: HistoryPanel) => `history:${history}`;
+const LEGACY_CLIMATE_ID = "history:climate";
 export const gaugePanelId = (entityId: string) => `gauge:${entityId}`;
 
 export function isHidden(id: string, hidden: readonly string[]): boolean {
@@ -57,7 +62,14 @@ export function parseStoredPanels(raw: unknown): StoredPanels | null {
   if (typeof data !== "object" || data === null) return null;
   const { v, hidden, seen } = data as { v?: unknown; hidden?: unknown; seen?: unknown };
   if (v !== SCHEMA_VERSION || !isStringArray(hidden) || !isStringArray(seen)) return null;
-  return { v: SCHEMA_VERSION, hidden, seen };
+  return { v: SCHEMA_VERSION, hidden: migrateHidden(hidden), seen };
+}
+
+// Feature 158: a hidden legacy "history:climate" hides both climate cards; the old id is dropped on the next save.
+export function migrateHidden(hidden: readonly string[]): string[] {
+  if (!hidden.includes(LEGACY_CLIMATE_ID)) return [...hidden];
+  const rest = hidden.filter((id) => id !== LEGACY_CLIMATE_ID);
+  return [...new Set([...rest, historyPanelId("climate-temp"), historyPanelId("climate-hum")])];
 }
 
 export function parsePanelState(raw: string | null): PanelState | null {

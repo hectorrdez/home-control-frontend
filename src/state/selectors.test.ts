@@ -118,13 +118,13 @@ describe("isInteractive", () => {
     ]);
   });
 
-  it("keeps an unavailable light interactive but out of the deck and the counts", () => {
+  it("keeps an unavailable light in the deck (grey tile, feature 155) and in the counts", () => {
     const light: Entity = { ...synthetic("light"), entityId: "light.gone", state: "unavailable" };
     expect(isInteractive(light)).toBe(true);
     const state = loaded([...house(), light]);
     const shown = deckSections(state, null, "all").flatMap((s) => s.entities.map((e) => e.entityId));
-    expect(shown).not.toContain("light.gone");
-    expect(groupCounts(state).lights).toBe(4);
+    expect(shown).toContain("light.gone");
+    expect(groupCounts(state).lights).toBe(5);
   });
 });
 
@@ -182,6 +182,13 @@ describe("deck sections", () => {
     expect(sections[0].entities.map((e) => e.entityId)).toEqual(["light.living_room_ceiling", "climate.living_room"]);
   });
 
+  it("shows an unavailable device in its room", () => {
+    const light: Entity = { ...synthetic("light"), entityId: "light.gone", state: "unavailable", area: "office" };
+    const state = loaded([...house(), light]);
+    const sections = deckSections(state, "office", "all");
+    expect(sections[0].entities.map((e) => e.entityId)).toContain("light.gone");
+  });
+
   it("hides read-only entities from every section", () => {
     const shown = deckSections(loaded(house()), null, "all").flatMap((s) => s.entities.map((e) => e.entityId));
     expect(shown.some((id) => id.startsWith("sensor.") || id.startsWith("binary_sensor."))).toBe(false);
@@ -215,11 +222,11 @@ describe("deck sections", () => {
 });
 
 describe("unavailable entities", () => {
-  it("are hidden from the deck and the group counts", () => {
+  it("stay in the deck as grey tiles and count with the devices shown", () => {
     const entities = createFixtureEntities().map((e) => (e.entityId === "light.kitchen_ceiling" ? { ...e, state: "unavailable" } : e));
     const state = loaded(entities);
     const shown = deckSections(state, null, "all").flatMap((sec) => sec.entities.map((e) => e.entityId));
-    expect(shown).not.toContain("light.kitchen_ceiling");
-    expect(groupCounts(state).all).toBe(8);
+    expect(shown).toContain("light.kitchen_ceiling");
+    expect(groupCounts(state).all).toBe(9);
   });
 });
