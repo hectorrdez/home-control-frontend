@@ -1,5 +1,5 @@
 import type { EntityFilter, EventsQuery, HomeApi } from "./HomeApi";
-import { ApiError, SettingConflictError, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type LoggedEvent, type Setting } from "./types";
+import { ApiError, ReloadRateLimitedError, SettingConflictError, type ReloadEntry, type ReloadResult, type Preset, type PresetInput, type AlertRule, type Alias, type CalibrationInput, type CoverCalibration, type ApiErrorKind, type Area, type ConnectionState, type Entity, type EntityAction, type HaStatus, type HistorySeries, type LoggedEvent, type Setting } from "./types";
 import { backoffDelay } from "./backoff";
 import { parseServerEvent, parseStateChanged, SERVER_EVENT_NAMES, streamUrl, type EventSourceFactory } from "./liveSubscribe";
 import { getClientId, getClientName } from "./clientIdentity";
@@ -311,6 +311,39 @@ export function createLiveApi({ baseUrl, token, fetchImpl, eventSourceFactory }:
 
     async deleteSetting(key): Promise<void> {
       await request<unknown[]>(`/api/settings/${encodeURIComponent(key)}`, { method: "DELETE" });
+    },
+
+    // Feature 164 (backend 024): the answer carries `data` (entries) and a sibling `entities` count.
+    async reloadIntegrations(): Promise<ReloadResult> {
+      let res: Response;
+      try {
+        res = await doFetch(`${baseUrl}/api/ha/reload`, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+            "X-Client-Id": getClientId(),
+            "X-Client-Name": getClientName(),
+          },
+        });
+      } catch (err) {
+        throw new ApiError("network", err instanceof Error ? err.message : "Network error");
+      }
+      const body = (await res.json().catch(() => undefined)) as
+        | (Envelope<ReloadEntry[]> & { entities?: { before?: number; after?: number }; retryAfterSeconds?: number })
+        | undefined;
+      if (res.status === 429) {
+        const fromBody = body?.retryAfterSeconds ?? (typeof body?.data === "object" && body.data && !Array.isArray(body.data) ? (body.data as { retryAfterSeconds?: number }).retryAfterSeconds : undefined);
+        const header = Number(res.headers.get("Retry-After"));
+        const seconds = fromBody ?? (Number.isFinite(header) && header > 0 ? header : 1);
+        throw new ReloadRateLimitedError(seconds);
+      }
+      if (!res.ok) throw new ApiError(kindFor(res.status, errorCode(body)), errorCode(body) ?? `HTTP ${res.status}`, res.status);
+      if (!Array.isArray(body?.data) || !body.entities) throw new ApiError("server", "Response has no reload envelope", res.status);
+      return {
+        entries: body.data,
+        entities: { before: body.entities.before ?? 0, after: body.entities.after ?? 0 },
+      };
     },
 
     async setCoverPercent(entityId, percent): Promise<Entity> {

@@ -17,6 +17,8 @@ interface EntitiesContextValue {
   setSelectedArea: (areaId: string | null) => void;
   selectedGroup: DomainFilter;
   setSelectedGroup: (group: DomainFilter) => void;
+  // Re-fetch the areas (feature 164). Coalesced: concurrent calls share one request plus at most one follow-up.
+  refreshAreas: () => Promise<void>;
   // Optimistic action (104). Resolves true on success, false after a rollback.
   sendIntent: (entity: Entity, intent: Intent) => Promise<boolean>;
   // Live stream state (105): "open" or "reconnecting". Values keep their last known state meanwhile.
@@ -26,6 +28,7 @@ interface EntitiesContextValue {
 }
 
 const EntitiesContext = createContext<EntitiesContextValue | null>(null);
+
 
 export function EntitiesProvider({ children }: { children: ReactNode }) {
   const api = useApi();
@@ -65,11 +68,33 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
   }, [loadEvents]);
 
   // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
-  const refreshAreas = useCallback(() => {
-    void api.getAreas().then(
-      (areas) => dispatch({ type: "areasRefreshed", areas }),
-      () => undefined,
-    );
+  // Feature 164: coalesced. While a refresh is in flight, callers share its promise and mark one follow-up;
+  // the follow-up runs once when the in-flight request ends, so the latest state is never lost.
+  const areasInFlight = useRef<Promise<void> | null>(null);
+  const areasFollowUp = useRef(false);
+  const refreshAreas = useCallback((): Promise<void> => {
+    if (areasInFlight.current) {
+      areasFollowUp.current = true;
+      return areasInFlight.current;
+    }
+    const start = (): Promise<void> => {
+      const request = api
+        .getAreas()
+        .then(
+          (areas) => dispatch({ type: "areasRefreshed", areas }),
+          () => undefined,
+        )
+        .finally(() => {
+          areasInFlight.current = null;
+          if (areasFollowUp.current) {
+            areasFollowUp.current = false;
+            void start(); // cannot reject: its own chain handles the request error
+          }
+        });
+      areasInFlight.current = request;
+      return request;
+    };
+    return start();
   }, [api]);
 
   // One app-level subscription (105): stream events merge into the store; a reconnect re-fetches the areas once.
@@ -81,7 +106,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         setConnection(next);
         publishStreamState(next);
         if (isStreamRecovery(previous, next)) {
-          refreshAreas();
+          void refreshAreas();
           loadEvents();
         }
         previous = next;
@@ -103,7 +128,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         hiddenSince ??= Date.now();
         return;
       }
-      if (shouldResyncAfterHidden(hiddenSince, Date.now())) refreshAreas();
+      if (shouldResyncAfterHidden(hiddenSince, Date.now())) void refreshAreas();
       hiddenSince = null;
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -126,7 +151,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       const requestId = Number(entry.slice(separator + 1));
       return window.setTimeout(() => {
         dispatch({ type: "settleTimedOut", entityId, requestId });
-        refreshAreas(); // keeps the last state on failure; the next stream event or reload will correct it
+        void refreshAreas(); // keeps the last state on failure; the next stream event or reload will correct it
       }, SETTLE_TIMEOUT_MS);
     });
     return () => timers.forEach((timer) => window.clearTimeout(timer));
@@ -172,8 +197,9 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       sendIntent,
       connection,
       logAlert,
+      refreshAreas,
     }),
-    [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert],
+    [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert, refreshAreas],
   );
 
   // Feature 147: zone colors come from the same areas list (every HA area, the unassigned group excluded).

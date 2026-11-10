@@ -4,6 +4,7 @@ import DevicesPage from "./DevicesPage";
 import HistoryPage from "./HistoryPage";
 import HomePage from "./HomePage";
 import { ROUTE_PATHS } from "./routePaths";
+import SettingsPage from "./SettingsPage";
 import TelemetryPage from "./TelemetryPage";
 
 export const SiteMap: Array<Page> = [
@@ -12,4 +13,5 @@ export const SiteMap: Array<Page> = [
   { name: "deviceDetail", path: ROUTE_PATHS.deviceDetail, component: <DeviceDetailPage /> },
   { name: "telemetry", path: ROUTE_PATHS.telemetry, component: <TelemetryPage /> },
   { name: "history", path: ROUTE_PATHS.history, component: <HistoryPage /> },
+  { name: "settings", path: ROUTE_PATHS.settings, component: <SettingsPage /> },
 ];

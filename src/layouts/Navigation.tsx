@@ -1,6 +1,6 @@
 import PathUtils from "@utils/PathUtils";
 import StringUtils from "@utils/StringUtils";
-import { Activity, Box, History, List, type LucideIcon } from "lucide-react";
+import { Activity, Box, History, List, Settings, type LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 type NavItem = { label: string; name: string; icon: LucideIcon };
@@ -10,6 +10,7 @@ const items: Array<NavItem> = [
   { label: "Devices", name: "devices", icon: List },
   { label: "Telemetry", name: "telemetry", icon: Activity },
   { label: "History", name: "history", icon: History },
+  { label: "Settings", name: "settings", icon: Settings },
 ];
 
 export function TopNav() {

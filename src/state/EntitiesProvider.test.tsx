@@ -251,3 +251,115 @@ describe("settling after a stale answer (117)", () => {
     }
   });
 });
+
+// Feature 164: refreshAreas is coalesced (one request in flight, at most one follow-up, shared promise).
+describe("refreshAreas coalescing (164)", () => {
+  // getAreas: the mount load answers at once; calls listed in `deferred` wait until released.
+  function coalescingHarness(deferred: number[], afterDeferred: Area[] = areas) {
+    const releases: Array<() => void> = [];
+    let call = 0;
+    const getAreas = vi.fn(() => {
+      const index = call++;
+      if (index === 0) return Promise.resolve(areas);
+      if (deferred.includes(index)) {
+        return new Promise<Area[]>((resolve) => releases.push(() => resolve(afterDeferred)));
+      }
+      return Promise.resolve(afterDeferred);
+    });
+    const h = harness({ getAreas: getAreas as unknown as () => Promise<Area[]> });
+    return { h, getAreas, release: (i: number) => releases[i]() };
+  }
+
+  it("two calls in the same tick make one request plus one follow-up, never zero", async () => {
+    const { h, getAreas } = coalescingHarness([]);
+    const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+    await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+    act(() => {
+      void result.current.refreshAreas();
+      void result.current.refreshAreas();
+    });
+    await waitFor(() => expect(getAreas).toHaveBeenCalledTimes(3));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(getAreas).toHaveBeenCalledTimes(3);
+  });
+
+  it("concurrent callers share the same in-flight promise", async () => {
+    const { h, getAreas, release } = coalescingHarness([1]);
+    const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+    await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.refreshAreas();
+      second = result.current.refreshAreas();
+    });
+    expect(second).toBe(first);
+    expect(getAreas).toHaveBeenCalledTimes(2);
+    await act(async () => release(0));
+    await act(async () => {
+      await first;
+    });
+  });
+
+  it("a call made during an in-flight refresh is not lost: the latest state is fetched", async () => {
+    const latest: Area[] = [{ areaId: "kitchen", name: "Kitchen", entities: [light("light.new", "on")] }];
+    const { h, getAreas, release } = coalescingHarness([1], latest);
+    const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+    await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+    act(() => {
+      void result.current.refreshAreas(); // in flight (deferred)
+    });
+    act(() => {
+      void result.current.refreshAreas(); // during flight: marks one follow-up
+    });
+    await act(async () => release(0)); // in-flight answer arrives (stale for the second caller)
+    await waitFor(() => expect(getAreas).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.state.entities["light.new"]).toBeDefined());
+  });
+
+  it("an SSE-reconnect refresh right after a visibility refresh still runs", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { h, getAreas, release } = coalescingHarness([1]);
+      const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+      await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+      const setVisibility = (value: "hidden" | "visible") =>
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => value });
+      setVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.setSystemTime(Date.now() + 61_000);
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange")); // refresh 1, in flight (deferred)
+      expect(getAreas).toHaveBeenCalledTimes(2);
+
+      h.emitConnection("reconnecting");
+      h.emitConnection("open"); // reconnect refresh: coalesced into one follow-up, must not be dropped
+      await act(async () => release(0));
+      await waitFor(() => expect(getAreas).toHaveBeenCalledTimes(3));
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    }
+  });
+
+  it("keeps the optimistic value of a pending action when the refresh answers the old state", async () => {
+    const h = harness({ runAction: () => new Promise<Entity>(() => undefined) });
+    const { result } = renderHook(() => useEntities(), { wrapper: wrapper(h.api) });
+    await waitFor(() => expect(result.current.state.status).toBe("ready"));
+
+    act(() => {
+      void result.current.sendIntent(light("light.k"), { kind: "power", on: true });
+    });
+    expect(result.current.state.entities["light.k"].state).toBe("on");
+
+    await act(async () => {
+      await result.current.refreshAreas();
+    });
+    expect(h.getAreas).toHaveBeenCalledTimes(2);
+    expect(result.current.state.entities["light.k"].state).toBe("on");
+  });
+});
