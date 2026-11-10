@@ -19,6 +19,8 @@ export interface SyncedSetting<T> {
   set(value: T): void;
   subscribe(listener: () => void): () => void;
   status(): SyncedStatus;
+  // False from start() until the first sync attempt ends (or the store is unavailable/offline). Derived writes wait for it.
+  settled(): boolean;
   start(api: HomeApi): Promise<void>;
   stop(): void;
   // Drops the in-memory copy so the next get() re-reads the localStorage cache (tests and sign-out-like resets).
@@ -115,6 +117,7 @@ function isRetryable(error: unknown): boolean {
 
 export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500 }: SyncedSettingOptions<T>): SyncedSetting<T> {
   let loaded = false;
+  let isSettled = false;
   let memory: Memory<T> | null = null;
   let api: HomeApi | undefined;
   // Bumped by stop(): async work started before it is ignored when it finishes.
@@ -266,6 +269,15 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
 
   // Reconciles with the server: adopt its value, push pending offline edits, or import the local value once.
   async function sync(): Promise<void> {
+    const run = generation;
+    await syncOnce();
+    if (run === generation && !isSettled) {
+      isSettled = true;
+      notify();
+    }
+  }
+
+  async function syncOnce(): Promise<void> {
     const client = api;
     if (!client || unavailable) return;
     const run = generation;
@@ -352,6 +364,7 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
     ensureLoaded();
     stop();
     api = next;
+    isSettled = false;
     unavailable = false;
     offline = false;
     unsubscribers = [subscribeServerEvents(onServerEvent), subscribeStreamState(onStreamState)];
@@ -360,6 +373,7 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
 
   function forget(): void {
     loaded = false;
+    isSettled = false;
     memory = null;
   }
 
@@ -393,6 +407,7 @@ export function createSyncedSetting<T>({ key, legacyKey, parse, debounceMs = 500
       return "local";
     },
 
+    settled: () => isSettled,
     start,
     stop,
     forget,
