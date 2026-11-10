@@ -78,6 +78,31 @@ export class SettingConflictError extends ApiError {
   }
 }
 
+// Feature 164 (backend 024): POST /api/ha/reload answers one entry per reloaded integration plus the entity counts.
+export interface ReloadEntry {
+  entryId: string;
+  domain: string;
+  title: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface ReloadResult {
+  entries: ReloadEntry[];
+  entities: { before: number; after: number };
+}
+
+// 429 on POST /api/ha/reload: the reload was done recently; `retryAfterSeconds` is the wait before the next one.
+export class ReloadRateLimitedError extends ApiError {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super("server", "reload_rate_limited", 429);
+    this.name = "ReloadRateLimitedError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 // Feature 127 (backend 010): cover travel-time calibration. position stays null until a percent move has ended.
 export interface CoverCalibration {
   entityId: string;

@@ -14,6 +14,7 @@ import {
   type ConnectionState,
   type CoverCalibration,
   type Preset,
+  type ReloadResult,
   type PresetInput,
   type Entity,
   type EntityAction,
@@ -27,6 +28,7 @@ import {
 import {
   createFixtureEntities,
   createManyDeviceEntities,
+  createReloadedDeviceEntities,
   createRawNameEntities,
   createUncalibratedCoverEntities,
   createKnownCoverEntities,
@@ -67,6 +69,8 @@ const REMOTE_ACK_MS = 2000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+// Feature 164: a normal RELOAD DEVICES answers after this delay (scenario slow uses slowMs).
+const RELOAD_DELAY_MS = 800;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -105,6 +109,8 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
     emitServer({ type: "resource_changed", resource, keys, by: getClientId() });
   }
   const rng = createPrng(hashSeed(`stream:${seed}`));
+  // Feature 164: successful reloads in this mock session (the first one adds the device).
+  let reloadCalls = 0;
 
   // Feature 140: in-memory event log shaped like backend 018 (newest first). Kept in localStorage so a reload
   // still shows it; the live `event` frame mirrors every row.
@@ -944,6 +950,20 @@ export function createMockApi(options: MockApiOptions = {}): HomeApi {
         if (onServerEvent) serverListeners.delete(onServerEvent);
         clearInterval(interval);
         for (const timer of timeouts) clearTimeout(timer);
+      };
+    },
+
+    // Feature 164 (backend 024). The first call per session adds one device so the flow is visible.
+    async reloadIntegrations(): Promise<ReloadResult> {
+      if (scenario === "unavailable-reload") throw new ApiError("not_found", "not_found", 404);
+      if (scenario === "error") throw new ApiError("server", "ha_unreachable", 502);
+      await delay(scenario === "slow" ? slowMs : RELOAD_DELAY_MS);
+      const before = entities.size;
+      if (reloadCalls === 0) for (const e of createReloadedDeviceEntities()) entities.set(e.entityId, e);
+      reloadCalls += 1;
+      return {
+        entries: [{ entryId: "mock-tuya", domain: "tuya", title: "Tuya", ok: true }],
+        entities: { before, after: entities.size },
       };
     },
 

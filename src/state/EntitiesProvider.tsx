@@ -17,6 +17,8 @@ interface EntitiesContextValue {
   setSelectedArea: (areaId: string | null) => void;
   selectedGroup: DomainFilter;
   setSelectedGroup: (group: DomainFilter) => void;
+  // Re-fetch the areas (feature 164 reuses it after a reload; a call within 1 s of the last request is skipped).
+  refreshAreas: () => void;
   // Optimistic action (104). Resolves true on success, false after a rollback.
   sendIntent: (entity: Entity, intent: Intent) => Promise<boolean>;
   // Live stream state (105): "open" or "reconnecting". Values keep their last known state meanwhile.
@@ -26,6 +28,9 @@ interface EntitiesContextValue {
 }
 
 const EntitiesContext = createContext<EntitiesContextValue | null>(null);
+
+// Feature 164: window in which a second areas refresh is not sent.
+const AREAS_DEDUP_MS = 1000;
 
 export function EntitiesProvider({ children }: { children: ReactNode }) {
   const api = useApi();
@@ -65,7 +70,12 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
   }, [loadEvents]);
 
   // Re-fetch the entity list (keeps optimistic values). A failure keeps the last state; the stream corrects it.
+  // Feature 164: a refresh asked within AREAS_DEDUP_MS of the previous areas request is skipped (no double fetch).
+  const lastAreasRequest = useRef(0);
   const refreshAreas = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAreasRequest.current < AREAS_DEDUP_MS) return;
+    lastAreasRequest.current = now;
     void api.getAreas().then(
       (areas) => dispatch({ type: "areasRefreshed", areas }),
       () => undefined,
@@ -172,8 +182,9 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       sendIntent,
       connection,
       logAlert,
+      refreshAreas,
     }),
-    [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert],
+    [state, load, selectedArea, selectedGroup, sendIntent, connection, logAlert, refreshAreas],
   );
 
   // Feature 147: zone colors come from the same areas list (every HA area, the unassigned group excluded).

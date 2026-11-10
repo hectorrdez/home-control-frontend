@@ -14,7 +14,7 @@ describe("TopNav", () => {
     );
     const nav = screen.getByRole("navigation", { name: "Main" });
     const labels = within(nav).getAllByRole("link").map((link) => link.textContent);
-    expect(labels).toEqual(["Home 3D", "Devices", "Telemetry", "History"]);
+    expect(labels).toEqual(["Home 3D", "Devices", "Telemetry", "History", "Settings"]);
     expect(within(nav).getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
   });
 
@@ -46,6 +46,18 @@ describe("TopNav", () => {
     expect(home.className).not.toContain("bg-primary-container");
   });
 
+  it("links the Settings entry at the end of the list (feature 164)", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <TopNav />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const settings = within(nav).getByRole("link", { name: "Settings" });
+    expect(settings.getAttribute("href")).toBe("/settings");
+    expect(settings.className).toContain("bg-primary-container");
+  });
+
   it("marks home as active on the root path", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
@@ -64,7 +76,7 @@ describe("BottomRail", () => {
       </MemoryRouter>,
     );
     const rail = screen.getByRole("navigation", { name: "Bottom navigation" });
-    expect(within(rail).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home 3D", "Devices", "Telemetry", "History"]);
+    expect(within(rail).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home 3D", "Devices", "Telemetry", "History", "Settings"]);
     expect(within(rail).getByRole("link", { name: "Devices" }).className).toContain("text-primary-container");
   });
 
