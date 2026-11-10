@@ -111,8 +111,10 @@ function climateWidget(metric: ClimateMetric, order: number, climate: ClimateOpt
   };
 }
 
+const NO_CLIMATE: ClimateOptions = { metrics: [] };
+
 // Default layout: the climate cards first, then every numeric sensor, visible, ordered by area then name.
-export function deriveWidgets(sensors: Entity[], climate: ClimateOptions = { metrics: [] }): Widget[] {
+export function deriveWidgets(sensors: Entity[], climate: ClimateOptions = NO_CLIMATE): Widget[] {
   const climateWidgets = climate.metrics.map((m, order) => climateWidget(m, order, climate));
   const sensorWidgets = numericSensors(sensors)
     .sort((a, b) => (a.area ?? "").localeCompare(b.area ?? "") || a.name.localeCompare(b.name))
@@ -129,7 +131,7 @@ export function deriveWidgets(sensors: Entity[], climate: ClimateOptions = { met
 // Merges a saved layout with the current sensors: removed sensors are dropped, new ones appended visible.
 // Climate cards: a saved one is kept only while its metric is present; a missing one for a present metric is
 // PREPENDED (hiddenByDefault applies). No saved layout (or none usable) -> the defaults.
-export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[], climate: ClimateOptions = { metrics: [] }): Widget[] {
+export function reconcileWidgets(saved: Widget[] | null, sensors: Entity[], climate: ClimateOptions = NO_CLIMATE): Widget[] {
   if (saved === null) return deriveWidgets(sensors, climate);
   const savedById = new Map(saved.map((w) => [w.entityId, w]));
   const current = numericSensors(sensors);
