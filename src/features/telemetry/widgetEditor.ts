@@ -1,5 +1,5 @@
 import type { Entity } from "@/api/types";
-import { deriveWidgets, type ClimateMetric, type Widget, type WidgetKind, type WidgetSize } from "./widgets";
+import { deriveWidgets, kindFor, type ClimateMetric, type Widget, type WidgetKind, type WidgetSize } from "./widgets";
 
 // Feature 114a: pure editor logic for the telemetry dashboard layout. No React, no storage.
 // Every function returns a NEW array (or the input reference when nothing applies).
@@ -75,4 +75,26 @@ export function setSize(widgets: Widget[], id: string, size: WidgetSize): Widget
 // default size (absent = third) and default order. Feature 159: metrics are the climate metrics the house has.
 export function resetWidgets(sensors: Entity[], metrics: ClimateMetric[] = []): Widget[] {
   return deriveWidgets(sensors, { metrics });
+}
+
+// Feature 163: shows exactly `shown` among the device's `fields` (the others hidden). Renumbers like the other edits.
+export function setDeviceFields(widgets: Widget[], fields: string[], shown: string[]): Widget[] {
+  const inDevice = new Set(fields);
+  const next = widgets.map((w) => (inDevice.has(w.entityId) ? { ...w, visible: shown.includes(w.entityId) } : { ...w }));
+  return renumbered(sortedByOrder(next));
+}
+
+// Feature 163: the chart of `from` now shows `to` (same device). `to` takes from's place and width; `from` is hidden and
+// takes to's old place. The kind stays when `to` supports it, else the default kind of `to`.
+export function swapFieldWidget(widgets: Widget[], from: string, to: string, toEntity: Entity): Widget[] {
+  const a = widgets.find((w) => w.entityId === from);
+  const b = widgets.find((w) => w.entityId === to);
+  if (!a || !b || a.id === b.id) return widgets;
+  const kind = validKinds(toEntity).includes(a.kind) ? a.kind : kindFor(toEntity);
+  const swapped = widgets.map((w) => {
+    if (w.id === a.id) return { ...w, visible: false, order: b.order };
+    if (w.id === b.id) return { ...w, visible: true, order: a.order, size: a.size, kind };
+    return { ...w };
+  });
+  return renumbered(sortedByOrder(swapped));
 }

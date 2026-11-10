@@ -26,17 +26,23 @@ import {
   canMove,
   moveWidget,
   resetWidgets,
+  setDeviceFields,
   setKind,
   setSize,
   setVisible,
+  swapFieldWidget,
   validKinds,
 } from "@/features/telemetry/widgetEditor";
 import {
+  CATEGORIES,
   UNASSIGNED_ZONE,
+  buildDeviceRows,
+  categoryOf,
   facetCounts,
-  filterRows,
+  filterDevices,
   normalize,
   type ChartRow,
+  type DeviceRow,
 } from "@/features/telemetry/widgetFilters";
 import { useChartFilters } from "@/features/telemetry/useChartFilters";
 import Button from "@components/controls/Button";
@@ -45,6 +51,7 @@ import ClimateMetricCard from "./ClimateMetricCard";
 import Card from "./Card";
 import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
 import ChartEditBar from "./ChartEditBar";
+import FieldPickerDialog, { type PickerField } from "./FieldPickerDialog";
 
 const side = (dir: -1 | 1): "up" | "down" => (dir < 0 ? "up" : "down");
 
@@ -141,18 +148,18 @@ export default function TelemetryChartsGrid({
       }),
     [widgets, byId, names, areaName],
   );
-  const facets = useMemo(() => facetCounts(rows), [rows]);
+  // Feature 163: the drawer lists devices (one per physical device, with the chartable fields it has).
+  const devices = useMemo(() => buildDeviceRows(rows, sensors), [rows, sensors]);
+  const deviceOf = useMemo(() => {
+    const map = new Map<string, DeviceRow>();
+    for (const d of devices) for (const f of d.fields) map.set(f.entity.entityId, d);
+    return map;
+  }, [devices]);
+  const facets = useMemo(() => facetCounts(devices), [devices]);
   // Feature 137: filters are shared (telemetry.filters); stale zone ids are ignored against the zones on screen.
   const zoneIds = useMemo(() => new Set(facets.zones.map((z) => z.id)), [facets]);
   const { filters, change: setFilters, onSearchFocusChange } = useChartFilters(zoneIds);
-  const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
-  const toggle = (entityId: string, on: boolean) =>
-    persist(widgets.map((w) => (w.entityId === entityId ? { ...w, visible: on } : w)));
-  // ALL / NONE only touch the rows the filters currently show.
-  const setShown = (on: boolean) => {
-    const ids = new Set(filtered.map((r) => r.entity.entityId));
-    persist(widgets.map((w) => (ids.has(w.entityId) ? { ...w, visible: on } : w)));
-  };
+  const filteredDevices = useMemo(() => filterDevices(devices, filters), [devices, filters]);
   // Feature 159: climate cards are never in `rows`, so filters, facets and ALL/NONE stay chart-only.
   const isShown = (w: Widget) => w.visible && (isClimateWidget(w) || byId.has(w.entityId));
   const visible = widgets.filter(isShown);
@@ -228,6 +235,48 @@ export default function TelemetryChartsGrid({
     editRef.current?.focus();
   };
 
+  // Feature 163: field picker. "device" = ADD / EDIT the fields of a device (checkboxes); "field" = the FIELD swap of
+  // one chart (radio). Set only from user actions, cleared on confirm or cancel.
+  const [picker, setPicker] = useState<{ kind: "device"; device: DeviceRow } | { kind: "field"; device: DeviceRow; from: string } | null>(null);
+  const deviceIds = (d: DeviceRow) => d.fields.map((f) => f.entity.entityId);
+  const addDevice = (d: DeviceRow) => {
+    if (d.fields.length > 1) {
+      setPicker({ kind: "device", device: d });
+      return;
+    }
+    persist(setDeviceFields(widgets, deviceIds(d), deviceIds(d)));
+    setAnnouncement(`Added ${d.name}`);
+  };
+  const removeDevice = (d: DeviceRow) => {
+    persist(setDeviceFields(widgets, deviceIds(d), []));
+    setAnnouncement(`Removed ${d.name}`);
+  };
+  const pickerFields = (d: DeviceRow): PickerField[] =>
+    d.fields.map((f) => {
+      const unit = typeof f.entity.attributes.unit_of_measurement === "string" ? f.entity.attributes.unit_of_measurement : "";
+      return {
+        entityId: f.entity.entityId,
+        label: f.label,
+        category: CATEGORIES.find((c) => c.id === categoryOf(f.entity))?.label ?? "OTHER",
+        value: f.entity.state ? `${f.entity.state}${unit ? ` ${unit}` : ""}` : "",
+      };
+    });
+  const confirmPicker = (ids: string[]) => {
+    if (!picker) return;
+    if (picker.kind === "field") {
+      const to = byId.get(ids[0]);
+      const from = byId.get(picker.from);
+      if (to && from && ids[0] !== picker.from) {
+        persist(swapFieldWidget(widgets, picker.from, ids[0], to));
+        setAnnouncement(`${labelOf(from)} replaced by ${labelOf(to)}`);
+      }
+    } else {
+      persist(setDeviceFields(widgets, deviceIds(picker.device), ids));
+      setAnnouncement(picker.device.added ? `Updated ${picker.device.name}` : `Added ${picker.device.name}`);
+    }
+    setPicker(null);
+  };
+
   const leaveEdit = () => {
     setEditing(false);
     setResetOpen(false);
@@ -297,18 +346,10 @@ export default function TelemetryChartsGrid({
             filters={filters}
             onChange={setFilters}
             facets={facets}
-            shown={filtered.length}
-            total={rows.length}
+            shown={filteredDevices.length}
+            total={devices.length}
             onSearchFocusChange={onSearchFocusChange}
           />
-          <div className="flex gap-space-xs">
-            <Button variant="secondary" className="flex-1" onClick={() => setShown(true)}>
-              ALL
-            </Button>
-            <Button variant="secondary" className="flex-1" onClick={() => setShown(false)}>
-              NONE
-            </Button>
-          </div>
           {climateShown.length > 0 && (
             <ul aria-label="Climate card toggles" className="flex flex-col gap-space-xs">
               {climateShown.map((w) => {
@@ -329,24 +370,43 @@ export default function TelemetryChartsGrid({
               })}
             </ul>
           )}
-          {filtered.length === 0 ? (
+          {filteredDevices.length === 0 ? (
             <p className="font-label-caps text-label-caps uppercase text-on-surface-variant">NO MATCHES</p>
           ) : (
-            <ul aria-label="Chart toggles" className="flex flex-col gap-space-xs">
-              {filtered.map((r) => (
+            <ul aria-label="Devices" className="flex flex-col gap-space-xs">
+              {filteredDevices.map((d) => (
                 <li
-                  key={r.widget.id}
-                  className="flex items-center justify-between gap-space-sm rounded border border-outline-variant/30 p-space-sm"
+                  key={d.key}
+                  className="flex flex-col gap-space-xs rounded border border-outline-variant/30 p-space-sm"
                 >
-                  <span className="min-w-0 truncate font-sans text-body-md text-on-surface">
-                    {r.label}
-                    {r.deviceName && <span className="font-mono text-label-caps uppercase text-on-surface-variant"> · {r.deviceName}</span>}
-                  </span>
-                  <Switch
-                    aria-label={`Show ${r.label}`}
-                    checked={r.widget.visible}
-                    onCheckedChange={(on) => toggle(r.entity.entityId, on)}
-                  />
+                  <div className="flex items-center justify-between gap-space-sm">
+                    <span className="min-w-0 truncate font-sans text-body-md text-on-surface">{d.name}</span>
+                    <span className="shrink-0 font-mono text-label-caps uppercase text-on-surface-variant">{d.zoneName}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-space-xs">
+                    <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">{`${d.fields.length} FIELDS`}</span>
+                    <span className="rounded border border-primary-container/40 px-space-xs font-label-caps text-label-caps uppercase text-primary-container">
+                      {d.added ? `ADDED ${d.addedCount}/${d.fields.length}` : "NOT ADDED"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-space-xs">
+                    {d.added ? (
+                      <>
+                        {d.fields.length > 1 && (
+                          <Button variant="secondary" aria-label={`Edit ${d.name}`} onClick={() => setPicker({ kind: "device", device: d })}>
+                            EDIT
+                          </Button>
+                        )}
+                        <Button variant="destructive" aria-label={`Remove ${d.name}`} onClick={() => removeDevice(d)}>
+                          REMOVE
+                        </Button>
+                      </>
+                    ) : (
+                      <Button aria-label={`Add ${d.name}`} onClick={() => addDevice(d)}>
+                        ADD
+                      </Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -373,6 +433,17 @@ export default function TelemetryChartsGrid({
           )}
         </div>
       </SideDrawer>
+      {picker && (
+        <FieldPickerDialog
+          title={picker.device.name}
+          fields={pickerFields(picker.device)}
+          mode={picker.kind === "field" ? "single" : "multi"}
+          initial={picker.kind === "field" ? [picker.from] : picker.device.fields.filter((f) => f.widget.visible).map((f) => f.entity.entityId)}
+          confirmLabel={picker.kind === "device" && !picker.device.added ? "ADD" : "SAVE"}
+          onConfirm={confirmPicker}
+          onCancel={() => setPicker(null)}
+        />
+      )}
       <p role="status" aria-label="Layout changes" className="sr-only">
         {announcement}
       </p>
@@ -414,6 +485,7 @@ export default function TelemetryChartsGrid({
               }
               const entity = byId.get(w.entityId);
               if (!entity) return null;
+              const device = deviceOf.get(entity.entityId);
               return (
                 <div
                   key={w.id}
@@ -444,6 +516,11 @@ export default function TelemetryChartsGrid({
                         setAnnouncement(`${labelFor(w)} width ${SIZE_LABEL[next]}`);
                       }}
                       onHide={() => hide(w)}
+                      onField={
+                        device && device.fields.length > 1
+                          ? () => setPicker({ kind: "field", device, from: entity.entityId })
+                          : undefined
+                      }
                     />
                   )}
                 </div>

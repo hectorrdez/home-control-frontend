@@ -4,7 +4,7 @@ import { useChartFilters } from "./useChartFilters";
 import { EMPTY_FILTERS, filtersSetting, type StoredFilters } from "./widgetFilters";
 
 const ZONES = new Set(["kitchen", "office"]);
-const stored = (over: Partial<StoredFilters>): StoredFilters => ({ v: 1, query: "", zones: [], categories: [], visibility: "all", ...over });
+const stored = (over: Partial<StoredFilters>): StoredFilters => ({ v: 1, query: "", zones: [], categories: [], kinds: [], visibility: "all", ...over });
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -34,8 +34,8 @@ describe("useChartFilters", () => {
 
   it("applies a remote change live", () => {
     const { result } = renderHook(() => useChartFilters(ZONES));
-    act(() => filtersSetting.set(stored({ visibility: "off" })));
-    expect(result.current.filters.visibility).toBe("off");
+    act(() => filtersSetting.set(stored({ visibility: "notAdded" })));
+    expect(result.current.filters.visibility).toBe("notAdded");
   });
 
   it("holds a remote change while the search has focus and applies it on blur", () => {
@@ -52,7 +52,7 @@ describe("useChartFilters", () => {
     const { result } = renderHook(() => useChartFilters(ZONES));
     expect(result.current.filters.zones).toEqual(["kitchen"]);
     expect(filtersSetting.get()?.zones).toEqual(["kitchen", "deleted"]);
-    act(() => result.current.change({ ...result.current.filters, visibility: "on" }));
+    act(() => result.current.change({ ...result.current.filters, visibility: "added" }));
     expect(filtersSetting.get()?.zones).toEqual(["kitchen"]);
   });
 });

@@ -101,55 +101,57 @@ describe("TelemetryChartsGrid", () => {
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(panel().getAttribute("aria-hidden")).toBe("false");
-    expect(within(screen.getByRole("list", { name: "Chart toggles" })).getAllByRole("switch")).toHaveLength(2);
+    expect(within(screen.getByRole("list", { name: "Devices" })).getAllByRole("listitem")).toHaveLength(2);
 
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(panel().getAttribute("aria-hidden")).toBe("true"));
   });
 
-  it("switch hides and restores a chart and persists the layout", () => {
+  it("REMOVE and ADD hide and restore a single-field chart and persist the layout", () => {
     renderGrid([sensor("living"), sensor("bed")]);
     expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
 
-    const [first] = screen.getAllByRole("switch");
-    fireEvent.click(first);
-    expect(first.getAttribute("aria-checked")).toBe("false");
+    const [remove] = screen.getAllByRole("button", { name: /^Remove / });
+    fireEvent.click(remove);
     expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Add / })).toHaveLength(1);
 
     const saved = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "{}").value;
     expect(saved.version).toBe(1);
     expect(saved.widgets.filter((w: { visible: boolean }) => !w.visible)).toHaveLength(1);
 
-    fireEvent.click(first);
-    expect(first.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /^Add / }));
     expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("NONE hides every chart and ALL restores them", () => {
+  it("REMOVE on every device hides every chart and ADD restores them", () => {
     renderGrid([sensor("living"), sensor("bed")]);
     fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: "NONE" }));
+    for (const button of screen.getAllByRole("button", { name: /^Remove / })) fireEvent.click(button);
     expect(screen.getByText("ALL CHARTS HIDDEN")).toBeTruthy();
     expect(screen.getByText("LIVE • 0 CHARTS")).toBeTruthy();
 
-    // The Visibility pill is also named ALL (feature 118): pick the bulk button outside the filter groups.
-    const bulkAll = screen.getAllByRole("button", { name: "ALL" }).find((b) => b.closest('[role="group"]') === null)!;
-    fireEvent.click(bulkAll);
-    expect(screen.queryByText("ALL CHARTS HIDDEN")).toBeNull();
+    for (const button of screen.getAllByRole("button", { name: /^Add / })) fireEvent.click(button);
     expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
   });
 
-  describe("search and filters (feature 118)", () => {
-    const counter = () => screen.getByRole("status", { name: "Charts shown" }).textContent;
-    const toggles = () => within(screen.getByRole("list", { name: "Chart toggles" })).queryAllByRole("switch");
+  describe("search and filters (feature 118, devices in feature 163)", () => {
+    const counter = () => screen.getByRole("status", { name: "Devices shown" }).textContent;
+    const deviceRows = () => within(screen.getByRole("list", { name: "Devices" })).queryAllByRole("listitem");
     const openPanel = () => fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
-    const pill = (group: string, name: RegExp) => within(screen.getByRole("group", { name: group })).getByRole("button", { name });
-    const bulk = (name: string) =>
-      screen.getAllByRole("button", { name }).find((b) => b.closest('[role="group"]') === null)!;
+    const search = (value: string) => fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value } });
+    // Opens the FILTERS modal, clicks one pill in it and applies the draft.
+    const filterBy = (group: string, name: RegExp) => {
+      fireEvent.click(screen.getByRole("button", { name: /^FILTERS/ }));
+      const dialog = screen.getByRole("dialog", { name: "FILTERS" });
+      fireEvent.click(within(within(dialog).getByRole("group", { name: group })).getByRole("button", { name }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "APPLY" }));
+    };
 
-    // Office sensor (no own name match), kitchen sensors, and an unassigned power sensor.
+    // Office power sensor, unassigned pressure sensor, kitchen pressure sensor (sensor() has device_class pressure).
     const mixed = () => [
       { ...sensor("living"), area: "office", attributes: { device_class: "power", unit_of_measurement: "W", state_class: "measurement" } },
       { ...sensor("bed"), area: null },
@@ -166,33 +168,33 @@ describe("TelemetryChartsGrid", () => {
       );
     }
 
-    it("shows the total and narrows the list by search", () => {
+    it("shows the total and narrows the device list by search", () => {
       renderMixed();
       openPanel();
       expect(counter()).toBe("3 OF 3");
-      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
+      search("kitchen");
       expect(counter()).toBe("1 OF 3");
-      expect(toggles()).toHaveLength(1);
-      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "zzz" } });
+      expect(deviceRows()).toHaveLength(1);
+      search("zzz");
       expect(screen.getByText("NO MATCHES")).toBeTruthy();
-      expect(screen.queryByRole("list", { name: "Chart toggles" })).toBeNull();
+      expect(screen.queryByRole("list", { name: "Devices" })).toBeNull();
     });
 
-    it("toggles zone and category pills (OR inside, AND across) and clears them", () => {
+    it("filters by zone and field from the modal (OR inside, AND across) and clears them", () => {
       renderMixed();
       openPanel();
-      fireEvent.click(pill("Zones", /^KITCHEN( \d+)?$/));
+      filterBy("Zones", /^KITCHEN( \d+)?$/);
       expect(counter()).toBe("1 OF 3");
-      fireEvent.click(pill("Zones", /^UNASSIGNED( \d+)?$/));
+      filterBy("Zones", /^UNASSIGNED( \d+)?$/);
       expect(counter()).toBe("2 OF 3");
-      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      filterBy("Fields", /^POWER( \d+)?$/);
       expect(counter()).toBe("0 OF 3");
       expect(screen.getByText("NO MATCHES")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "FILTERS · 3" })).toBeTruthy();
 
-      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
+      filterBy("Fields", /^POWER( \d+)?$/);
       expect(counter()).toBe("2 OF 3");
-      fireEvent.click(pill("Zones", /^KITCHEN( \d+)?$/));
-      expect(pill("Zones", /^KITCHEN( \d+)?$/).getAttribute("aria-pressed")).toBe("false");
+      filterBy("Zones", /^KITCHEN( \d+)?$/);
       expect(counter()).toBe("1 OF 3");
 
       fireEvent.click(screen.getByRole("button", { name: "CLEAR" }));
@@ -200,45 +202,39 @@ describe("TelemetryChartsGrid", () => {
       expect(screen.getByRole("button", { name: "CLEAR" }).hasAttribute("disabled")).toBe(true);
     });
 
-    it("visibility pills filter by switch state", () => {
+    it("filters by kind (only kinds present are offered) and by status", () => {
       renderMixed();
       openPanel();
-      fireEvent.click(toggles()[0]);
-      fireEvent.click(pill("Visibility", /^OFF$/));
-      expect(counter()).toBe("1 OF 3");
-      fireEvent.click(pill("Visibility", /^ON$/));
-      expect(counter()).toBe("2 OF 3");
-      fireEvent.click(pill("Visibility", /^ALL$/));
+      fireEvent.click(screen.getByRole("button", { name: /^Remove living/ }));
+      filterBy("Kind", /^SENSOR( \d+)?$/);
       expect(counter()).toBe("3 OF 3");
+      fireEvent.click(screen.getByRole("button", { name: "FILTERS · 1" }));
+      const dialog = screen.getByRole("dialog", { name: "FILTERS" });
+      expect(within(within(dialog).getByRole("group", { name: "Kind" })).queryByRole("button", { name: /^ACTUATOR/ })).toBeNull();
+      fireEvent.click(within(dialog).getByRole("button", { name: "CLOSE" }));
+
+      filterBy("Status", /^NOT ADDED$/);
+      expect(counter()).toBe("1 OF 3");
+      expect(deviceRows()).toHaveLength(1);
+      filterBy("Status", /^ADDED$/);
+      expect(counter()).toBe("2 OF 3");
     });
 
-    it("ALL and NONE only change the rows the filters show", () => {
+    it("a device row changed through the filtered list stays in sync with the chart count", () => {
       renderMixed();
       openPanel();
-      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
-      fireEvent.click(bulk("NONE"));
+      search("kitchen");
+      fireEvent.click(screen.getByRole("button", { name: /^Remove / }));
+      expect(counter()).toBe("1 OF 3");
       expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
-      expect(screen.getByRole("switch", { name: "Show living sensor" }).getAttribute("aria-checked")).toBe("false");
-      expect(screen.queryByRole("switch", { name: "Show bed sensor" })).toBeNull();
-
-      fireEvent.click(screen.getByRole("button", { name: "CLEAR" }));
-      fireEvent.click(bulk("ALL"));
-      expect(screen.getByText("LIVE • 3 CHARTS")).toBeTruthy();
-    });
-
-    it("keeps a switch toggled through the filtered list in sync", () => {
-      renderMixed();
-      openPanel();
-      fireEvent.click(pill("Categories", /^POWER( \d+)?$/));
-      fireEvent.click(screen.getByRole("switch", { name: "Show living sensor" }));
-      expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+      expect(screen.getByRole("button", { name: /^Add / })).toBeTruthy();
     });
 
     // Feature 137: filters are the shared setting telemetry.filters, so a fresh mount restores them.
     it("saves filters: a fresh mount restores them", () => {
       const first = renderMixed();
       openPanel();
-      fireEvent.change(screen.getByRole("searchbox", { name: "Search charts" }), { target: { value: "kitchen" } });
+      search("kitchen");
       expect(counter()).toBe("1 OF 3");
       first.unmount();
       renderMixed();
@@ -290,7 +286,7 @@ describe("TelemetryChartsGrid", () => {
     try {
       renderGrid([sensor("living")]);
       fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
-      fireEvent.click(screen.getByRole("switch"));
+      fireEvent.click(screen.getByRole("button", { name: /^Remove / }));
       expect(screen.getByText("ALL CHARTS HIDDEN")).toBeTruthy();
     } finally {
       spy.mockRestore();
@@ -714,5 +710,112 @@ describe("TelemetryChartsGrid climate cards (feature 159)", () => {
     expect(climateIds()).toEqual(["climate:temperature", "climate:humidity"]);
     expect(listItems()[0].className).toContain("xl:col-span-6");
     expect(listItems()[1].className).toContain("xl:col-span-6");
+  });
+});
+
+// Feature 163: a two-field device (temperature + humidity of one thermostat) next to a single-field sensor.
+const thermoTemp: Entity = {
+  ...sensor("thermo_temp"),
+  name: "Thermo temperature",
+  deviceName: "Thermo",
+  attributes: { device_class: "temperature", unit_of_measurement: "C", state_class: "measurement" },
+};
+const thermoHum: Entity = {
+  ...sensor("thermo_hum"),
+  name: "Thermo humidity",
+  deviceName: "Thermo",
+  attributes: { device_class: "humidity", unit_of_measurement: "%", state_class: "measurement" },
+};
+const liveIds = () =>
+  within(screen.getByRole("list", { name: "Live charts" }))
+    .getAllByRole("listitem")
+    .map((li) => li.getAttribute("data-widget-id") ?? "");
+
+describe("TelemetryChartsGrid device add flow (feature 163)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    widgetsSetting.forget();
+    filtersSetting.forget();
+  });
+  afterEach(cleanup);
+
+  it("ADD on a single-field device adds it directly, without a popup", () => {
+    renderGrid([sensor("living"), thermoTemp, thermoHum]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Remove .*living/ }));
+    expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Add .*living/ }));
+    expect(screen.getByText("LIVE • 3 CHARTS")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("ADD on a multi-field device opens the field popup; ADD stays disabled until one field is checked", () => {
+    renderGrid([sensor("living"), thermoTemp, thermoHum]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Thermo" }));
+    expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Thermo" }));
+    const dialog = screen.getByRole("dialog", { name: "Thermo" });
+    const boxes = within(dialog).getAllByRole("checkbox");
+    expect(boxes).toHaveLength(2);
+    const confirm = within(dialog).getByRole("button", { name: "ADD" });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(boxes[0]);
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(confirm);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
+    expect(screen.getByText("ADDED 1/2")).toBeTruthy();
+  });
+
+  it("EDIT on an added multi-field device changes its fields; REMOVE hides all of them", () => {
+    renderGrid([thermoTemp, thermoHum]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    expect(screen.getByText("ADDED 2/2")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Thermo" }));
+    const dialog = screen.getByRole("dialog", { name: "Thermo" });
+    const boxes = within(dialog).getAllByRole("checkbox");
+    expect(boxes.every((b) => (b as HTMLInputElement).checked)).toBe(true);
+    fireEvent.click(boxes[1]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "SAVE" }));
+    expect(screen.getByText("LIVE • 1 CHARTS")).toBeTruthy();
+    expect(screen.getByText("ADDED 1/2")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Thermo" }));
+    expect(screen.getByText("LIVE • 0 CHARTS")).toBeTruthy();
+    expect(screen.getByText("NOT ADDED")).toBeTruthy();
+  });
+
+  it("the chart FIELD control swaps the field in place (same position) and is absent on single-field charts", () => {
+    renderGrid([sensor("living"), thermoTemp, thermoHum]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Thermo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Thermo" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Thermo" })).getAllByRole("checkbox")[0]);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Thermo" })).getByRole("button", { name: "ADD" }));
+    fireEvent.click(screen.getByRole("button", { name: "CHARTS" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
+    expect(screen.getAllByRole("button", { name: /^Change field of / })).toHaveLength(1);
+    const before = liveIds();
+    const at = before.findIndex((id) => id.includes("thermo"));
+    expect(at).toBeGreaterThanOrEqual(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Change field of / }));
+    const dialog = screen.getByRole("dialog", { name: "Thermo" });
+    const radios = within(dialog).getAllByRole("radio") as HTMLInputElement[];
+    expect(radios).toHaveLength(2);
+    fireEvent.click(radios.find((r) => !r.checked)!);
+    fireEvent.click(within(dialog).getByRole("button", { name: "SAVE" }));
+
+    const after = liveIds();
+    expect(after).toHaveLength(before.length);
+    expect(after[at]).not.toBe(before[at]);
+    expect(after[at]).toMatch(/thermo/);
+    expect(screen.getByText("LIVE • 2 CHARTS")).toBeTruthy();
   });
 });
