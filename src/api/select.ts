@@ -52,6 +52,7 @@ function createLazyMockApi(search: string): HomeApi {
     ackAlert: async (id) => (await load()).ackAlert(id),
     ackAllAlerts: async () => (await load()).ackAllAlerts(),
     listEvents: async (query) => (await load()).listEvents(query),
+    reloadIntegrations: async () => (await load()).reloadIntegrations(),
     subscribe(onEntity, onConnection, onServerEvent) {
       let stop: (() => void) | undefined;
       let closed = false;

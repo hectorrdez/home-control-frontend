@@ -16,6 +16,7 @@ import type {
   ServerAlert,
   Preset,
   PresetInput,
+  ReloadResult,
 } from "./types";
 
 // Feature 140 (backend 018): GET /api/events query. Every field optional; `from`/`to` ISO dates or instants.
@@ -79,4 +80,7 @@ export interface HomeApi {
   ackAllAlerts(): Promise<ServerAlert[]>;
   // Feature 140 (backend 018). Rejects with kind "not_found" when the backend has no events endpoint.
   listEvents(query?: EventsQuery): Promise<LoggedEvent[]>;
+  // Feature 164 (backend 024). Rejects with ApiError status 404 (no endpoint), 409 (reload running),
+  // 502 (HA unreachable) or ReloadRateLimitedError (429).
+  reloadIntegrations(): Promise<ReloadResult>;
 }

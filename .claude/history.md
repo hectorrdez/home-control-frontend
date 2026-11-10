@@ -66,3 +66,4 @@ id|slug|state|role|commit|commit_url
 161|house-zone-point-climate|ENDED|frontend|32444cd|https://github.com/hectorrdez/home-control-frontend/commit/32444cd
 162|devices-filters-drawer|ENDED|frontend|2a8b53b|https://github.com/hectorrdez/home-control-frontend/commit/2a8b53b
 163|telemetry-charts-add-flow|ENDED|frontend|94846a7|https://github.com/hectorrdez/home-control-frontend/commit/94846a7
+164|settings-page|ENDED|frontend|67a0f54|https://github.com/hectorrdez/home-control-frontend/commit/67a0f54
