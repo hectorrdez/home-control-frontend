@@ -30,7 +30,9 @@ import { useHistory } from "@/features/telemetry/useHistory";
 // filters, cursor and readout; the old shared CLIMATE HISTORY panel (112/131/144) is split into these two cards.
 // Feature 131: temperature ALL ROOMS with 2+ rooms = one zone-colored line per room plus a thicker TOTAL MEAN.
 // Feature 144/147: humidity keeps per-room lines plus mean, or one series in the room's zone color.
-export type ClimateMetric = "temperature" | "humidity";
+import type { ClimateMetric } from "@/features/telemetry/widgets";
+
+export type { ClimateMetric };
 
 
 // Numeric sensors of one device class in a room (or in every room when room is null).

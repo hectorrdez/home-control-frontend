@@ -16,6 +16,8 @@ export const EMPTY_PANEL_STATE: PanelState = { hidden: [], seen: [] };
 
 export const kpiPanelId = (kpi: "climate" | "air" | "power" | "nodes") => `kpi:${kpi}`;
 // Feature 158: the climate history is two cards; the old single id is only read by the migration below.
+// Feature 159: history:climate-temp / history:climate-hum are no longer fixed-panel toggles. The page reads them
+// (never writes) once, as the default visible flag of the climate widgets (widgets.ts) that do not exist yet.
 export type HistoryPanel = "climate-temp" | "climate-hum" | "power";
 export const historyPanelId = (history: HistoryPanel) => `history:${history}`;
 const LEGACY_CLIMATE_ID = "history:climate";

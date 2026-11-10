@@ -8,13 +8,14 @@ import type { WidgetKind, WidgetSize } from "@/features/telemetry/widgets";
 // Feature 146: the WIDE toggle is replaced by a FULL / HALF / THIRD width selector.
 interface ChartEditBarProps {
   label: string;
-  kind: WidgetKind;
-  kinds: WidgetKind[];
+  // Feature 159: climate cards have no chart type, so kind/kinds/onKind are optional and the type group is omitted.
+  kind?: WidgetKind;
+  kinds?: WidgetKind[];
   size: WidgetSize;
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
-  onKind: (kind: WidgetKind) => void;
+  onKind?: (kind: WidgetKind) => void;
   onSize: (size: WidgetSize) => void;
   onHide: () => void;
 }
@@ -39,13 +40,15 @@ export default function ChartEditBar({
       <Button variant="secondary" data-move="down" aria-label={`Move ${label} down`} disabled={!canDown} onClick={() => onMove(1)}>
         <ArrowDown size={16} aria-hidden="true" />
       </Button>
-      <div role="group" aria-label={`Chart type for ${label}`} className="flex flex-wrap gap-space-xs">
-        {kinds.map((k) => (
-          <FilterPill key={k} selected={kind === k} onClick={() => onKind(k)}>
-            {KIND_LABEL[k]}
-          </FilterPill>
-        ))}
-      </div>
+      {kinds && kinds.length > 0 && onKind && (
+        <div role="group" aria-label={`Chart type for ${label}`} className="flex flex-wrap gap-space-xs">
+          {kinds.map((k) => (
+            <FilterPill key={k} selected={kind === k} onClick={() => onKind(k)}>
+              {KIND_LABEL[k]}
+            </FilterPill>
+          ))}
+        </div>
+      )}
       <div role="group" aria-label={`Width for ${label}`} className="flex flex-wrap gap-space-xs">
         {SIZES.map((s) => (
           <FilterPill key={s} selected={size === s} onClick={() => onSize(s)}>

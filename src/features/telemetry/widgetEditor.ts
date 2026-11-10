@@ -1,5 +1,5 @@
 import type { Entity } from "@/api/types";
-import { deriveWidgets, type Widget, type WidgetKind, type WidgetSize } from "./widgets";
+import { deriveWidgets, type ClimateMetric, type Widget, type WidgetKind, type WidgetSize } from "./widgets";
 
 // Feature 114a: pure editor logic for the telemetry dashboard layout. No React, no storage.
 // Every function returns a NEW array (or the input reference when nothing applies).
@@ -71,7 +71,8 @@ export function setSize(widgets: Widget[], id: string, size: WidgetSize): Widget
   return patchWidget(widgets, id, { size });
 }
 
-// Reset = the 113 defaults: all visible, default kinds, default size (absent = third), default order.
-export function resetWidgets(sensors: Entity[]): Widget[] {
-  return deriveWidgets(sensors);
+// Reset = the defaults: climate cards first (half, visible), then all sensors visible with default kind,
+// default size (absent = third) and default order. Feature 159: metrics are the climate metrics the house has.
+export function resetWidgets(sensors: Entity[], metrics: ClimateMetric[] = []): Widget[] {
+  return deriveWidgets(sensors, { metrics });
 }

@@ -7,7 +7,7 @@ import type { Area, ConnectionState, Entity } from "@/api/types";
 import { AliasesProvider } from "@/state/AliasesProvider";
 import { EntitiesProvider } from "@/state/EntitiesProvider";
 import { ToastProvider } from "@components/feedback/Toast";
-import { widgetsSetting, type StoredWidgets } from "@/features/telemetry/widgets";
+import { widgetsSetting, type ClimateMetric, type StoredWidgets, type Widget } from "@/features/telemetry/widgets";
 import { filtersSetting } from "@/features/telemetry/widgetFilters";
 
 const CACHE_KEY = "hc.setting.telemetry.widgets";
@@ -18,7 +18,7 @@ const sensor = (id: string): Entity => ({
   domain: "sensor",
   name: `${id} sensor`,
   state: "21.5",
-  attributes: { state_class: "measurement", unit_of_measurement: "C", device_class: "temperature" },
+  attributes: { state_class: "measurement", unit_of_measurement: "C", device_class: "pressure" },
   area: "kitchen",
   lastChanged: "2026-11-06T10:00:00.000Z",
 });
@@ -333,7 +333,7 @@ describe("TelemetryChartsGrid edit mode (feature 114)", () => {
 
   const humidity = (id: string): Entity => ({
     ...sensor(id),
-    attributes: { state_class: "measurement", unit_of_measurement: "%", device_class: "humidity" },
+    attributes: { state_class: "measurement", unit_of_measurement: "%", device_class: "pressure" },
   });
   const listItems = () => within(screen.getByRole("list", { name: "Live charts" })).getAllByRole("listitem");
   const editGroups = () => screen.queryAllByRole("group", { name: /^Edit / });
@@ -612,5 +612,107 @@ describe("TelemetryChartsGrid shared layout (feature 135)", () => {
     fireEvent.click(screen.getByRole("button", { name: "CONFIRM RESET" }));
     expect(set).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Layout updated from another device")).toBeNull();
+  });
+});
+describe("TelemetryChartsGrid climate cards (feature 159)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    widgetsSetting.forget();
+    filtersSetting.forget();
+  });
+  afterEach(cleanup);
+
+  // A temperature/humidity sensor is both a climate card and a chart (sensor charts are unchanged).
+  const thermo: Entity = {
+    ...sensor("kitchen_temp"),
+    attributes: { state_class: "measurement", unit_of_measurement: "C", device_class: "temperature" },
+  };
+  const hygro: Entity = {
+    ...sensor("kitchen_hum"),
+    attributes: { state_class: "measurement", unit_of_measurement: "%", device_class: "humidity" },
+  };
+  const itemIds = () => listItems().map((li) => li.getAttribute("data-widget-id") ?? "");
+  const climateIds = () => itemIds().filter((id) => id.startsWith("climate:"));
+  const listItems = () => within(screen.getByRole("list", { name: "Live charts" })).getAllByRole("listitem");
+  const saved = () => JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "{}").value.widgets as Widget[];
+  const liveRegion = () => screen.getByRole("status", { name: "Layout changes" });
+  const renderClimate = (sensors: Entity[], climateHiddenByDefault?: ClimateMetric[]) => {
+    const h = harness([{ areaId: "kitchen", name: "Kitchen", entities: sensors }]);
+    return render(
+      <Providers api={h.api}>
+        <TelemetryChartsGrid
+          sensors={sensors}
+          areaName={(id) => (id ? "Kitchen" : "Unassigned")}
+          connection="open"
+          climateHiddenByDefault={climateHiddenByDefault}
+        />
+      </Providers>,
+    );
+  };
+  const editOn = () => fireEvent.click(screen.getByRole("button", { name: "EDIT" }));
+
+  it("renders the climate cards first, half width, and counts only charts", () => {
+    renderClimate([sensor("living"), thermo, hygro]);
+    expect(climateIds()).toEqual(["climate:temperature", "climate:humidity"]);
+    expect(listItems()[0].className).toContain("xl:col-span-6");
+    expect(listItems()[1].className).toContain("xl:col-span-6");
+    expect(screen.getByText("LIVE • 3 CHARTS")).toBeTruthy();
+  });
+
+  it("edit bar: width group only, no chart type group, FULL persists", () => {
+    renderClimate([thermo]);
+    editOn();
+    expect(screen.queryByRole("group", { name: "Chart type for Climate temperature" })).toBeNull();
+    const widthGroup = screen.getByRole("group", { name: "Width for Climate temperature" });
+    expect(within(widthGroup).getAllByRole("button").map((b) => b.textContent)).toEqual(["FULL", "75%", "HALF", "THIRD", "25%"]);
+    fireEvent.click(within(widthGroup).getByRole("button", { name: "FULL" }));
+    expect(listItems()[0].className).toContain("xl:col-span-12");
+    expect(saved().find((w) => w.id === "climate:temperature")?.size).toBe("full");
+    expect(liveRegion().textContent).toBe("Climate temperature width FULL");
+  });
+
+  it("hide announces the climate title and removes the card", () => {
+    renderClimate([thermo, hygro]);
+    editOn();
+    fireEvent.click(screen.getByRole("button", { name: "Hide Climate humidity" }));
+    expect(liveRegion().textContent).toBe("Climate humidity hidden");
+    expect(climateIds()).toEqual(["climate:temperature"]);
+  });
+
+  it("move down swaps the climate card with the next visible sensor", () => {
+    renderClimate([sensor("living"), thermo]);
+    editOn();
+    // Layout before: climate temperature, kitchen_temp, living. Moving down swaps with kitchen_temp.
+    expect(itemIds().slice(0, 2)).toEqual(["climate:temperature", "widget.sensor.kitchen_temp"]);
+    fireEvent.click(screen.getByRole("button", { name: "Move Climate temperature down" }));
+    expect(itemIds().slice(0, 2)).toEqual(["widget.sensor.kitchen_temp", "climate:temperature"]);
+    expect(liveRegion().textContent).toBe("Moved Climate temperature to position 2 of 3");
+  });
+
+  it("the CHARTS drawer switch hides and shows a climate card", () => {
+    renderClimate([thermo, hygro]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    const toggles = within(screen.getByRole("list", { name: "Climate card toggles" }));
+    fireEvent.click(toggles.getByRole("switch", { name: "Show Climate temperature" }));
+    expect(climateIds()).toEqual(["climate:humidity"]);
+    expect(saved().find((w) => w.id === "climate:temperature")?.visible).toBe(false);
+  });
+
+  it("starts hidden when the legacy fixed-panel toggle was hidden", () => {
+    renderClimate([thermo, hygro], ["humidity"]);
+    expect(climateIds()).toEqual(["climate:temperature"]);
+    fireEvent.click(screen.getByRole("button", { name: /CHARTS/ }));
+    expect(screen.getByRole("switch", { name: "Show Climate humidity" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("RESET LAYOUT restores both climate cards to half, visible, first", () => {
+    renderClimate([sensor("living"), thermo, hygro]);
+    editOn();
+    fireEvent.click(screen.getByRole("button", { name: "Hide Climate temperature" }));
+    fireEvent.click(screen.getByRole("button", { name: "RESET LAYOUT" }));
+    fireEvent.click(screen.getByRole("button", { name: "CONFIRM RESET" }));
+    expect(climateIds()).toEqual(["climate:temperature", "climate:humidity"]);
+    expect(listItems()[0].className).toContain("xl:col-span-6");
+    expect(listItems()[1].className).toContain("xl:col-span-6");
   });
 });

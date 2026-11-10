@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiProvider } from "@/api/ApiContext";
 import type { HomeApi } from "@/api/HomeApi";
 import type { Area, ConnectionState, Entity } from "@/api/types";
@@ -7,6 +7,9 @@ import { AliasesProvider } from "@/state/AliasesProvider";
 import { EntitiesProvider } from "@/state/EntitiesProvider";
 import { ToastProvider } from "@components/feedback/Toast";
 import TelemetryPage from "./TelemetryPage";
+import { panelsSetting } from "@/features/telemetry/panelVisibility";
+import { widgetsSetting } from "@/features/telemetry/widgets";
+import { filtersSetting } from "@/features/telemetry/widgetFilters";
 
 const ent = (
   entityId: string,
@@ -295,6 +298,44 @@ describe("TelemetryPage climate cards (feature 158)", () => {
     ];
     renderPage({ areas: areasOf(humOnly) });
     expect(await screen.findByRole("heading", { name: "HUMIDITY" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "TEMPERATURE" })).toBeNull();
+  });
+});
+
+// Feature 159: the climate cards are editable chart-grid cards; their switches live in the CHARTS drawer.
+describe("TelemetryPage climate cards in the chart grid (feature 159)", () => {
+  const tempAndHum = () => [
+    ent("sensor.kitchen_temperature", "21.5", sensorAttrs("temperature", "°C")),
+    ent("sensor.kitchen_humidity", "48", sensorAttrs("humidity", "%")),
+  ];
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    panelsSetting.forget();
+    widgetsSetting.forget();
+    filtersSetting.forget();
+  });
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+    document.querySelectorAll('[data-slot="status-strip"]').forEach((n) => n.remove());
+  });
+
+  it("climate cards are not fixed-panel toggles; their switches are in the CHARTS drawer", async () => {
+    renderPage({ areas: areasOf(tempAndHum()) });
+    await screen.findByRole("heading", { name: "TEMPERATURE" });
+    fireEvent.click(await screen.findByRole("button", { name: "CHARTS" }));
+    const fixed = screen.queryByRole("list", { name: "Fixed panel toggles" });
+    expect(fixed?.textContent ?? "").not.toContain("Climate temperature");
+    expect(fixed?.textContent ?? "").not.toContain("Climate humidity");
+    const cards = within(screen.getByRole("list", { name: "Climate card toggles" }));
+    expect(cards.getByRole("switch", { name: "Show Climate temperature" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("a stored hidden history:climate-temp starts the temperature card hidden (one-time migration)", async () => {
+    panelsSetting.set({ v: 1, hidden: ["history:climate-temp"], seen: [] });
+    renderPage({ areas: areasOf(tempAndHum()) });
+    await screen.findByRole("heading", { name: "HUMIDITY" });
     expect(screen.queryByRole("heading", { name: "TEMPERATURE" })).toBeNull();
   });
 });

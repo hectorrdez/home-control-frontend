@@ -14,7 +14,6 @@ import KpiCard from "@components/cards/KpiCard";
 import RingGauge from "@components/cards/RingGauge";
 import EventFeed from "@components/cards/EventFeed";
 import TelemetryChartsGrid, { type FixedPanel } from "@components/cards/TelemetryChartsGrid";
-import ClimateMetricCard from "@components/cards/ClimateMetricCard";
 import PowerHistoryBars from "@components/cards/PowerHistoryBars";
 import {
   airGrade,
@@ -22,15 +21,15 @@ import {
   climateStats,
   energyToday,
   nodeHealth,
-  numericState,
   ringGauges,
   sensorCount,
   solarPower,
 } from "@/features/telemetry/telemetry";
 import { GAUGE_LIMIT } from "@/features/telemetry/constants";
 import { housePowerSensor } from "@/features/telemetry/history";
-import { gaugePanelId, historyPanelId, kpiPanelId } from "@/features/telemetry/panelVisibility";
+import { gaugePanelId, historyPanelId, kpiPanelId, type HistoryPanel } from "@/features/telemetry/panelVisibility";
 import { usePanelVisibility } from "@/features/telemetry/usePanelVisibility";
+import type { ClimateMetric } from "@/features/telemetry/widgets";
 
 const LABEL: Record<ConnectionState, string> = {
   open: "LIVE",
@@ -91,6 +90,15 @@ export default function TelemetryPage() {
     [allGauges],
   );
   const panels = usePanelVisibility(batteryGaugeIds);
+  // Feature 159: the 125/158 climate toggles are read once as the default visibility of the climate widgets.
+  const { isPanelHidden } = panels;
+  const climateHiddenByDefault = useMemo<ClimateMetric[]>(() => {
+    const legacy: [ClimateMetric, HistoryPanel][] = [
+      ["temperature", "climate-temp"],
+      ["humidity", "climate-hum"],
+    ];
+    return legacy.filter(([, panel]) => isPanelHidden(historyPanelId(panel))).map(([metric]) => metric);
+  }, [isPanelHidden]);
 
   if (state.status === "error") {
     return (
@@ -132,11 +140,6 @@ export default function TelemetryPage() {
   const solar = solarPower(entities);
   const shown = (id: string) => !panels.isPanelHidden(id);
   const gauges = allGauges.filter((g) => shown(gaugePanelId(g.id))).slice(0, GAUGE_LIMIT);
-  // Feature 158: one card per metric; a card exists only when the house has a sensor of its metric.
-  const hasSensorOf = (deviceClass: string) =>
-    entities.some((e) => e.domain === "sensor" && e.attributes.device_class === deviceClass && numericState(e) !== null);
-  const hasClimateTemp = hasSensorOf("temperature");
-  const hasClimateHum = hasSensorOf("humidity");
   const hasPowerHistory = housePowerSensor(entities) !== null;
   const fixedPanels: FixedPanel[] = [
     ...(climate ? [{ id: kpiPanelId("climate"), label: "Climate mean" }] : []),
@@ -144,8 +147,6 @@ export default function TelemetryPage() {
     ...(load ? [{ id: kpiPanelId("power"), label: "Power" }] : []),
     ...(nodes ? [{ id: kpiPanelId("nodes"), label: "Nodes" }] : []),
     ...allGauges.map((g) => ({ id: gaugePanelId(g.id), label: g.label })),
-    ...(hasClimateTemp ? [{ id: historyPanelId("climate-temp"), label: "Climate temperature" }] : []),
-    ...(hasClimateHum ? [{ id: historyPanelId("climate-hum"), label: "Climate humidity" }] : []),
     ...(hasPowerHistory ? [{ id: historyPanelId("power"), label: "Power history" }] : []),
   ].map((p) => ({ ...p, visible: shown(p.id) }));
 
@@ -245,12 +246,6 @@ export default function TelemetryPage() {
       )}
 
       <section aria-label="Climate history" className="col-span-12 flex flex-col gap-space-sm">
-        {hasClimateTemp && shown(historyPanelId("climate-temp")) && (
-          <ClimateMetricCard metric="temperature" entities={entities} areaName={areaName} />
-        )}
-        {hasClimateHum && shown(historyPanelId("climate-hum")) && (
-          <ClimateMetricCard metric="humidity" entities={entities} areaName={areaName} />
-        )}
         {shown(historyPanelId("power")) && <PowerHistoryBars entities={entities} />}
         <TelemetryChartsGrid
           sensors={entities}
@@ -258,6 +253,7 @@ export default function TelemetryPage() {
           connection={connection}
           fixedPanels={fixedPanels}
           onFixedPanelChange={panels.setPanelVisible}
+          climateHiddenByDefault={climateHiddenByDefault}
         />
       </section>
 

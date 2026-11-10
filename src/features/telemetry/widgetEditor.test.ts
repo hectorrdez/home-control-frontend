@@ -185,3 +185,16 @@ describe("resetWidgets", () => {
     expect(changed[0].size).toBe("full");
   });
 });
+
+describe("resetWidgets with climate cards (feature 159)", () => {
+  it("restores the climate cards first, half and visible, even after they were hidden", () => {
+    const sensors = [temp, humidity];
+    const changed = setVisible(setSize(resetWidgets(sensors, ["temperature", "humidity"]), "climate:temperature", "full"), "climate:temperature", false);
+    const restored = resetWidgets(sensors, ["temperature", "humidity"]);
+    expect(restored.slice(0, 2).map((w) => [w.id, w.size, w.visible])).toEqual([
+      ["climate:temperature", "half", true],
+      ["climate:humidity", "half", true],
+    ]);
+    expect(changed).not.toEqual(restored);
+  });
+});
