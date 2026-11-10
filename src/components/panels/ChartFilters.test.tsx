@@ -14,12 +14,22 @@ const facets: FacetCounts = {
     { id: "temperature", label: "TEMPERATURE", count: 2 },
     { id: "power", label: "POWER", count: 1 },
   ],
+  kinds: [
+    { id: "sensor", label: "SENSOR", count: 2 },
+    { id: "actuator", label: "ACTUATOR", count: 1 },
+  ],
 };
 
 function renderFilters(filters: Filters = EMPTY_FILTERS, shown = 3, total = 3) {
   const onChange = vi.fn();
   render(<ChartFilters filters={filters} onChange={onChange} facets={facets} shown={shown} total={total} />);
   return onChange;
+}
+
+// The filter modal is opened from the FILTERS button; its groups are only in the DOM while it is open.
+function openModal() {
+  fireEvent.click(screen.getByRole("button", { name: /^FILTERS/ }));
+  return screen.getByRole("dialog", { name: "FILTERS" });
 }
 
 const group = (name: string) => screen.getByRole("group", { name });
@@ -29,7 +39,7 @@ describe("ChartFilters", () => {
 
   it("shows the counter and disables CLEAR when nothing is filtered", () => {
     renderFilters(EMPTY_FILTERS, 3, 3);
-    expect(screen.getByRole("status", { name: "Charts shown" }).textContent).toBe("3 OF 3");
+    expect(screen.getByRole("status", { name: "Devices shown" }).textContent).toBe("3 OF 3");
     expect(screen.getByRole("button", { name: "CLEAR" }).hasAttribute("disabled")).toBe(true);
   });
 
@@ -48,51 +58,86 @@ describe("ChartFilters", () => {
     expect(onChange).toHaveBeenCalledWith(EMPTY_FILTERS);
   });
 
-  it("renders one zone pill per zone with its count and toggles membership", () => {
+  it("shows the active filter count on the FILTERS button", () => {
+    renderFilters({ ...EMPTY_FILTERS, zones: ["kitchen"], kinds: ["sensor"], visibility: "added" }, 1, 3);
+    expect(screen.getByRole("button", { name: "FILTERS · 3" })).toBeTruthy();
+  });
+
+  it("opens the modal from FILTERS with aria-expanded and closes it with CLOSE", () => {
+    renderFilters();
+    const button = screen.getByRole("button", { name: "FILTERS" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    openModal();
+    expect(screen.getByRole("button", { name: "FILTERS" }).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "CLOSE" }));
+    expect(screen.queryByRole("dialog", { name: "FILTERS" })).toBeNull();
+  });
+
+  it("applies the modal draft on APPLY and drops it on CLOSE", () => {
+    const onChange = renderFilters();
+    const dialog = openModal();
+    fireEvent.click(within(dialog).getByRole("button", { name: "POWER 1" }));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "CLOSE" }));
+    expect(onChange).not.toHaveBeenCalled();
+
+    openModal();
+    fireEvent.click(screen.getByRole("button", { name: "POWER 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "APPLY" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, categories: ["power"] });
+    expect(screen.queryByRole("dialog", { name: "FILTERS" })).toBeNull();
+  });
+
+  it("renders one zone pill per zone with its count and toggles membership in the draft", () => {
     const onChange = renderFilters({ ...EMPTY_FILTERS, zones: ["kitchen"] });
+    openModal();
     const kitchen = within(group("Zones")).getByRole("button", { name: "KITCHEN 2" });
     expect(kitchen.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(kitchen);
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, zones: [] });
-
     fireEvent.click(within(group("Zones")).getByRole("button", { name: "UNASSIGNED 1" }));
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, zones: ["kitchen", "unassigned"] });
+    fireEvent.click(screen.getByRole("button", { name: "APPLY" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, zones: ["unassigned"] });
   });
 
-  it("renders category pills and toggles membership", () => {
-    const onChange = renderFilters({ ...EMPTY_FILTERS, categories: ["power"] });
-    const power = within(group("Categories")).getByRole("button", { name: "POWER 1" });
-    expect(power.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(power);
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, categories: [] });
-
-    fireEvent.click(within(group("Categories")).getByRole("button", { name: "TEMPERATURE 2" }));
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, categories: ["power", "temperature"] });
+  it("renders field, kind and status pills; kind pills toggle membership (OR inside the group)", () => {
+    const onChange = renderFilters({ ...EMPTY_FILTERS, kinds: ["sensor"] });
+    openModal();
+    expect(within(group("Fields")).getByRole("button", { name: "TEMPERATURE 2" })).toBeTruthy();
+    const sensor = within(group("Kind")).getByRole("button", { name: "SENSOR 2" });
+    expect(sensor.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(group("Kind")).getByRole("button", { name: "ACTUATOR 1" }));
+    fireEvent.click(sensor);
+    fireEvent.click(screen.getByRole("button", { name: "APPLY" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, kinds: ["actuator"] });
   });
 
-  it("selects one visibility option at a time", () => {
-    const onChange = renderFilters({ ...EMPTY_FILTERS, visibility: "on" });
-    expect(within(group("Visibility")).getByRole("button", { name: "ON" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(within(group("Visibility")).getByRole("button", { name: "OFF" }));
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, visibility: "off" });
-    fireEvent.click(within(group("Visibility")).getByRole("button", { name: "ALL" }));
-    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, visibility: "all" });
+  it("selects one status option at a time", () => {
+    const onChange = renderFilters({ ...EMPTY_FILTERS, visibility: "added" });
+    openModal();
+    expect(within(group("Status")).getByRole("button", { name: "ADDED" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(group("Status")).getByRole("button", { name: "NOT ADDED" }));
+    fireEvent.click(within(group("Status")).getByRole("button", { name: "ALL" }));
+    fireEvent.click(within(group("Status")).getByRole("button", { name: "NOT ADDED" }));
+    fireEvent.click(screen.getByRole("button", { name: "APPLY" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, visibility: "notAdded" });
   });
 
-  it("renders no category pills when there are none", () => {
+  it("renders no field pills when there are none", () => {
     render(
       <ChartFilters
         filters={EMPTY_FILTERS}
         onChange={vi.fn()}
-        facets={{ zones: [], categories: [] }}
+        facets={{ zones: [], categories: [], kinds: [] }}
         shown={0}
         total={0}
       />,
     );
-    expect(within(group("Categories")).queryAllByRole("button")).toHaveLength(0);
-    expect(screen.getByRole("status", { name: "Charts shown" }).textContent).toBe("0 OF 0");
+    openModal();
+    expect(within(group("Fields")).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("status", { name: "Devices shown" }).textContent).toBe("0 OF 0");
   });
 });
+
 // Feature 147: each zone pill shows the zone dot of the assigned token; the unassigned pill has no dot.
 describe("ChartFilters zone pills (feature 147)", () => {
   it("shows the assigned zone dot before the zone name", () => {
@@ -101,6 +146,7 @@ describe("ChartFilters zone pills (feature 147)", () => {
         <ChartFilters filters={EMPTY_FILTERS} onChange={vi.fn()} facets={facets} shown={3} total={3} />
       </ZoneColorsProvider>,
     );
+    fireEvent.click(screen.getByRole("button", { name: "FILTERS" }));
     const kitchen = screen.getByRole("button", { name: "KITCHEN 2" });
     expect(kitchen.querySelector("[data-zone-token]")?.getAttribute("data-zone-token")).toBe(ZONE_TOKENS[0]);
     expect(screen.getByRole("button", { name: "UNASSIGNED 1" }).querySelector("[data-zone-token]")).toBeNull();

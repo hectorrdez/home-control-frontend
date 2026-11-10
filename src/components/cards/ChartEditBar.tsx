@@ -18,6 +18,8 @@ interface ChartEditBarProps {
   onKind?: (kind: WidgetKind) => void;
   onSize: (size: WidgetSize) => void;
   onHide: () => void;
+  // Feature 163: opens the field picker (single mode) for a chart of a multi-field device. Omitted for one-field devices.
+  onField?: () => void;
 }
 
 export default function ChartEditBar({
@@ -31,6 +33,7 @@ export default function ChartEditBar({
   onKind,
   onSize,
   onHide,
+  onField,
 }: ChartEditBarProps) {
   return (
     <div role="group" aria-label={`Edit ${label}`} className="mt-space-xs flex flex-wrap items-center gap-space-xs">
@@ -56,6 +59,11 @@ export default function ChartEditBar({
           </FilterPill>
         ))}
       </div>
+      {onField && (
+        <Button variant="secondary" aria-label={`Change field of ${label}`} onClick={onField}>
+          FIELD
+        </Button>
+      )}
       <Button variant="secondary" aria-label={`Hide ${label}`} onClick={onHide}>
         <EyeOff size={16} aria-hidden="true" />
         HIDE

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { EMPTY_FILTERS, activeFilters, filtersSetting, fromStoredFilters, parseStoredFilters, toStoredFilters } from "./widgetFilters";
 
-const valid = { v: 1, query: "kitchen", zones: ["kitchen"], categories: ["temperature"], visibility: "on" };
+const valid = { v: 1, query: "kitchen", zones: ["kitchen"], categories: ["temperature"], kinds: ["sensor"], visibility: "added" };
 
 describe("parseStoredFilters", () => {
   it("accepts a valid v1 value", () => {
@@ -26,7 +26,7 @@ describe("stored filter helpers", () => {
   beforeEach(() => filtersSetting.forget());
 
   it("maps to and from the stored shape", () => {
-    const f = { query: "a", zones: ["z"], categories: ["co2" as const], visibility: "off" as const };
+    const f = { query: "a", zones: ["z"], categories: ["co2" as const], kinds: ["actuator" as const], visibility: "notAdded" as const };
     expect(fromStoredFilters(toStoredFilters(f))).toEqual(f);
     expect(fromStoredFilters(null)).toEqual(EMPTY_FILTERS);
   });

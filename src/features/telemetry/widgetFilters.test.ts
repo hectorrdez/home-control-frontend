@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { Entity } from "@/api/types";
 import type { Widget } from "./widgets";
 import {
-  CATEGORIES,
   EMPTY_FILTERS,
+  buildDeviceRows,
   categoryOf,
   facetCounts,
-  filterRows,
+  filterDevices,
   isFiltered,
+  kindsOf,
   normalize,
+  parseStoredFilters,
   UNASSIGNED_ZONE,
   type ChartFilters,
   type ChartRow,
@@ -149,102 +151,164 @@ describe("isFiltered", () => {
     expect(isFiltered(filters({ query: "kit" }))).toBe(true);
     expect(isFiltered(filters({ zones: ["kitchen"] }))).toBe(true);
     expect(isFiltered(filters({ categories: ["power"] }))).toBe(true);
-    expect(isFiltered(filters({ visibility: "on" }))).toBe(true);
-    expect(isFiltered(filters({ visibility: "off" }))).toBe(true);
+    expect(isFiltered(filters({ kinds: ["sensor"] }))).toBe(true);
+    expect(isFiltered(filters({ visibility: "added" }))).toBe(true);
+    expect(isFiltered(filters({ visibility: "notAdded" }))).toBe(true);
   });
 });
 
-describe("filterRows", () => {
-  const kitchenTemp = row(entity("sensor.kitchen_temperature", { device_class: "temperature" }, { area: "kitchen" }), {
-    label: "Temperatura cocina",
-    zoneName: "Kitchen",
-  });
-  const bedHumidity = row(entity("sensor.bed_humidity", { device_class: "humidity" }, { area: "bedroom" }), {
-    label: "Humedad dormitorio",
-    zoneName: "Bedroom",
-  });
-  const office = row(entity("sensor.desk_power", { device_class: "power" }, { area: "office" }), {
-    label: "Bateria enchufe",
-    zoneName: "Office",
-    visible: false,
-  });
-  const loose = row(entity("sensor.loose_co2", { device_class: "co2" }), { label: "CO2", zoneName: "Unassigned" });
-  const rows = [kitchenTemp, bedHumidity, office, loose];
+// Two devices, one light: kitchen thermostat (temp + humidity, added), bedroom plug (power + battery, one field shown),
+// office lamp (light only, has no chart so it is not a device row), loose co2 sensor (standalone).
+const kTemp = entity("sensor.kitchen_temperature", { device_class: "temperature" }, { area: "kitchen", deviceName: "Thermo" });
+const kHum = entity("sensor.kitchen_humidity", { device_class: "humidity" }, { area: "kitchen", deviceName: "Thermo" });
+const bPower = entity("sensor.bed_plug_power", { device_class: "power" }, { area: "bedroom", deviceName: "Plug" });
+const bBattery = entity("sensor.bed_plug_battery", { device_class: "battery" }, { area: "bedroom", deviceName: "Plug" });
+const bSwitch = entity("switch.bed_plug", {}, { domain: "switch", area: "bedroom", deviceName: "Plug" });
+const lamp = entity("light.office_lamp", {}, { domain: "light", area: "office" });
+const loopCo2 = entity("sensor.loose_co2", { device_class: "co2" });
 
-  it("returns every row in input order for empty filters", () => {
-    expect(filterRows(rows, EMPTY_FILTERS)).toEqual(rows);
-  });
+const chartRows: ChartRow[] = [
+  row(kTemp, { zoneName: "Kitchen", deviceName: "Thermo", label: "Temperature", visible: false }),
+  row(kHum, { zoneName: "Kitchen", deviceName: "Thermo", label: "Humidity", visible: false }),
+  row(bPower, { zoneName: "Bedroom", deviceName: "Plug", label: "Power", visible: true }),
+  row(bBattery, { zoneName: "Bedroom", deviceName: "Plug", label: "Battery", visible: false }),
+  row(loopCo2, { zoneName: "Unassigned", label: "CO2", visible: false }),
+];
+const allEntities = [kTemp, kHum, bPower, bBattery, bSwitch, lamp, loopCo2];
+const devices = buildDeviceRows(chartRows, allEntities);
+const byName = (name: string) => devices.find((d) => d.name === name)!;
 
-  it("matches the alias label accent- and case-insensitively", () => {
-    expect(filterRows(rows, filters({ query: "temperatura" }))).toEqual([kitchenTemp]);
-    expect(filterRows(rows, filters({ query: "batería" }))).toEqual([office]);
-  });
-
-  it("matches the raw entity name, zone name and entityId", () => {
-    expect(filterRows(rows, filters({ query: "bed humidity" }))).toEqual([bedHumidity]);
-    expect(filterRows(rows, filters({ query: "office" }))).toEqual([office]);
-    expect(filterRows(rows, filters({ query: "sensor.loose" }))).toEqual([loose]);
+describe("kindsOf", () => {
+  it("is sensor for a measurement field, actuator for a controllable member, both for a smart plug", () => {
+    expect([...kindsOf([chartRows[2]], [])]).toEqual(["sensor"]);
+    expect([...kindsOf([], [lamp])]).toEqual(["actuator"]);
+    expect([...kindsOf([chartRows[2]], [bSwitch])].sort()).toEqual(["actuator", "sensor"]);
   });
 
-  it("treats a whitespace-only query as empty", () => {
-    expect(filterRows(rows, filters({ query: "  " }))).toEqual(rows);
+  it("is other when there is no measurement field and no controllable member", () => {
+    expect([...kindsOf([chartRows[3]], [bBattery])]).toEqual(["other"]);
+  });
+});
+
+describe("buildDeviceRows", () => {
+  it("groups fields by device key and keeps the first-seen order", () => {
+    expect(devices.map((d) => d.name)).toEqual(["Thermo", "Plug", "CO2"]);
+    expect(byName("Thermo").fields.map((f) => f.entity.entityId)).toEqual([kTemp.entityId, kHum.entityId]);
   });
 
-  it("matches the cleaned device name, accent- and case-insensitively", () => {
-    const hub = row(entity("sensor.hub_power", { device_class: "power" }), { label: "Potencia", deviceName: "Ático Hub", zoneName: "Office" });
-    const others = [kitchenTemp, hub];
-    expect(filterRows(others, filters({ query: "atico" }))).toEqual([hub]);
-    expect(filterRows(others, filters({ query: "HUB" }))).toEqual([hub]);
-    expect(filterRows(others, filters({ query: "potencia" }))).toEqual([hub]);
-    expect(filterRows(others, filters({ query: "zzz" }))).toEqual([]);
+  it("takes the zone from the device and counts visible fields", () => {
+    expect(byName("Thermo").zoneId).toBe("kitchen");
+    expect(byName("Thermo").zoneName).toBe("Kitchen");
+    expect(byName("Thermo").addedCount).toBe(0);
+    expect(byName("Thermo").added).toBe(false);
+    expect(byName("Plug").addedCount).toBe(1);
+    expect(byName("Plug").added).toBe(true);
+  });
+
+  it("collects every member entity id, including controllable ones", () => {
+    expect(byName("Plug").entityIds.sort()).toEqual([bBattery.entityId, bPower.entityId, bSwitch.entityId].sort());
+  });
+
+  it("falls back to the field label for a standalone entity", () => {
+    expect(byName("CO2").kinds).toEqual(new Set(["sensor"]));
+    expect(byName("CO2").added).toBe(false);
+  });
+
+  it("gives each device its kinds from members and fields", () => {
+    expect(byName("Plug").kinds).toEqual(new Set(["sensor", "actuator"]));
+    expect(byName("Thermo").kinds).toEqual(new Set(["sensor"]));
+  });
+});
+
+describe("filterDevices", () => {
+  const names = (f: Partial<ChartFilters>) => filterDevices(devices, filters(f)).map((d) => d.name);
+
+  it("returns every device in input order for empty filters", () => {
+    expect(names({})).toEqual(["Thermo", "Plug", "CO2"]);
+  });
+
+  it("matches the device name, field labels, zone name and entityIds, accent- and case-insensitively", () => {
+    expect(names({ query: "THERMO" })).toEqual(["Thermo"]);
+    expect(names({ query: "humidity" })).toEqual(["Thermo"]);
+    expect(names({ query: "kitchen" })).toEqual(["Thermo"]);
+    expect(names({ query: "switch.bed_plug" })).toEqual(["Plug"]);
+    expect(names({ query: "zzz" })).toEqual([]);
   });
 
   it("ANDs groups and ORs values within a group", () => {
-    expect(filterRows(rows, filters({ zones: ["kitchen", "office"] }))).toEqual([kitchenTemp, office]);
-    expect(filterRows(rows, filters({ zones: ["kitchen"], categories: ["humidity"] }))).toEqual([]);
-    expect(filterRows(rows, filters({ categories: ["humidity", "co2"] }))).toEqual([bedHumidity, loose]);
-    expect(filterRows(rows, filters({ query: "sensor", zones: ["unassigned"] }))).toEqual([loose]);
+    expect(names({ zones: ["kitchen", "bedroom"] })).toEqual(["Thermo", "Plug"]);
+    expect(names({ zones: ["kitchen"], categories: ["power"] })).toEqual([]);
+    expect(names({ categories: ["humidity", "co2"] })).toEqual(["Thermo", "CO2"]);
+    expect(names({ query: "sensor", zones: ["unassigned"] })).toEqual(["CO2"]);
   });
 
-  it("filters by visibility", () => {
-    expect(filterRows(rows, filters({ visibility: "on" }))).toEqual([kitchenTemp, bedHumidity, loose]);
-    expect(filterRows(rows, filters({ visibility: "off" }))).toEqual([office]);
+  it("passes a device when ANY of its fields has the category", () => {
+    expect(names({ categories: ["battery"] })).toEqual(["Plug"]);
+  });
+
+  it("filters by kind, multi-select with OR", () => {
+    expect(names({ kinds: ["actuator"] })).toEqual(["Plug"]);
+    expect(names({ kinds: ["sensor"] })).toEqual(["Thermo", "Plug", "CO2"]);
+    expect(names({ kinds: ["other"] })).toEqual([]);
+    expect(names({ kinds: ["actuator", "other"] })).toEqual(["Plug"]);
+  });
+
+  it("filters by status", () => {
+    expect(names({ visibility: "added" })).toEqual(["Plug"]);
+    expect(names({ visibility: "notAdded" })).toEqual(["Thermo", "CO2"]);
   });
 });
 
 describe("facetCounts", () => {
-  const a = row(entity("sensor.a", { device_class: "temperature" }, { area: "kitchen" }), { zoneName: "Kitchen" });
-  const b = row(entity("sensor.b", { device_class: "temperature" }, { area: "kitchen" }), { zoneName: "Kitchen" });
-  const c = row(entity("sensor.c", { device_class: "power" }, { area: "bedroom" }), { zoneName: "Bedroom" });
-  const d = row(entity("sensor.d", { device_class: "power" }), { zoneName: "Unassigned" });
-  const e = row(entity("sensor.e", { device_class: "power" }, { area: "attic" }), { zoneName: "Attic" });
-
-  it("counts zones and categories over all rows", () => {
-    const facets = facetCounts([a, b, c, d]);
+  it("counts zones and categories per device", () => {
+    const facets = facetCounts(devices);
     expect(facets.zones).toEqual([
       { id: "bedroom", name: "Bedroom", count: 1 },
-      { id: "kitchen", name: "Kitchen", count: 2 },
+      { id: "kitchen", name: "Kitchen", count: 1 },
       { id: UNASSIGNED_ZONE, name: "Unassigned", count: 1 },
     ]);
     expect(facets.categories).toEqual([
-      { id: "temperature", label: "TEMPERATURE", count: 2 },
-      { id: "power", label: "POWER", count: 2 },
+      { id: "temperature", label: "TEMPERATURE", count: 1 },
+      { id: "humidity", label: "HUMIDITY", count: 1 },
+      { id: "co2", label: "CO2", count: 1 },
+      { id: "power", label: "POWER", count: 1 },
+      { id: "battery", label: "BATTERY", count: 1 },
+    ]);
+  });
+
+  it("counts kinds per device and omits zero counts", () => {
+    expect(facetCounts(devices).kinds).toEqual([
+      { id: "sensor", label: "SENSOR", count: 3 },
+      { id: "actuator", label: "ACTUATOR", count: 1 },
     ]);
   });
 
   it("sorts zones by name and puts unassigned last even when it sorts first", () => {
-    const facets = facetCounts([d, e, c, a]);
+    const attic = buildDeviceRows([row(entity("sensor.e", { device_class: "power" }, { area: "attic" }), { zoneName: "Attic" })], []);
+    const facets = facetCounts([...attic, ...devices]);
     expect(facets.zones.map((z) => z.id)).toEqual(["attic", "bedroom", "kitchen", UNASSIGNED_ZONE]);
   });
 
-  it("orders categories by CATEGORIES order and omits zero counts", () => {
-    const facets = facetCounts([c, a]);
-    expect(facets.categories.map((x) => x.id)).toEqual(["temperature", "power"]);
-    expect(facets.categories.every((x) => x.count > 0)).toBe(true);
-    expect(CATEGORIES.map((x) => x.id).indexOf("temperature")).toBeLessThan(CATEGORIES.map((x) => x.id).indexOf("power"));
+  it("returns empty facets for no devices", () => {
+    expect(facetCounts([])).toEqual({ zones: [], categories: [], kinds: [] });
+  });
+});
+
+describe("stored filters", () => {
+  it("reads the legacy visibility values as added / notAdded and defaults kinds to []", () => {
+    expect(parseStoredFilters({ v: 1, query: "", zones: [], categories: [], visibility: "on" })).toEqual({
+      v: 1,
+      query: "",
+      zones: [],
+      categories: [],
+      kinds: [],
+      visibility: "added",
+    });
+    expect(parseStoredFilters({ v: 1, query: "", zones: [], categories: [], visibility: "off" })?.visibility).toBe("notAdded");
   });
 
-  it("returns empty facets for no rows", () => {
-    expect(facetCounts([])).toEqual({ zones: [], categories: [] });
+  it("drops unknown kinds and rejects an unknown visibility", () => {
+    expect(parseStoredFilters({ v: 1, query: "", zones: [], categories: [], kinds: ["sensor", "x"], visibility: "all" })?.kinds).toEqual(["sensor"]);
+    expect(parseStoredFilters({ v: 1, query: "", zones: [], categories: [], visibility: "maybe" })).toBeNull();
   });
 });

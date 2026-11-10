@@ -1,6 +1,7 @@
 import type { Entity } from "@/api/types";
 import { createSyncedSetting, registerSyncedSetting, type SyncedSetting } from "@/features/settings/syncedSetting";
 import type { Widget } from "./widgets";
+import { deviceRowKeyIn } from "@/features/devices/deviceFilters";
 
 // Feature 118: pure search/filter model for the CHARTS side panel. No React, no storage.
 
@@ -136,19 +137,103 @@ export interface ChartRow {
   zoneName: string;
 }
 
-export type Visibility = "all" | "on" | "off";
+// Feature 163: the CHARTS drawer lists physical devices. A device passes a kind filter by its kinds.
+export type DeviceKind = "sensor" | "actuator" | "other";
+export const DEVICE_KINDS: readonly { id: DeviceKind; label: string }[] = [
+  { id: "sensor", label: "SENSOR" },
+  { id: "actuator", label: "ACTUATOR" },
+  { id: "other", label: "OTHER" },
+];
+
+// A device is a SENSOR when one of its chart fields is a measurement category.
+const MEASUREMENT_CATEGORIES = new Set<ChartCategory>([
+  "temperature",
+  "humidity",
+  "co2",
+  "voc",
+  "pm25",
+  "pm10",
+  "pressure",
+  "illuminance",
+  "power",
+  "energy",
+  "voltage",
+  "current",
+  "frequency",
+  "gas",
+  "water",
+]);
+
+// A device is an ACTUATOR when one of its entities is controllable, whatever else it has.
+const ACTUATOR_DOMAINS = new Set(["light", "switch", "cover", "climate", "lock", "fan", "scene", "script", "media_player"]);
+
+export interface DeviceRow {
+  key: string; // deviceRowKeyIn: `${zoneId}~${slug}`, or the entity id for a standalone entity
+  name: string;
+  zoneId: string;
+  zoneName: string;
+  fields: ChartRow[]; // chartable fields (numeric sensors), in widget order
+  entityIds: string[]; // every member entity (chart fields and the rest of the device)
+  kinds: Set<DeviceKind>;
+  added: boolean; // at least one field chart is visible
+  addedCount: number;
+}
+
+// Kinds of a device from its chart fields and all its member entities. Never empty: no sensor and no actuator = other.
+export function kindsOf(fields: ChartRow[], members: Entity[]): Set<DeviceKind> {
+  const kinds = new Set<DeviceKind>();
+  if (fields.some((f) => MEASUREMENT_CATEGORIES.has(categoryOf(f.entity)))) kinds.add("sensor");
+  if (members.some((e) => ACTUATOR_DOMAINS.has(e.domain))) kinds.add("actuator");
+  if (kinds.size === 0) kinds.add("other");
+  return kinds;
+}
+
+// Groups the chart rows into devices (same key rule as the /devices list). `entities` is every entity on the page: it
+// supplies the controllable members for the ACTUATOR kind. Devices come out in the first-seen order of `rows`.
+export function buildDeviceRows(rows: ChartRow[], entities: Entity[]): DeviceRow[] {
+  const groups = new Map<string, { fields: ChartRow[]; members: Entity[] }>();
+  for (const row of rows) {
+    const key = deviceRowKeyIn(row.zoneId, row.entity);
+    const group = groups.get(key) ?? { fields: [], members: [] };
+    group.fields.push(row);
+    groups.set(key, group);
+  }
+  for (const entity of entities) {
+    const group = groups.get(deviceRowKeyIn(entity.area ?? UNASSIGNED_ZONE, entity));
+    if (group) group.members.push(entity);
+  }
+  return [...groups.entries()].map(([key, { fields, members }]) => {
+    const first = fields[0];
+    const addedCount = fields.filter((f) => f.widget.visible).length;
+    const ids = [...new Set([...fields.map((f) => f.entity.entityId), ...members.map((e) => e.entityId)])];
+    return {
+      key,
+      name: first.deviceName !== "" ? first.deviceName : first.label,
+      zoneId: first.zoneId,
+      zoneName: first.zoneName,
+      fields,
+      entityIds: ids,
+      kinds: kindsOf(fields, members),
+      added: addedCount > 0,
+      addedCount,
+    };
+  });
+}
+
+export type Visibility = "all" | "added" | "notAdded";
 
 export interface ChartFilters {
   query: string;
   zones: string[];
   categories: ChartCategory[];
+  kinds: DeviceKind[];
   visibility: Visibility;
 }
 
-export const EMPTY_FILTERS: ChartFilters = { query: "", zones: [], categories: [], visibility: "all" };
+export const EMPTY_FILTERS: ChartFilters = { query: "", zones: [], categories: [], kinds: [], visibility: "all" };
 
 export function isFiltered(f: ChartFilters): boolean {
-  return f.query.trim() !== "" || f.zones.length > 0 || f.categories.length > 0 || f.visibility !== "all";
+  return f.query.trim() !== "" || f.zones.length > 0 || f.categories.length > 0 || f.kinds.length > 0 || f.visibility !== "all";
 }
 
 // Case- and accent-insensitive: "batería" matches "Bateria".
@@ -156,15 +241,17 @@ export function normalize(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
 }
 
-// Groups combine with AND; values inside a group combine with OR. Input order is preserved.
-export function filterRows(rows: ChartRow[], f: ChartFilters): ChartRow[] {
+// Groups combine with AND; values inside a group combine with OR. A device passes a category when ANY field has it.
+// Input order is preserved.
+export function filterDevices(devices: DeviceRow[], f: ChartFilters): DeviceRow[] {
   const q = normalize(f.query);
-  return rows.filter((r) => {
-    if (q && ![r.label, r.entity.name, r.deviceName, r.zoneName, r.entity.entityId].some((t) => normalize(t).includes(q))) return false;
-    if (f.zones.length > 0 && !f.zones.includes(r.zoneId)) return false;
-    if (f.categories.length > 0 && !f.categories.includes(categoryOf(r.entity))) return false;
-    if (f.visibility === "on" && !r.widget.visible) return false;
-    if (f.visibility === "off" && r.widget.visible) return false;
+  return devices.filter((d) => {
+    if (q && ![d.name, d.zoneName, ...d.fields.map((x) => x.label), ...d.entityIds].some((t) => normalize(t).includes(q))) return false;
+    if (f.zones.length > 0 && !f.zones.includes(d.zoneId)) return false;
+    if (f.categories.length > 0 && !d.fields.some((x) => f.categories.includes(categoryOf(x.entity)))) return false;
+    if (f.kinds.length > 0 && !f.kinds.some((k) => d.kinds.has(k))) return false;
+    if (f.visibility === "added" && !d.added) return false;
+    if (f.visibility === "notAdded" && d.added) return false;
     return true;
   });
 }
@@ -172,18 +259,21 @@ export function filterRows(rows: ChartRow[], f: ChartFilters): ChartRow[] {
 export interface FacetCounts {
   zones: { id: string; name: string; count: number }[];
   categories: { id: ChartCategory; label: string; count: number }[];
+  kinds: { id: DeviceKind; label: string; count: number }[];
 }
 
-// Counts over ALL rows (static, not the filtered set). Zero-count entries are omitted.
-export function facetCounts(rows: ChartRow[]): FacetCounts {
+// Counts over ALL devices (static, not the filtered set). A device counts once per category/kind it has.
+// Zero-count entries are omitted.
+export function facetCounts(devices: DeviceRow[]): FacetCounts {
   const zones = new Map<string, { id: string; name: string; count: number }>();
   const cats = new Map<ChartCategory, number>();
-  for (const r of rows) {
-    const zone = zones.get(r.zoneId);
+  const kinds = new Map<DeviceKind, number>();
+  for (const d of devices) {
+    const zone = zones.get(d.zoneId);
     if (zone) zone.count += 1;
-    else zones.set(r.zoneId, { id: r.zoneId, name: r.zoneName, count: 1 });
-    const cat = categoryOf(r.entity);
-    cats.set(cat, (cats.get(cat) ?? 0) + 1);
+    else zones.set(d.zoneId, { id: d.zoneId, name: d.zoneName, count: 1 });
+    for (const cat of new Set(d.fields.map((f) => categoryOf(f.entity)))) cats.set(cat, (cats.get(cat) ?? 0) + 1);
+    for (const kind of d.kinds) kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
   }
   const zoneList = [...zones.values()].sort((a, b) => {
     if (a.id === UNASSIGNED_ZONE) return 1;
@@ -194,37 +284,49 @@ export function facetCounts(rows: ChartRow[]): FacetCounts {
     const count = cats.get(c.id);
     return count ? [{ id: c.id, label: c.label, count }] : [];
   });
-  return { zones: zoneList, categories };
+  const kindList = DEVICE_KINDS.flatMap((k) => {
+    const count = kinds.get(k.id);
+    return count ? [{ id: k.id, label: k.label, count }] : [];
+  });
+  return { zones: zoneList, categories, kinds: kindList };
 }
 
 // Feature 137: the filters are a shared setting (telemetry.filters, 134). Stored value v1; the store debounces the PUT.
+// Feature 163: visibility is all / added / notAdded (the old v1 values on / off are read as added / notAdded) and
+// kinds is optional (absent = none).
 export const FILTERS_QUERY_MAX = 100;
 export const FILTERS_ZONES_MAX = 50;
-const VISIBILITIES: readonly Visibility[] = ["all", "on", "off"];
+const VISIBILITIES: readonly Visibility[] = ["all", "added", "notAdded"];
+const LEGACY_VISIBILITY: Record<string, Visibility> = { on: "added", off: "notAdded" };
 const CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
+const KIND_IDS = new Set<string>(DEVICE_KINDS.map((k) => k.id));
 
 export interface StoredFilters {
   v: 1;
   query: string;
   zones: string[];
   categories: ChartCategory[];
+  kinds: DeviceKind[];
   visibility: Visibility;
 }
 
-// Unknown categories are dropped; any other bad field makes the whole value invalid (null -> defaults).
+// Unknown categories and kinds are dropped; any other bad field makes the whole value invalid (null -> defaults).
 export function parseStoredFilters(raw: unknown): StoredFilters | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const { v, query, zones, categories, visibility } = raw as Record<string, unknown>;
+  const { v, query, zones, categories, kinds, visibility } = raw as Record<string, unknown>;
   if (v !== 1 || typeof query !== "string" || query.length > FILTERS_QUERY_MAX) return null;
   if (!Array.isArray(zones) || zones.length > FILTERS_ZONES_MAX || !zones.every((z) => typeof z === "string")) return null;
   if (!Array.isArray(categories)) return null;
-  if (!VISIBILITIES.includes(visibility as Visibility)) return null;
+  if (kinds !== undefined && !Array.isArray(kinds)) return null;
+  const mapped = typeof visibility === "string" ? (LEGACY_VISIBILITY[visibility] ?? visibility) : visibility;
+  if (!VISIBILITIES.includes(mapped as Visibility)) return null;
   return {
     v: 1,
     query,
     zones,
     categories: categories.filter((c): c is ChartCategory => typeof c === "string" && CATEGORY_IDS.has(c)),
-    visibility: visibility as Visibility,
+    kinds: (kinds ?? []).filter((k): k is DeviceKind => typeof k === "string" && KIND_IDS.has(k)),
+    visibility: mapped as Visibility,
   };
 }
 
@@ -240,16 +342,23 @@ export function toStoredFilters(f: ChartFilters): StoredFilters {
     query: f.query.slice(0, FILTERS_QUERY_MAX),
     zones: f.zones.slice(0, FILTERS_ZONES_MAX),
     categories: [...f.categories],
+    kinds: [...f.kinds],
     visibility: f.visibility,
   };
 }
 
 export function fromStoredFilters(stored: StoredFilters | null): ChartFilters {
   if (!stored) return EMPTY_FILTERS;
-  return { query: stored.query, zones: stored.zones, categories: stored.categories, visibility: stored.visibility };
+  return {
+    query: stored.query,
+    zones: stored.zones,
+    categories: stored.categories,
+    kinds: stored.kinds,
+    visibility: stored.visibility,
+  };
 }
 
-// Zone ids no longer in the house (deleted in HA) are ignored when shown, so they never hide every chart.
+// Zone ids no longer in the house (deleted in HA) are ignored when shown, so they never hide every device.
 // Only the next user change rewrites the stored value.
 export function activeFilters(f: ChartFilters, zoneIds: ReadonlySet<string>): ChartFilters {
   const zones = f.zones.filter((z) => zoneIds.has(z));
