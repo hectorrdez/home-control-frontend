@@ -63,3 +63,6 @@ id|slug|state|role|commit|commit_url
 158|climate-history-split-cards|ENDED|frontend|845040d|https://github.com/hectorrdez/home-control-frontend/commit/845040d
 159|climate-history-cards-editable|ENDED|frontend|91c7e56|https://github.com/hectorrdez/home-control-frontend/commit/91c7e56
 160|chart-size-quarter|ENDED|frontend|8473546|https://github.com/hectorrdez/home-control-frontend/commit/8473546
+161|house-zone-point-climate|PENDING|frontend
+162|devices-filters-drawer|PENDING|frontend
+163|telemetry-charts-add-flow|PENDING|frontend
