@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isUnavailable } from "@/state/selectors";
 import { useEntities } from "@/state/EntitiesProvider";
 import type { Entity } from "@/api/types";
-import { roomGlow, roomLabel, roomStatus, type RoomGlow } from "./glow";
+import { climateChip, roomGlow, roomLabel, roomStatus, type RoomGlow } from "./glow";
 import { DEFAULT_PLAN, bindRooms } from "./plan";
 import { HouseScene, type ViewPreset } from "./HouseScene";
 import { useZoneTokenResolver } from "@/features/zones/ZoneColorsContext";
@@ -33,6 +33,7 @@ export default function HouseStage() {
   const zoneOf = useZoneTokenResolver();
   const hostRef = useRef<HTMLDivElement>(null);
   const labelEls = useRef(new Map<string, HTMLElement>());
+  const chipEls = useRef(new Map<string, HTMLElement>());
   const sceneRef = useRef<HouseScene | null>(null);
   const onSelectRef = useRef(setSelectedArea);
   const [unavailable, setUnavailable] = useState(false);
@@ -84,6 +85,7 @@ export default function HouseStage() {
     scene.setSelected(latest.current.selected);
     applyView(scene, latest.current.view);
     scene.setLabelElements(labelEls.current);
+    scene.setChipElements(chipEls.current);
     const observer = new ResizeObserver(() => scene.resize());
     observer.observe(host);
     return () => {
@@ -136,6 +138,24 @@ export default function HouseStage() {
     sceneRef.current?.setLabelElements(labelEls.current);
   }, [rooms, view]);
 
+  const presentRooms = rooms.filter((r) => r.present);
+  const shownRooms = view === "house" ? [] : rooms.filter((r) => r.floor === view);
+  const shownPresent = shownRooms.filter((r) => r.present);
+
+  // Zone point chips (feature 161): present zones of the shown view that have a sensor value, in both views.
+  const chipItems = useMemo(() => {
+    const visible = rooms.filter((r) => r.present && (view === "house" || r.floor === view));
+    return visible
+      .map((r) => ({ id: r.id, text: climateChip(entitiesByArea.get(r.areaId) ?? []) }))
+      .filter((item): item is { id: string; text: string } => item.text !== null);
+  }, [rooms, view, entitiesByArea]);
+
+  // Chip elements change with the rendered list; the scene keeps its own copy, so refresh it.
+  const chipKey = chipItems.map((c) => c.id).join("|");
+  useEffect(() => {
+    sceneRef.current?.setChipElements(chipEls.current);
+  }, [chipKey, view]);
+
   // Selecting a room on another floor brings that floor up. Adjusted during render on a selection change only,
   // so a manual view switch is not undone by a store change.
   const [lastSelected, setLastSelected] = useState<string | null>(null);
@@ -144,10 +164,6 @@ export default function HouseStage() {
     const target = selectedArea ? rooms.find((r) => r.present && r.areaId === selectedArea) : undefined;
     if (target && target.floor !== view) setView(target.floor);
   }
-
-  const presentRooms = rooms.filter((r) => r.present);
-  const shownRooms = view === "house" ? [] : rooms.filter((r) => r.floor === view);
-  const shownPresent = shownRooms.filter((r) => r.present);
 
   return (
     <section
@@ -164,6 +180,20 @@ export default function HouseStage() {
         </div>
       ) : (
         <div className="pointer-events-none absolute inset-0">
+          <div aria-hidden="true" className="absolute inset-0">
+            {chipItems.map((item) => (
+              <div
+                key={item.id}
+                ref={(el) => {
+                  if (el) chipEls.current.set(item.id, el);
+                  else chipEls.current.delete(item.id);
+                }}
+                className="absolute left-0 top-0 whitespace-nowrap rounded border border-tertiary-fixed-dim/30 bg-surface-container-lowest/80 px-space-xs font-mono text-label-caps text-on-surface"
+              >
+                {item.text}
+              </div>
+            ))}
+          </div>
           {shownRooms.map((room) => (
             <div
               key={room.id}

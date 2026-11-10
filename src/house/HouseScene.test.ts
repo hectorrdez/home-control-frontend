@@ -478,6 +478,106 @@ describe("HouseScene", () => {
     expect(bedroomLabel.style.opacity).toBe("1");
   });
 
+  it("positions the zone chips over the marker in both views and hides them on the other floor (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    const bedroomChip = document.createElement("div");
+    scene.setChipElements(
+      new Map([
+        ["kitchen", kitchenChip],
+        ["bedroom", bedroomChip],
+      ]),
+    );
+    flush();
+    // Whole-house view: every floor is stacked, so both chips are shown (the upper slab does not hide the ground floor).
+    expect(kitchenChip.style.opacity).toBe("1");
+    expect(bedroomChip.style.opacity).toBe("1");
+    expect(kitchenChip.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) translate\(-50%, calc\(-100% - 10px\)\)$/);
+
+    scene.setFloor(0);
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+    expect(bedroomChip.style.opacity).toBe("0");
+
+    scene.setFloor(1);
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+    expect(bedroomChip.style.opacity).toBe("1");
+  });
+
+  it("hides a zone chip whose marker is behind the camera (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+
+    // Camera north of the house looking further north: the kitchen marker sits behind it.
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 10, 200);
+    camera.updateMatrixWorld(); // the fake renderer does not refresh the camera matrices
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+  });
+
+  it("keeps a ground-floor chip visible under the upper-floor slab in the whole-house view (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    // Default high iso camera: the upper slab (y = 5.4) lies between it and the ground-floor ball, but slabs do not occlude.
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+  });
+
+  it("hides a zone chip whose ball is occluded by a wall in the whole-house view, and shows it on a clear line (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+
+    // Camera behind the ground wall (z = -10) looking at the kitchen ball: the wall hides it.
+    const { camera } = internals(scene);
+    camera.position.set(0, 10, -100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+
+    // Camera on the open side of the house: nothing between it and the ball.
+    camera.position.set(0, 10, 100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+  });
+
+  it("applies the same occlusion in the isolated floor view, ignoring walls cut away by the section (feature 161)", () => {
+    const { scene } = mountScene();
+    const kitchenChip = document.createElement("div");
+    scene.setChipElements(new Map([["kitchen", kitchenChip]]));
+    scene.setFloor(0);
+    const { camera } = internals(scene);
+
+    // Ray from low behind the ground wall passes through its kept part (below the low cut at y = 1.2): occluded.
+    camera.position.set(0, 0, -12);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("0");
+
+    // From high behind the wall the same ray crosses the wall above the cut: clipped, so the chip is visible.
+    camera.position.set(0, 10, -100);
+    camera.lookAt(0, 3.2, 0);
+    camera.updateMatrixWorld();
+    scene.resize();
+    flush();
+    expect(kitchenChip.style.opacity).toBe("1");
+  });
+
   it("builds the attic roof of the real plan and stacks the three levels", () => {
     const { scene } = mountScene(DEFAULT_PLAN);
     const groups = internals(scene).floorGroups;

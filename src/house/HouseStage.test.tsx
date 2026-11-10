@@ -13,6 +13,7 @@ const hoisted = vi.hoisted(() => {
     setView: Mock;
     setMode: Mock;
     setLabelElements: Mock;
+    setChipElements: Mock;
     setFloor: Mock;
     resize: Mock;
     dispose: Mock;
@@ -39,6 +40,7 @@ vi.mock("./HouseScene", () => ({
         setView: vi.fn(),
         setMode: vi.fn(),
         setLabelElements: vi.fn(),
+        setChipElements: vi.fn(),
         setFloor: vi.fn(),
         resize: vi.fn(),
         dispose: vi.fn(),
@@ -269,5 +271,82 @@ describe("HouseStage", () => {
     unmount();
     expect(second.dispose).toHaveBeenCalledTimes(1);
     expect(observers[1].disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  describe("zone point chips (161)", () => {
+    const sensor = (entityId: string, area: string, deviceClass: string, state: string) => ({
+      entityId,
+      domain: "sensor",
+      name: entityId,
+      state,
+      attributes: { device_class: deviceClass },
+      area,
+      lastChanged: "",
+    });
+
+    const climateStage = (entities: Record<string, ReturnType<typeof sensor>>, ids = Object.keys(entities)) => {
+      hoisted.stage.value = {
+        state: {
+          areas: [{ areaId: firstArea, name: "Living", entityIds: ids }],
+          entities,
+        },
+        selectedArea: null,
+        setSelectedArea: vi.fn(),
+      };
+      return hoisted.stage.value;
+    };
+
+    it("shows the mean chip on the zone point in the whole-house view", () => {
+      climateStage({
+        "sensor.t1": sensor("sensor.t1", firstArea, "temperature", "20"),
+        "sensor.t2": sensor("sensor.t2", firstArea, "temperature", "23"),
+        "sensor.h1": sensor("sensor.h1", firstArea, "humidity", "48"),
+      });
+      render(<HouseStage />);
+
+      expect(screen.getByText("21.5 °C · 48%")).toBeTruthy();
+      expect(screen.queryByText("LIVING: 21.5 °C 48% RH")).toBeNull();
+      expect(screen.getByRole("list").textContent).toContain("Living: 21.5 °C, 48% RH");
+    });
+
+    it("shows the chip and the name label together in the isolated floor view", () => {
+      climateStage({ "sensor.t1": sensor("sensor.t1", firstArea, "temperature", "21.456") });
+      render(<HouseStage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Planta baja" }));
+      expect(screen.getByText("21.5 °C")).toBeTruthy();
+      expect(screen.getByText("LIVING: 21.5 °C")).toBeTruthy();
+    });
+
+    it("renders no chip for a zone without sensors", () => {
+      stageWith();
+      render(<HouseStage />);
+
+      expect(screen.queryByText(/°C/)).toBeNull();
+      expect(screen.queryByText(/%/)).toBeNull();
+    });
+
+    it("updates the chip text live when a sensor state changes", () => {
+      climateStage({ "sensor.t1": sensor("sensor.t1", firstArea, "temperature", "21") });
+      const { rerender } = render(<HouseStage />);
+      expect(screen.getByText("21.0 °C")).toBeTruthy();
+
+      climateStage({ "sensor.t1": sensor("sensor.t1", firstArea, "temperature", "24.25") });
+      rerender(<HouseStage />);
+      expect(screen.getByText("24.3 °C")).toBeTruthy();
+      expect(screen.queryByText("21.0 °C")).toBeNull();
+    });
+
+    it("hands the chip elements to the scene in both views", () => {
+      climateStage({ "sensor.t1": sensor("sensor.t1", firstArea, "temperature", "21") });
+      render(<HouseStage />);
+      const scene = hoisted.scenes[0];
+      const chipMap = scene.setChipElements.mock.calls.at(-1)?.[0] as Map<string, HTMLElement>;
+      expect([...chipMap.keys()]).toEqual([DEFAULT_PLAN.floors[0].rooms[0].id]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Planta alta" }));
+      const upperMap = scene.setChipElements.mock.calls.at(-1)?.[0] as Map<string, HTMLElement>;
+      expect(upperMap.size).toBe(0);
+    });
   });
 });

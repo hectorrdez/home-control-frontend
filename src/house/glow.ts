@@ -32,22 +32,53 @@ export function formatHumidity(value: string): string | null {
   return Number.isFinite(n) ? `${Math.round(n)}% RH` : null;
 }
 
-function sensorValue(entities: Entity[], deviceClass: string, format: (v: string) => string | null): string | null {
-  const sensor = entities.find((e) => e.domain === "sensor" && e.attributes.device_class === deviceClass);
-  return sensor ? format(sensor.state) : null;
+export interface RoomClimate {
+  temperature: number | null;
+  humidity: number | null;
 }
 
-// "KITCHEN: 21.5 °C 48% RH"; absent sensor parts are omitted.
+// Mean of the numeric states of every sensor of one device_class; unavailable, unknown and non-numeric states are ignored.
+function meanOf(entities: Entity[], deviceClass: string): number | null {
+  const values = entities
+    .filter((e) => e.domain === "sensor" && e.attributes.device_class === deviceClass)
+    .filter((e) => e.state !== "unavailable" && e.state !== "unknown" && e.state.trim() !== "")
+    .map((e) => Number(e.state))
+    .filter((n) => Number.isFinite(n));
+  return values.length === 0 ? null : values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+// Mean temperature and humidity of one area (feature 161). A metric with no valid sensor is null.
+export function roomClimate(entities: Entity[]): RoomClimate {
+  return { temperature: meanOf(entities, "temperature"), humidity: meanOf(entities, "humidity") };
+}
+
+function climateParts(climate: RoomClimate): { temperature: string | null; humidity: string | null } {
+  return {
+    temperature: climate.temperature === null ? null : formatTemperature(String(climate.temperature)),
+    humidity: climate.humidity === null ? null : formatHumidity(String(climate.humidity)),
+  };
+}
+
+// "KITCHEN: 21.5 °C 48% RH"; absent parts are omitted.
 export function roomLabel(name: string, entities: Entity[]): string {
-  const parts = [sensorValue(entities, "temperature", formatTemperature), sensorValue(entities, "humidity", formatHumidity)];
-  return [`${name.toUpperCase()}:`, ...parts.filter((p): p is string => p !== null)].join(" ");
+  const { temperature, humidity } = climateParts(roomClimate(entities));
+  return [`${name.toUpperCase()}:`, ...[temperature, humidity].filter((p): p is string => p !== null)].join(" ");
 }
 
-// Live status line for the screen-reader room list: "Kitchen: lights on, 21.5 °C".
+// Zone point chip (feature 161): "21.5 °C · 48%"; null when the zone has no sensor value.
+export function climateChip(entities: Entity[]): string | null {
+  const climate = roomClimate(entities);
+  const temperature = climate.temperature === null ? null : formatTemperature(String(climate.temperature));
+  const humidity = climate.humidity === null ? null : `${Math.round(climate.humidity)}%`;
+  const parts = [temperature, humidity].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+// Live status line for the screen-reader room list: "Kitchen: lights on, 21.5 °C, 48% RH".
 export function roomStatus(name: string, entities: Entity[]): string {
   const lights = entities.filter((e) => e.domain === "light");
   const lightPart = lights.length === 0 ? null : lights.some((e) => e.state === "on") ? "lights on" : "lights off";
-  const temp = sensorValue(entities, "temperature", formatTemperature);
-  const parts = [lightPart, temp].filter((p): p is string => p !== null);
+  const { temperature, humidity } = climateParts(roomClimate(entities));
+  const parts = [lightPart, temperature, humidity].filter((p): p is string => p !== null);
   return parts.length > 0 ? `${name}: ${parts.join(", ")}` : `${name}:`;
 }
