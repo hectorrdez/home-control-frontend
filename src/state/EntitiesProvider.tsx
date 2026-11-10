@@ -88,7 +88,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
           areasInFlight.current = null;
           if (areasFollowUp.current) {
             areasFollowUp.current = false;
-            start();
+            void start(); // cannot reject: its own chain handles the request error
           }
         });
       areasInFlight.current = request;
@@ -106,7 +106,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         setConnection(next);
         publishStreamState(next);
         if (isStreamRecovery(previous, next)) {
-          refreshAreas();
+          void refreshAreas();
           loadEvents();
         }
         previous = next;
@@ -128,7 +128,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
         hiddenSince ??= Date.now();
         return;
       }
-      if (shouldResyncAfterHidden(hiddenSince, Date.now())) refreshAreas();
+      if (shouldResyncAfterHidden(hiddenSince, Date.now())) void refreshAreas();
       hiddenSince = null;
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -151,7 +151,7 @@ export function EntitiesProvider({ children }: { children: ReactNode }) {
       const requestId = Number(entry.slice(separator + 1));
       return window.setTimeout(() => {
         dispatch({ type: "settleTimedOut", entityId, requestId });
-        refreshAreas(); // keeps the last state on failure; the next stream event or reload will correct it
+        void refreshAreas(); // keeps the last state on failure; the next stream event or reload will correct it
       }, SETTLE_TIMEOUT_MS);
     });
     return () => timers.forEach((timer) => window.clearTimeout(timer));

@@ -46,7 +46,7 @@ export default function SettingsPage() {
       (result) => {
         setReload({ kind: "done", result });
         // One areas refetch: the panel, devices list and 3D view pick up the new devices.
-        refreshAreas();
+        void refreshAreas();
       },
       (err: unknown) => {
         if (err instanceof ReloadRateLimitedError) {
