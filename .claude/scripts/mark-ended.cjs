@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { CLAUDE_DIR, run, writeState } = require('./_lib.cjs');
+const { CLAUDE_DIR, run, writeState, sweep } = require('./_lib.cjs');
 
 const id = process.argv[2];
 if (!id) {
@@ -11,7 +11,7 @@ if (!id) {
 }
 
 console.log('Running tests before allowing ENDED...');
-const code = run('node', [path.join(__dirname, 'test.cjs')]);
+const code = run('node', [path.join(__dirname, 'verify.cjs')]);
 if (code !== 0) {
   console.log(`REFUSED: tests failed. ${id} stays unchanged. Fix the code and retry.`);
   process.exit(1);
@@ -30,4 +30,7 @@ if (fs.existsSync(handoff)) {
   fs.rmSync(handoff);
   console.log('Cleared stale .claude/handoff.md (nothing in flight).');
 }
+
+// Tests are done: drop residue (stale tmp compile caches, test-results, ...). Never blocks ENDED.
+sweep(true);
 process.exit(0);

@@ -47,3 +47,4 @@ coverage/
 
 # vitest cache
 .vitest/
+.claude/tmp/
