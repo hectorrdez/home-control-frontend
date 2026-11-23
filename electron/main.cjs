@@ -161,7 +161,7 @@ function start() {
   app.on('window-all-closed', () => {});
 
   // Windows groups and names the notifications (feature 145).
-  if (process.platform === 'win32') app.setAppUserModelId('es.hectorrdez.homecontrol');
+  if (process.platform === 'win32') app.setAppUserModelId('com.example.homecontrol');
   app.whenReady().then(() => {
     createWindow();
     createTray();

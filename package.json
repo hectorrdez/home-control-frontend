@@ -46,7 +46,7 @@
   },
   "main": "electron/main.cjs",
   "build": {
-    "appId": "es.hectorrdez.homecontrol",
+    "appId": "com.example.homecontrol",
     "productName": "Home Control",
     "directories": {
       "output": "release"

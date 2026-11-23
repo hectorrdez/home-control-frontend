@@ -48,3 +48,6 @@ coverage/
 # vitest cache
 .vitest/
 .claude/tmp/
+
+# public-repo hygiene: internal harness and local agent config
+.claude/

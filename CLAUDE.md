@@ -99,7 +99,7 @@ Choose the cheapest automated proof that covers the change. Add or update an E2E
 
 ## Kanban
 
-Board: Plane `https://plane.hectorrdez.es` (workspace `scouttech`, project HomeControl). Use the `kanban` skill (config in `.claude/kanban.json`). Move the card at every step; cards are assigned to the board user; never duplicate a card (look it up by `{id} {slug}`). General cards carry label `Main`; each repo's subtasks carry `repo:<repo>` (this repo: `repo:home-control-frontend`).
+Board: Plane `https://plane.example.com` (workspace `scouttech`, project HomeControl). Use the `kanban` skill (config in `.claude/kanban.json`). Move the card at every step; cards are assigned to the board user; never duplicate a card (look it up by `{id} {slug}`). General cards carry label `Main`; each repo's subtasks carry `repo:<repo>` (this repo: `repo:home-control-frontend`).
 
 | Flow moment | Stage |
 |---|---|
@@ -278,7 +278,7 @@ All under `.claude/scripts/`, run as `node .claude/scripts/<name>.cjs [args]` (N
 - `set-commit.cjs <id> <hash>` — Records a feature's commit hash (+ web URL from `origin`, if resolvable) into `history.md`.
 - `add-note.cjs "text"` — Appends to `notes.md`.
 - `tree.cjs` — Regenerates the project file tree.
-- `sonar.cjs [--sources=src] [--tests=dir] [--lcov=path]` — SonarQube analysis against sonarqube.hectorrdez.es (token from env `SONAR_TOKEN` or `sonar.token` in a parent folder; never printed). Prints QUALITY_GATE + open issues + hotspots; exit 0=clean, 1=gate/issues, 2=could not run. Needs `npm i -g @sonar/scan` and network: does NOT work inside the luna/codex sandbox (no network) - run it from a Claude agent/shell.
+- `sonar.cjs [--sources=src] [--tests=dir] [--lcov=path]` — SonarQube analysis against sonar.example.com (token from env `SONAR_TOKEN` or `sonar.token` in a parent folder; never printed). Prints QUALITY_GATE + open issues + hotspots; exit 0=clean, 1=gate/issues, 2=could not run. Needs `npm i -g @sonar/scan` and network: does NOT work inside the luna/codex sandbox (no network) - run it from a Claude agent/shell.
 - `relay-up.cjs` — Flow step 2. Starts the relay supervisor (detached) if `relay.json` is `enabled` and it isn't already running. No-op when relay is off.
 - `relay-supervisor.cjs start|status|stop|tick` — The relay loop (normally started by `relay-up.cjs`, not by hand). `status` / `stop` to inspect or halt it; `tick --dry` shows the next decision without launching.
 - `relay-detect.cjs [--json]` — Scan this machine for agent CLIs, local runtimes + models, GPU VRAM, cloud availability. Feeds the relay interview.

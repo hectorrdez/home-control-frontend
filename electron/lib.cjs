@@ -1,7 +1,7 @@
 'use strict';
 // Pure main-process helpers (no Electron import) so they can be unit-tested with vitest.
 
-const DEFAULT_PANEL_URL = 'https://home-control.hectorrdez.es';
+const DEFAULT_PANEL_URL = 'https://panel.example.com';
 const DEV_PANEL_URL = 'http://localhost:5173';
 const MIN_WIDTH = 1024;
 const MIN_HEIGHT = 700;

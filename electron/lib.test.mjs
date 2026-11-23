@@ -61,10 +61,10 @@ describe('clampWindowSize', () => {
 });
 
 describe('navigation policy', () => {
-  const panel = 'https://home-control.hectorrdez.es/';
+  const panel = 'https://panel.example.com/';
 
   it('allows the panel origin inside the window', () => {
-    expect(lib.isPanelUrl('https://home-control.hectorrdez.es/telemetry', panel)).toBe(true);
+    expect(lib.isPanelUrl('https://panel.example.com/telemetry', panel)).toBe(true);
   });
 
   it('sends other http(s) links to the system browser', () => {
@@ -73,7 +73,7 @@ describe('navigation policy', () => {
   });
 
   it('does not open panel-origin links externally', () => {
-    expect(lib.shouldOpenExternally('https://home-control.hectorrdez.es/x', panel)).toBe(false);
+    expect(lib.shouldOpenExternally('https://panel.example.com/x', panel)).toBe(false);
   });
 
   it('drops non-http schemes', () => {
