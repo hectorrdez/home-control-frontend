@@ -117,7 +117,7 @@ The image builds the app with the `VITE_*` build args and serves `dist/` with ng
 ## Testing
 
 - **Unit and component tests** live next to the source (`*.test.ts(x)`, `electron/*.test.mjs`, `scripts/**/*.test.mjs`) and run with `npm run test:unit`.
-- **End-to-end tests** (Playwright) live in a separate repository, [`home-control-frontend-testing`](https://github.com/hectorrdez/home-control-frontend-testing). They run in mock mode against this app's dev server, selecting scenarios with `?mock=`, and can point at a deployed panel for read-only smoke checks.
+- **End-to-end tests** (Playwright) run in mock mode against this app's dev server, selecting scenarios with `?mock=`, and can point at a deployed panel for read-only smoke checks. The suite is maintained in a separate private repository.
 
 ```bash
 # In the testing repository, with this repository checked out next to it
